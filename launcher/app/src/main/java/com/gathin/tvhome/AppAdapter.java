@@ -12,6 +12,9 @@ import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Process;
 import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -35,6 +38,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * App tiles. The first {@link MainActivity#COLUMNS} positions are the pinned dock (favourites, fixed order),
@@ -143,6 +148,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         items.clear();
         items.addAll(fresh);
         notifyDataSetChanged();
+        sampleDockColours();
         if (Perf.enabled()) {
             Perf.log("reload", t0, String.format(Locale.US, "apps=%d query_ms=%.1f load_ms=%.1f",
                     fresh.size(), Perf.ms(t0, tQuery), Perf.ms(tQuery, tLoad)));
@@ -252,10 +258,50 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return e.ambient;
     }
 
+    /**
+     * Samples the dock apps' glow colours on a background thread, so focusing a dock app for the first time
+     * doesn't draw and scan its banner on the main thread. A focus that comes first samples it there, as before.
+     */
+    private void sampleDockColours() {
+        final List<Entry> dock = new ArrayList<>();
+        final List<Drawable> copies = new ArrayList<>();
+        for (int i = 0; i < Math.min(dockSize, items.size()); i++) {
+            Entry e = items.get(i);
+            Drawable live = e.banner != null ? e.banner : e.icon;
+            if (e.ambient != 0 || live == null || live.getConstantState() == null) continue;
+            dock.add(e);
+            copies.add(live.getConstantState().newDrawable().mutate());   // private copies, drawn off the main thread
+        }
+        if (dock.isEmpty()) return;
+        BACKGROUND.execute(() -> {
+            final int[] colours = new int[copies.size()];
+            for (int i = 0; i < colours.length; i++) colours[i] = sample(copies.get(i));
+            MAIN.post(() -> {
+                for (int i = 0; i < colours.length; i++) {
+                    if (dock.get(i).ambient == 0) dock.get(i).ambient = colours[i];
+                }
+            });
+        });
+    }
+
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final Executor BACKGROUND = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            r.run();
+        }, "tvhome-colours");
+        t.setDaemon(true);
+        return t;
+    });
+
     private static int vividColor(Drawable live) {
         if (live == null) return AmbientColor.FALLBACK;
         // Draw a private copy: changing the bounds of the drawable an ImageView shows would blank the tile.
-        Drawable d = live.getConstantState() != null ? live.getConstantState().newDrawable().mutate() : live;
+        return sample(live.getConstantState() != null ? live.getConstantState().newDrawable().mutate() : live);
+    }
+
+    /** Draws {@code d} small and picks its glow colour. Any thread, if no one else uses {@code d}. */
+    private static int sample(Drawable d) {
         Rect saved = new Rect(d.getBounds());
         // Banner aspect (16:9), fine enough that small logos and accents are sampled in proportion to their area.
         int w = 64, h = 36;
