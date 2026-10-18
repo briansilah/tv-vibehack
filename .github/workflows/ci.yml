@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Cancel superseded PR runs; let every push to main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  launcher:
+    name: Launcher build and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            launcher/**/*.gradle*
+            launcher/**/gradle-wrapper.properties
+
+      - name: Install Android SDK platform 34 and build-tools 34.0.0
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-34" "build-tools;34.0.0" > /dev/null'
+
+      - name: Build debug and release, run unit tests
+        run: ./gradlew --stacktrace assembleDebug assembleRelease testDebugUnitTest
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: tvhome-debug-apk
+          path: launcher/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: launcher-reports
+          path: launcher/app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  tools:
+    name: Python tools and scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/requirements.txt
+
+      - name: Install tool dependencies
+        run: python -m pip install -r tools/requirements.txt
+
+      - name: Compile Python tools
+        run: python -m py_compile tools/*.py
+
+      - name: Check shell script syntax
+        run: for f in tools/*.sh launcher/*.sh; do bash -n "$f"; done
+
+      - name: Run Python unit tests
+        run: |
+          if [ -d tools/tests ]; then
+            python -m unittest discover -s tools/tests -v
+          else
+            echo "No tools/tests directory; skipping."
+          fi
