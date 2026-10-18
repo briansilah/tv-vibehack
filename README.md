@@ -77,6 +77,9 @@ A home screen that is yours again:
 - **The rest of your apps in a grid** that slides up when you press Down.
 - **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
+- **Rearrange apps from the remote**, as on Apple TV: hold OK on an app and pick Edit Home Screen; it
+  jiggles, the arrows move it (into and out of the dock too) and OK saves. The same menu has Move to
+  Dock and App Info.
 - **Three frosted buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
   network you're on) and Settings.
 - **A greeting, a large thin clock and the date**, set in
@@ -154,6 +157,18 @@ video, no network, no background services.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
 the dock order, apps to hide, your TV's Live TV package, and the number of columns.
+
+**Rearrange** apps on the TV itself. Hold OK on an app for its menu:
+
+- **Edit Home Screen** picks the app up: it jiggles, and the arrows move it one slot or row at a time
+  while the other apps make room. The dock is just the first row, so an app moved into it pushes the
+  dock's last app down into the grid. OK saves; Back puts the app back where it was.
+- **Move to Dock** puts the app in the dock's last slot, whose app moves down to the start of the grid;
+  **Move out of Dock** puts a dock app at the start of the grid.
+- **App Info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
+
+Your order is saved on the TV and replaces the `dock_apps` default from then on. Apps you install later
+go at the end, as on Apple TV; apps you uninstall drop out and the rest close up.
 
 **Build and install** with one command:
 

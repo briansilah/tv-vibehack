@@ -1,9 +1,11 @@
 package com.gathin.tvhome;
 
+import android.animation.ValueAnimator;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
@@ -19,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,13 +34,15 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * App tiles. The first {@link MainActivity#COLUMNS} positions are the pinned dock (favourites, fixed order),
- * the rest is alphabetical.
+ * App tiles. The first {@link MainActivity#COLUMNS} positions are the dock. Until the user rearranges, the dock
+ * holds the configured favourites and the rest is alphabetical; after that, their saved order (see {@link AppOrder}).
  */
 public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
@@ -46,12 +51,20 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
         /** Called for every D-pad direction on a tile. Return true when handled. */
         boolean onTileDpadKey(int position, int keyCode);
+
+        /** Select held on a tile. */
+        void onTileLongPressed(int position, View card);
+
+        /** Every key on a tile, before the tile handles it. Return true when handled. */
+        boolean onTileKey(int position, KeyEvent event);
     }
 
     static final class Entry {
         final String label;
         final ComponentName component;
         final String pkg;
+        /** Identifies the app across reloads and in the saved order. */
+        final String key;
         final Drawable banner;
         final Drawable icon;
         int ambient;
@@ -60,6 +73,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             this.label = label;
             this.component = component;
             this.pkg = component.getPackageName();
+            this.key = component.flattenToShortString();
             this.banner = banner;
             this.icon = icon;
         }
@@ -67,10 +81,17 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     /** Focused tile size relative to the others, as measured on an Apple TV 4K (about 152 vs 124 px). */
     static final float FOCUS_SCALE = 1.22f;
+    /** The jiggle of the app being rearranged: peak rotation each way, and one full rock. */
+    private static final float JIGGLE_DEGREES = 1.5f;
+    private static final long JIGGLE_PERIOD_MS = 280L;
     /** Lift of the focused tile, for the soft drop shadow tvOS draws under it. */
     private static final float FOCUS_LIFT_DP = 12f;
     /** The focused tile's name sits this far below its resting place, clear of the scaled tile. */
     private static final float NAME_SHIFT_DP = 12f;
+    /** The user's arrangement (see {@link AppOrder#encode}); absent until they first rearrange. */
+    private static final String PREF_ORDER = "app_order";
+    /** Rebind payload: the tile's slot changed (dock or grid) or it started or stopped being rearranged. */
+    private static final Object PAYLOAD_SLOT = new Object();
 
     private final Context ctx;
     private final TileListener listener;
@@ -80,6 +101,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
     private final Set<String> hidden;
     private final List<Entry> items = new ArrayList<>();
+    private final SharedPreferences prefs;
+    /** The app being rearranged, which jiggles; null when not rearranging. */
+    private String editingKey;
 
     AppAdapter(Context ctx, TileListener listener, int dockSize) {
         this.ctx = ctx;
@@ -87,6 +111,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         this.dockSize = dockSize;
         this.favourites = Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps));
         this.hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
+        this.prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
@@ -107,18 +132,60 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             String label = String.valueOf(ri.loadLabel(pm));
             fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
         }
-        Collections.sort(fresh, (a, b) -> {
-            int fa = favourites.indexOf(a.pkg), fb = favourites.indexOf(b.pkg);
-            if (fa >= 0 || fb >= 0) {
-                if (fa < 0) return 1;
-                if (fb < 0) return -1;
-                return Integer.compare(fa, fb);
-            }
-            return a.label.compareToIgnoreCase(b.label);
-        });
+        Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
+        Map<String, Entry> byKey = new HashMap<>();
+        List<String> byName = new ArrayList<>(fresh.size());
+        for (Entry e : fresh) {
+            if (byKey.put(e.key, e) == null) byName.add(e.key);
+        }
+        List<String> order = AppOrder.arrange(byName, favourites, AppOrder.decode(prefs.getString(PREF_ORDER, null)));
         items.clear();
-        items.addAll(fresh);
+        for (String key : order) items.add(byKey.get(key));
         notifyDataSetChanged();
+    }
+
+    /** The apps' keys in their current order. */
+    List<String> keys() {
+        List<String> keys = new ArrayList<>(items.size());
+        for (Entry e : items) keys.add(e.key);
+        return keys;
+    }
+
+    /** Saves the current order as the user's arrangement; from now on it replaces the configured dock. */
+    void saveOrder() {
+        prefs.edit().putString(PREF_ORDER, AppOrder.encode(keys())).apply();
+    }
+
+    /** Moves an app being rearranged; the apps in between shift over, into or out of the dock. */
+    void move(int from, int to) {
+        if (from == to || from < 0 || to < 0 || from >= items.size() || to >= items.size()) return;
+        AppOrder.move(items, from, to);
+        notifyItemMoved(from, to);
+        if (Math.min(from, to) < dockSize && Math.max(from, to) >= dockSize) {
+            // An app crossed between the dock and the grid: dock tiles have no name underneath.
+            notifyItemChanged(to, PAYLOAD_SLOT);
+            notifyItemRangeChanged(dockSize - 1, 2, PAYLOAD_SLOT);
+        }
+    }
+
+    /** Makes the app with this key jiggle, as the one being rearranged, or stops it with null. */
+    void setEditing(String key) {
+        int was = positionOf(editingKey);
+        editingKey = key;
+        int now = positionOf(key);
+        if (was >= 0) notifyItemChanged(was, PAYLOAD_SLOT);
+        if (now >= 0 && now != was) notifyItemChanged(now, PAYLOAD_SLOT);
+    }
+
+    void openAppInfo(int position) {
+        if (position < 0 || position >= items.size()) return;
+        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + items.get(position).pkg));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            ctx.startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(ctx, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
     }
 
     @NonNull
@@ -132,8 +199,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     public void onBindViewHolder(@NonNull Holder h, int position) {
         Entry e = items.get(position);
         h.name.setText(e.label);
-        h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
         h.settle(h.card.isFocused());   // a rebind after reload() can hit the focused tile
+        bindSlot(h, position);
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
@@ -148,15 +215,22 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             h.label.setVisibility(View.VISIBLE);
         }
         h.card.setOnClickListener(v -> launch(e));
-        h.card.setOnLongClickListener(v -> {
-            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try {
-                ctx.startActivity(i);
-            } catch (ActivityNotFoundException ignored) {
-            }
-            return true;
-        });
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull Holder h, int position, @NonNull List<Object> payloads) {
+        if (payloads.isEmpty()) onBindViewHolder(h, position);
+        else bindSlot(h, position);
+    }
+
+    private void bindSlot(Holder h, int position) {
+        h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
+        h.setJiggling(items.get(position).key.equals(editingKey));
+    }
+
+    static boolean isSelect(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
     }
 
     private void launch(Entry e) {
@@ -178,19 +252,19 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     @Override
     public long getItemId(int position) {
-        return items.get(position).component.flattenToShortString().hashCode();
+        return items.get(position).key.hashCode();
     }
 
     /** Stable key for the app at a position (its component), or null. */
     String keyAt(int position) {
-        return position >= 0 && position < items.size() ? items.get(position).component.flattenToShortString() : null;
+        return position >= 0 && position < items.size() ? items.get(position).key : null;
     }
 
     /** Position of the app with this key, or -1 when it is gone. */
     int positionOf(String key) {
         if (key == null) return -1;
         for (int i = 0; i < items.size(); i++) {
-            if (items.get(i).component.flattenToShortString().equals(key)) return i;
+            if (items.get(i).key.equals(key)) return i;
         }
         return -1;
     }
@@ -234,6 +308,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         private final SpringAnimation scaleX;
         private final SpringAnimation scaleY;
         private final float density;
+        /** Running while this tile's app is being rearranged. */
+        private ValueAnimator jiggle;
+        /** The current Select press has already long-pressed, so its release must not open the app. */
+        private boolean longPressed;
 
         Holder(View v, TileListener listener) {
             super(v);
@@ -256,13 +334,23 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             card.setClipToOutline(true);
 
             card.setOnKeyListener((view, keyCode, event) -> {
+                int pos = getBindingAdapterPosition();
+                if (listener == null || pos == RecyclerView.NO_POSITION) return false;
+                if (listener.onTileKey(pos, event)) return true;
+                if (isSelect(keyCode)) return onSelectKey(view, event);
                 if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
                 if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN
                         && keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
                     return false;
                 }
+                return listener.onTileDpadKey(pos, keyCode);
+            });
+
+            card.setOnLongClickListener(view -> {
+                longPressed = true;
                 int pos = getBindingAdapterPosition();
-                return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileDpadKey(pos, keyCode);
+                if (listener != null && pos != RecyclerView.NO_POSITION) listener.onTileLongPressed(pos, view);
+                return true;
             });
 
             card.setOnFocusChangeListener((view, focused) -> {
@@ -297,6 +385,50 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                     .setDuration(focused ? 200 : 140).start();
         }
 
+        /**
+         * Holding Select long-presses: the view's own long-click timer usually fires first, but an injected
+         * long press (adb's {@code input keyevent --longpress}) can release before it does, so its long-press
+         * repeat counts too. The release that ends a long press must not also open the app.
+         */
+        private boolean onSelectKey(View view, KeyEvent event) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) {
+                    longPressed = false;
+                } else if (event.isLongPress() && !longPressed) {
+                    view.cancelLongPress();
+                    view.performLongClick();
+                }
+                return false;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP && longPressed) {
+                longPressed = false;
+                view.setPressed(false);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * tvOS's edit mode: the app being moved rocks gently about its centre, a quick, small rotation that
+         * starts and stops at rest.
+         */
+        void setJiggling(boolean on) {
+            if (on == (jiggle != null)) return;
+            if (on) {
+                jiggle = ValueAnimator.ofFloat(0f, 1f);
+                jiggle.setDuration(JIGGLE_PERIOD_MS);
+                jiggle.setRepeatCount(ValueAnimator.INFINITE);
+                jiggle.setInterpolator(new LinearInterpolator());
+                jiggle.addUpdateListener(a -> card.setRotation(
+                        JIGGLE_DEGREES * (float) Math.sin(2 * Math.PI * a.getAnimatedFraction())));
+                jiggle.start();
+            } else {
+                jiggle.cancel();
+                jiggle = null;
+                card.animate().rotation(0f).setDuration(120).setInterpolator(new DecelerateInterpolator()).start();
+            }
+        }
+
         /** Jumps to the resting focused or unfocused state, without animation. */
         void settle(boolean focused) {
             scaleX.cancel();
@@ -307,6 +439,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             card.setScaleX(s);
             card.setScaleY(s);
             card.setTranslationZ(focused ? FOCUS_LIFT_DP * density : 0f);
+            if (jiggle == null) card.setRotation(0f);   // the cancel above can stop the jiggle's return to rest
             name.setAlpha(focused ? 1f : 0f);
             name.setTranslationY(nameShift(focused));
         }

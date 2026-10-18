@@ -20,4 +20,9 @@
     <string name="cant_open">Can\'t open %1$s</string>
     <string name="date_format">EEEE  d MMMM</string>
     <string name="dream_name">Clock</string>
+    <string name="rearrange_hint">Arrows to move  ·  OK to save  ·  Back to cancel</string>
+    <string name="edit_home_screen">Edit Home Screen</string>
+    <string name="move_to_dock">Move to Dock</string>
+    <string name="move_out_of_dock">Move out of Dock</string>
+    <string name="app_info">App Info</string>
 </resources>

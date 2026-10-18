@@ -19,4 +19,9 @@
     <string name="not_available">Auf diesem TV nicht verfügbar</string>
     <string name="cant_open">%1$s lässt sich nicht öffnen</string>
     <string name="date_format">EEEE, d. MMMM</string>
+    <string name="rearrange_hint">Pfeiltasten zum Verschieben  ·  OK zum Speichern  ·  Zurück zum Abbrechen</string>
+    <string name="edit_home_screen">Home-Bildschirm bearbeiten</string>
+    <string name="move_to_dock">Ins Dock verschieben</string>
+    <string name="move_out_of_dock">Aus dem Dock nehmen</string>
+    <string name="app_info">App-Info</string>
 </resources>

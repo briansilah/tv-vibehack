@@ -5,7 +5,9 @@
 -->
 <resources>
 
-    <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
+    <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. This is only
+         the default: once you rearrange apps on the TV (hold OK on an app, Edit Home Screen), your own
+         order is kept instead. Clear the launcher's storage to go back to this one. -->
     <string-array name="dock_apps">
         <item>com.netflix.ninja</item>
         <item>com.amazon.amazonvideo.livingroom</item>

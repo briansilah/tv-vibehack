@@ -56,7 +56,9 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
             if (pos < 0 || pos >= dockSize) continue;
             View card = child.findViewById(R.id.card);
             if (card == null) continue;
-            float t = child.getTop() + card.getTop() + child.getTranslationY();
+            // Layout position, not translation: while apps are rearranged, one sliding into the dock row
+            // mustn't stretch the panel.
+            float t = child.getTop() + card.getTop();
             float b = t + card.getHeight();
             if (!any) {
                 top = t;
