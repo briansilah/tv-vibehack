@@ -26,4 +26,11 @@
 
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>
+
+    <!-- Top bar buttons (Inputs, Wi-Fi, Settings):
+         google  icons grouped in one tray; the focused one turns pale and its name shows underneath,
+                 like the Google TV home screen
+         apple   round icons; the focused one opens into a pill with its name, like Apple TV
+         pills   frosted pills, each with its icon and name -->
+    <string name="top_bar_style" translatable="false">google</string>
 </resources>

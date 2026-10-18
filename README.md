@@ -80,9 +80,11 @@ A home screen that is yours again:
 - **Rearrange apps from the remote**, as on Apple TV: hold OK on an app and pick Edit Home Screen; it
   jiggles, the arrows move it (into and out of the dock too) and OK saves. The same menu has Move to
   Dock and App Info.
-- **Three frosted buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
+- **Three icon buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
   network you're on) and Settings. On Google TV, Settings opens the TV's quick settings panel, as
-  the remote's Settings button does.
+  the remote's Settings button does. Pick their look in `config.xml` (`top_bar_style`): grouped in
+  one tray with the focused button's name underneath, as on Google TV (the default); round icons
+  that open into labelled pills, as on Apple TV; or frosted pills that always show their names.
 - **A greeting, a large thin clock and the date**, set in
   [Outfit](https://fonts.google.com/specimen/Outfit).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
