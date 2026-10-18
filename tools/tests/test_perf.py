@@ -135,6 +135,23 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(m["stack_kb"], 888)          # the summary row, not the "Stack" table row
         self.assertEqual((m["views"], m["activities"]), (441, 2))
 
+    def test_gfxinfo_picks_the_launcher_process(self):
+        service = ("** Graphics info for pid 4500 [com.gathin.tvhome:home] **\n\nTotal frames rendered: 0\n"
+                   "Janky frames: 0 (nan%)\n\n")
+        main = fixture("gfxinfo_android14.txt").replace("1390 [com.google.android.apps.tv.launcherx]",
+                                                        "4400 [com.gathin.tvhome]")
+        g = perf.parse_gfxinfo(service + main[main.index("** Graphics info"):])
+        self.assertEqual((g["total_frames"], g["janky_frames"]), (10516, 137))
+
+    def test_meminfo_picks_the_launcher_process(self):
+        service = ("** MEMINFO in pid 4500 [com.gathin.tvhome:home] **\n App Summary\n"
+                   "           Java Heap:     1000\n           TOTAL PSS:    9000\n Objects\n"
+                   "               Views:        0\n")
+        main = fixture("meminfo_android14.txt").replace("1390 [com.google.android.apps.tv.launcherx]",
+                                                        "4400 [com.gathin.tvhome]")
+        m = perf.parse_meminfo(service + main[main.index("** MEMINFO"):])
+        self.assertEqual((m["total_pss_kb"], m["java_heap_kb"], m["views"]), (132630, 20232, 441))
+
     def test_meminfo_android9_summary(self):
         m = perf.parse_meminfo(" App Summary\n                       Pss(KB)\n                        ------\n"
                                "           Java Heap:     5464\n         Native Heap:     9136\n"

@@ -120,8 +120,19 @@ def parse_am_start(out):
     return res
 
 
+def main_process(out):
+    """The launcher's own process section of a dumpsys that may list several processes (e.g. its :home
+    service on Google TV); the whole output when there is only one."""
+    parts = re.split(r"(?m)^\*\* .*? pid \d+ \[([^\]]+)\] \*\*[ \t]*$", out)
+    if len(parts) < 3:
+        return out
+    sections = dict(zip(parts[1::2], parts[2::2]))
+    return sections.get(PKG, parts[2])
+
+
 def parse_gfxinfo(out):
     """Process-wide frame stats from `dumpsys gfxinfo <pkg>`."""
+    out = main_process(out)
     res = {"total_frames": _int(r"^Total frames rendered:\s*(\d+)", out)}
     m = re.search(r"^Janky frames:\s*(\d+)\s*\(([\d.]+|nan)%\)", out, re.M)
     res["janky_frames"] = int(m.group(1)) if m else None
@@ -139,6 +150,7 @@ def parse_gfxinfo(out):
 
 def parse_meminfo(out):
     """App Summary (PSS, KB) and object counts from `dumpsys meminfo <pkg>`."""
+    out = main_process(out)
     i = out.find("App Summary")
     summary = out[i:] if i >= 0 else ""
     res = {}

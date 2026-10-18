@@ -30,7 +30,9 @@ ANDROID_SERIAL=192.168.1.50:37123 python3 tools/perf.py run --label main   # adb
 ```
 
 The launcher must be installed (`launcher/build-and-install.sh`). It doesn't need to be the default
-home app, except for `run --via-home` and `trace --action home`.
+home app, except for `run --via-home` and `trace --action home`. On Google TV the HOME intent always
+resolves to the stock launcher, and `HomeButtonService` brings ours back (see the README), so those
+two measure that hand-over rather than the launcher alone. Use the default warm start there.
 
 ## Workflow
 
