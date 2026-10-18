@@ -84,6 +84,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View ambient;
     private TextView heroName;
     private GradientDrawable ambientGlow;
+    /** The glow's three stops, reused for every frame of a colour blend. */
+    private final int[] glowStops = new int[3];
     private int ambientColor;
     private ValueAnimator ambientFade;
     private boolean heroShown;
@@ -147,6 +149,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambientGlow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         ambientGlow.setGradientCenter(0.32f, 0.42f);
         ambient.setBackground(ambientGlow);
+        // One drawable, so fading the view can just fade it: without this, every frame of a fade draws the
+        // full-screen glow into an offscreen buffer first.
+        ambient.forceHasOverlappingRendering(false);
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         greeting = findViewById(R.id.greeting);
@@ -375,7 +380,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void setAmbient(int color) {
         ambientColor = color;
         int c = color & 0x00FFFFFF;
-        ambientGlow.setColors(new int[]{0x5C000000 | c, 0x26000000 | c, 0x00000000 | c});
+        glowStops[0] = 0x5C000000 | c;
+        glowStops[1] = 0x26000000 | c;
+        glowStops[2] = c;
+        ambientGlow.setColors(glowStops);
     }
 
     private void hideHero() {
