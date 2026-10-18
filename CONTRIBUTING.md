@@ -54,6 +54,9 @@ you find a cleaner workaround, open an issue first.
 ## Pull requests
 
 - One topic per PR. Small is fine.
+- CI (`.github/workflows/ci.yml`) must pass. On every PR it builds the launcher (debug and
+  release), runs its unit tests, and checks the Python tools and shell scripts. The debug APK is
+  attached to each run as the `tvhome-debug-apk` artifact.
 - Say which TV you tested on.
 - No new dependencies in the launcher without discussing it in an issue.
 - Be kind in reviews. Most contributors here are doing this for their parents.
