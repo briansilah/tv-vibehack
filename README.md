@@ -77,7 +77,8 @@ A home screen that is yours again:
 - **One floating glass highlight** that springs from tile to tile instead of each tile drawing its
   own border. The focused tile lifts slightly and shows its name.
 - **Three frosted buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
-  network you're on) and Settings.
+  network you're on) and Settings. On Google TV, Settings opens the TV's own quick settings panel
+  (profile, Inputs, Picture, Sound), the same one the remote's Settings button opens.
 - **A greeting, a large thin clock and the date**, set in
   [Outfit](https://fonts.google.com/specimen/Outfit).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
@@ -128,6 +129,7 @@ tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt        # undo it and resto
 | [`tools/tv.py`](tools/tv.py) | A pure-Python ADB client: shell, batch, push, pull. Works where the stock `adb` binary is blocked. |
 | [`tools/b64push.py`](tools/b64push.py) | Uploads larger files such as APKs as base64 chunks and verifies the checksum. |
 | [`tools/disable.sh`](tools/disable.sh) / [`tools/restore.sh`](tools/restore.sh) | Apply or undo a debloat list. PowerShell versions sit next to them. |
+| [`tools/check-quick-settings.sh`](tools/check-quick-settings.sh) | Read-only check of Google TV's quick settings panel and the remote's Settings button with this launcher. |
 
 ### Windows
 
@@ -149,7 +151,7 @@ rewriting themselves.
 
 A small native Android TV app (`com.gathin.tvhome`, about 1.6 MB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no blur, no
-video, no network, no background services.
+video, no network, no background services (except, on Google TV, the small Home bridge below).
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
 the dock order, apps to hide, your TV's Live TV package, and the number of columns.
@@ -174,6 +176,33 @@ is smaller and faster on 1 GB sets; sign it yourself before installing.
 **Navigation** is deliberate: Up and Down move exactly one row, Up from the dock goes to the top
 buttons, the ends of the button row don't fall through to tiles, and the last focused app is
 remembered when you come back, even after the app list changes.
+
+<details>
+<summary><strong>Google TV: keeping the quick settings panel</strong></summary>
+
+On Google TV (TCL, Sony, Hisense...) the panel that the remote's Settings button opens, with your
+profile, Inputs, Picture and Sound, belongs to the stock launcher
+(`com.google.android.apps.tv.launcherx`). Disabling it, as the install script does on other TVs,
+takes the panel with it. And while it is enabled it always wins Home, whatever the default is set to.
+
+So on Google TV the install script keeps the stock launcher enabled and turns on a small
+accessibility service, `StockLauncherBridge`: whenever Google TV's home screen comes to the front
+(Home, boot, wake), it brings this launcher back over it. It reads no screen content and filters no
+keys. The remote's Settings button, long-press Home and the app buttons the stock launcher handles
+keep working, and the Settings button on the top bar opens the same panel.
+
+```bash
+TV_HOST=192.168.1.50 STOCK_LAUNCHER=com.google.android.apps.tv.launcherx launcher/build-and-install.sh
+```
+
+Trade-offs: Google TV's home screen flashes for a moment after Home before this one covers it, and
+the stock launcher keeps running in the background. `KEEP_STOCK_LAUNCHER=0` goes back to disabling
+it: no flash and no accessibility service, but no quick settings panel either, and the remote's
+Settings button does nothing. `tools/restore.sh` turns the bridge off.
+
+[`tools/check-quick-settings.sh`](tools/check-quick-settings.sh) checks the setup without changing
+anything on the TV and shows what the Settings button does.
+</details>
 
 <details>
 <summary><strong>Optional: the Clock screensaver</strong></summary>
@@ -214,6 +243,10 @@ Things that bit us or contributors, so they don't bite you.
   Home before `screencap`.
 - **Disable the stock launcher only after the new one is installed**, or the Home button lands on
   a factory test app.
+- **Google TV: the remote's Settings button does nothing** after the stock launcher was disabled.
+  Its quick settings panel lives inside the stock launcher; reinstall with
+  `STOCK_LAUNCHER=com.google.android.apps.tv.launcherx` to keep it (see
+  [the launcher](#the-launcher)). `tools/check-quick-settings.sh` shows what's missing.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`

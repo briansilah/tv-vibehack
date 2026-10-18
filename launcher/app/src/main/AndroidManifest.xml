@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Needed on Android 10 to read the Wi-Fi network name; granted over adb at install time. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Settings button: opens Google TV's quick settings panel (dashboard), see QuickSettings. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
     <application
         android:label="@string/app_name"
@@ -43,6 +45,21 @@
                 <action android:name="android.service.dreams.DreamService" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+        </service>
+
+        <!-- Keeps this launcher on Home while Google TV's stock launcher stays enabled for its quick settings
+             panel. Enabled by build-and-install.sh (KEEP_STOCK_LAUNCHER=1); see StockLauncherBridge. -->
+        <service
+            android:name=".StockLauncherBridge"
+            android:label="@string/app_name"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/stock_launcher_bridge" />
         </service>
     </application>
 </manifest>

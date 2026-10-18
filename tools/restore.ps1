@@ -19,6 +19,8 @@ $env:TV_HOST = $TvHost
 $pkgs = Get-Content $List | ForEach-Object { ($_ -replace '#.*$', '').Trim() } | Where-Object { $_ }
 $cmds = @($pkgs | ForEach-Object { "pm enable $_" }) + @(
     "pm enable $Stock",
+    # turn off the launcher's Home bridge (Google TV keep-stock-launcher mode), or Home keeps going to it
+    's=$(settings get secure enabled_accessibility_services); case "$s" in *StockLauncherBridge*) n=$(echo "$s" | sed -e ''s#com.gathin.tvhome/[^:]*StockLauncherBridge##'' -e ''s/::*/:/g'' -e ''s/^://'' -e ''s/:$//''); if [ -n "$n" ]; then settings put secure enabled_accessibility_services "$n"; else settings delete secure enabled_accessibility_services; fi; echo bridge-disabled ;; esac',
     "cmd package set-home-activity --user 0 $Stock",
     'settings put global window_animation_scale 1.0',
     'settings put global transition_animation_scale 1.0',

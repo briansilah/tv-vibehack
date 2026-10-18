@@ -162,7 +162,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         View btnSettings = findViewById(R.id.btnSettings);
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
-        btnSettings.setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        btnSettings.setOnClickListener(v -> openSettings());
 
         // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
         // jump to a tile far below when there is nothing in that direction.
@@ -227,6 +227,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public void onBackPressed() {
         // Home screen: Back goes nowhere.
+    }
+
+    // The remote's Settings button normally goes to the system and never reaches an app; if it does land here,
+    // do what the Settings button on the top bar does.
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_SETTINGS) return true;
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_SETTINGS) {
+            openSettings();
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
     }
 
     // ---- glass highlight -------------------------------------------------------------------------
@@ -411,6 +428,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } catch (Exception ignored) {
         }
         btnWifi.setText(text);
+    }
+
+    /** The TV's quick settings panel where there is one (Google TV's dashboard), otherwise the full Settings app. */
+    private void openSettings() {
+        if (!QuickSettings.open(this)) open(new Intent(Settings.ACTION_SETTINGS));
     }
 
     private void open(Intent i) {
