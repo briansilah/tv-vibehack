@@ -16,6 +16,10 @@
         android:theme="@style/Theme.TvHome"
         android:allowBackup="false">
 
+        <!-- Lets tools/perf.py and Android Studio CPU-profile and heap-profile release builds, as on
+             a stock install. Ignored before Android 10; no runtime cost. -->
+        <profileable android:shell="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

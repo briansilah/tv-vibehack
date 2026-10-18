@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -87,20 +88,43 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     void reload() {
+        long t0 = Perf.now();
+        Perf.begin("tvhome:reload");
+        try {
+            reloadTraced(t0);
+        } finally {
+            Perf.end();
+        }
+    }
+
+    private void reloadTraced(long t0) {
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
-        List<ResolveInfo> found = pm.queryIntentActivities(probe, 0);
+        Perf.begin("tvhome:reload.query");
+        List<ResolveInfo> found;
+        try {
+            found = pm.queryIntentActivities(probe, 0);
+        } finally {
+            Perf.end();
+        }
+        long tQuery = Perf.now();
         List<Entry> fresh = new ArrayList<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(ctx.getPackageName()) || hidden.contains(pkg)) continue;
-            Drawable banner = ri.activityInfo.loadBanner(pm);
-            if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
-            Drawable icon = ri.loadIcon(pm);
-            String label = String.valueOf(ri.loadLabel(pm));
-            fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
+            Perf.begin("tvhome:loadApp " + pkg);
+            try {
+                Drawable banner = ri.activityInfo.loadBanner(pm);
+                if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+                Drawable icon = ri.loadIcon(pm);
+                String label = String.valueOf(ri.loadLabel(pm));
+                fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
+            } finally {
+                Perf.end();
+            }
         }
+        long tLoad = Perf.now();
         Collections.sort(fresh, (a, b) -> {
             int fa = favourites.indexOf(a.pkg), fb = favourites.indexOf(b.pkg);
             if (fa >= 0 || fb >= 0) {
@@ -113,6 +137,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         items.clear();
         items.addAll(fresh);
         notifyDataSetChanged();
+        if (Perf.enabled()) {
+            Perf.log("reload", t0, String.format(Locale.US, "apps=%d query_ms=%.1f load_ms=%.1f",
+                    fresh.size(), Perf.ms(t0, tQuery), Perf.ms(tQuery, tLoad)));
+        }
     }
 
     @NonNull
@@ -200,7 +228,16 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     int ambientColorAt(int position) {
         if (position < 0 || position >= items.size()) return 0xFF444444;
         Entry e = items.get(position);
-        if (e.ambient == 0) e.ambient = vividColor(e.banner != null ? e.banner : e.icon);
+        if (e.ambient == 0) {
+            long t0 = Perf.now();
+            Perf.begin("tvhome:vividColor");
+            try {
+                e.ambient = vividColor(e.banner != null ? e.banner : e.icon);
+            } finally {
+                Perf.end();
+            }
+            Perf.log("ambient", t0, "pkg=" + e.pkg);
+        }
         return e.ambient;
     }
 

@@ -49,6 +49,7 @@ public class GlassView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        Perf.begin("tvhome:GlassView.onDraw");
         float inset = 6f * density;   // room for the glow
         rect.set(inset, inset, getWidth() - inset, getHeight() - inset);
 
@@ -70,5 +71,6 @@ public class GlassView extends View {
         canvas.restore();
 
         canvas.drawRoundRect(rect, radius, radius, rim);
+        Perf.end();
     }
 }
