@@ -79,7 +79,8 @@ A home screen that is yours again:
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
 - **Three frosted icon buttons** that open into labelled pills when focused, as on Apple TV:
   Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the network you're on) and
-  Settings.
+  Settings. On Google TV, Settings opens the TV's quick settings panel, as the remote's Settings
+  button does.
 - **A greeting, a large thin clock and the date**, set in
   [Outfit](https://fonts.google.com/specimen/Outfit).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
@@ -151,7 +152,8 @@ rewriting themselves.
 
 A small native Android TV app (`com.gathin.tvhome`, about 1.6 MB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no blur, no
-video, no network, no background services.
+video, no network, and no background services except, on Google TV, the small Home-button
+service described below.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
 the dock order, apps to hide, your TV's Live TV package, and the number of columns.
@@ -176,6 +178,40 @@ is smaller and faster on 1 GB sets; sign it yourself before installing.
 **Navigation** is deliberate: Up and Down move exactly one row, Up from the dock goes to the top
 buttons, the ends of the button row don't fall through to tiles, and the last focused app is
 remembered when you come back, even after the app list changes.
+
+<details>
+<summary><strong>Google TV: the quick settings panel and the Home button</strong></summary>
+
+Google TV's quick settings panel (profile, Inputs, Picture, Sound, the panel on the right that the
+remote's Settings button opens) lives inside the stock launcher,
+`com.google.android.apps.tv.launcherx`. So on Google TV the install script **keeps the stock
+launcher enabled**. Disabling it removes the panel, and on a TCL Google TV it is worse: Home then
+goes to a setup "recovery" screen that closes at once, over and over, until the system crashes and
+the screen stays black.
+
+With the stock launcher enabled, Android always sends Home to it: its Home entry has a higher
+priority than any sideloaded app can have, so making this launcher the default changes nothing.
+The script therefore turns on `HomeButtonService`, an accessibility service in this app:
+
+- **Home** opens this launcher; the stock home never appears. From the screensaver too.
+- **Holding Home** opens the quick settings panel, as on stock Google TV.
+- **Settings on the remote** works as before: the system opens the panel over any app.
+- When the stock home comes up on its own, the service covers it: at boot, and when the TV wakes
+  after more than 30 seconds in standby (Google TV sends it home then). It shows briefly first.
+
+Trade-offs:
+
+- Every remote key passes through the service, which answers at once for everything but Home.
+- Double-pressing Home no longer opens the picture-in-picture menu.
+- The stock launcher keeps running in the background.
+- On TCL, the service only starts at boot if the app's `AUTO_START` permission is allowed; the
+  install script allows it.
+- Keys sent with `adb shell input keyevent` skip accessibility services, so they still reach the
+  stock home. Test with the real remote.
+
+To go back to the stock home, run `tools/restore.sh` with
+`com.google.android.apps.tv.launcherx` as the stock launcher; it turns the service off.
+</details>
 
 <details>
 <summary><strong>Optional: the Clock screensaver</strong></summary>
@@ -216,6 +252,15 @@ Things that bit us or contributors, so they don't bite you.
   Home before `screencap`.
 - **Disable the stock launcher only after the new one is installed**, or the Home button lands on
   a factory test app.
+- **Never disable Google TV's launcher** (`com.google.android.apps.tv.launcherx`). On a TCL Google
+  TV 14 Home then went to `setupwraith`'s RecoveryActivity, which closes at once; the TV looped
+  until the system crashed and showed a black screen. Fix: `pm enable com.google.android.apps.tv.launcherx`.
+  The install script keeps it enabled on Google TV.
+- **Google TV: Home goes to the stock home** after a reboot. Check the Home-button service is
+  running: `dumpsys accessibility | grep "Bound services"`. On TCL it is blocked at boot unless
+  `appops get com.gathin.tvhome AUTO_START` says `allow`; run
+  `appops set com.gathin.tvhome AUTO_START allow; appops write-settings`. The second command
+  matters: Android saves app ops up to 30 minutes later, and `adb reboot` loses unsaved ones.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`

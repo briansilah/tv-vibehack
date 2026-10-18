@@ -152,7 +152,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         View btnSettings = findViewById(R.id.btnSettings);
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
-        btnSettings.setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        btnSettings.setOnClickListener(v -> openSettings());
 
         // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
         // jump to a tile far below when there is nothing in that direction. Down goes back to the dock app
@@ -413,6 +413,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi.setLabel(text);
         String wifi = getString(R.string.wifi);
         btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
+    }
+
+    /** Google TV's quick settings panel, like the remote's Settings button; the full Settings app elsewhere. */
+    private void openSettings() {
+        if (!QuickSettings.open(this)) open(new Intent(Settings.ACTION_SETTINGS));
     }
 
     private void open(Intent i) {
