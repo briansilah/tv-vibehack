@@ -2,7 +2,10 @@
 # default home screen. Uses Android Studio's bundled JDK and the default SDK location unless
 # JAVA_HOME / ANDROID_HOME are set.
 #
-# Usage: launcher\build-and-install.ps1 -TvHost 192.168.1.50 [-StockLauncher com.google.android.tvlauncher]
+# Usage: launcher\build-and-install.ps1 -TvHost 192.168.1.50 [-StockLauncher com.google.android.tvlauncher] [-BuildType debug]
+#
+# It builds a release APK (R8, not debuggable, signed with your local debug key) and compiles it ahead of time on
+# the TV, which makes it much faster than a debug build. -BuildType debug builds and installs a debuggable one.
 #
 # Google TV (com.google.android.apps.tv.launcherx on the TV): the stock launcher stays enabled whatever
 # -StockLauncher says. The quick settings panel that the remote's Settings button opens lives inside it, and on a
@@ -10,7 +13,9 @@
 # service, keeps Home on this launcher instead.
 param(
     [string]$TvHost = $env:TV_HOST,
-    [string]$StockLauncher = 'com.google.android.tvlauncher'
+    [string]$StockLauncher = 'com.google.android.tvlauncher',
+    [ValidateSet('release', 'debug')]
+    [string]$BuildType = 'release'
 )
 $ErrorActionPreference = 'Stop'
 # Pipe plain UTF-8 to native commands; the default here prepends a BOM that corrupts the first command.
@@ -30,16 +35,19 @@ if (-not (Test-Path local.properties)) {
     "sdk.dir=$($sdk -replace '\\', '\\')" | Out-File -Encoding ascii local.properties
 }
 
-.\gradlew.bat assembleDebug -q --console=plain
+$task = if ($BuildType -eq 'debug') { 'assembleDebug' } else { 'assembleRelease' }
+.\gradlew.bat $task -q --console=plain
 if ($LASTEXITCODE -ne 0) { throw 'Gradle build failed' }
 
 $py = '..\tools\venv\Scripts\python.exe'
-$apk = 'app\build\outputs\apk\debug\app-debug.apk'
+$apk = "app\build\outputs\apk\$BuildType\app-$BuildType.apk"
 & $py -I ..\tools\b64push.py $apk /data/local/tmp/tvhome.apk
 if ($LASTEXITCODE -ne 0) { throw 'APK upload failed' }
 $out = & $py -I ..\tools\tv.py 'pm install -r /data/local/tmp/tvhome.apk; rm -f /data/local/tmp/tvhome.apk'
 Write-Host $out
 if ("$out" -notmatch 'Success') { throw 'pm install failed; the stock launcher was left untouched' }
+# Compile it ahead of time now, instead of running it interpreted until the TV's idle-time compilation.
+& $py -I ..\tools\tv.py 'cmd package compile -m speed -f com.gathin.tvhome >/dev/null 2>&1; echo compiled'
 $googleTvLauncher = 'com.google.android.apps.tv.launcherx'
 $googleTv = "$(& $py -I ..\tools\tv.py "pm path $googleTvLauncher")" -match 'package:'
 if ($googleTv) {
