@@ -26,6 +26,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
@@ -76,7 +77,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private float shelfPendingY;
     private boolean tilesEntered;
     private TextView greeting;
-    private TextView btnWifi;
+    private TopBarButton btnWifi;
     // Static so they survive the activity being destroyed while another app is open (low-memory TVs,
     // or Developer options → "Don't keep activities"); they only reset when the process dies.
     private static int lastFocused = 0;
@@ -387,7 +388,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         greeting.setText(res);
     }
 
-    /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */
+    /** Shows the Wi-Fi network name on the button (when open) if we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
         String text = getString(R.string.wifi);
         try {
@@ -409,7 +410,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         } catch (Exception ignored) {
         }
-        btnWifi.setText(text);
+        btnWifi.setLabel(text);
+        String wifi = getString(R.string.wifi);
+        btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
     }
 
     private void open(Intent i) {
@@ -421,14 +424,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
-    /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */
+    /** Dropdown menu under the Inputs button: HDMI ports (with connection state), AV and Live TV. */
     private void showInputs() {
-        View anchor = findViewById(R.id.btnInputs);
+        TopBarButton anchor = findViewById(R.id.btnInputs);
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
 
-        // Compact: as wide as the Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
-        int width = Math.max(anchor.getWidth(), (int) (150 * density));
+        // Compact: as wide as the open Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
+        // The open width, not the current one: a click can land while the button is still opening.
+        int width = Math.max(anchor.getExpandedWidth(), (int) (150 * density));
         final PopupWindow popup = new PopupWindow(panel, width, ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));   // needed for Back to dismiss
         popup.setOutsideTouchable(true);
@@ -500,7 +504,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.setPivotY(0f);
         panel.setScaleY(0.92f);
         panel.setTranslationY(-8 * density);
-        popup.showAsDropDown(anchor, 0, (int) (10 * density), Gravity.START);
+        final int yOff = (int) (10 * density);
+        popup.showAsDropDown(anchor, 0, yOff, Gravity.START);
+        // Stay under the button while it finishes opening (the right-aligned row moves as it widens).
+        ViewTreeObserver.OnGlobalLayoutListener follow = () -> {
+            if (popup.isShowing()) popup.update(anchor, 0, yOff, -1, -1);
+        };
+        anchor.getViewTreeObserver().addOnGlobalLayoutListener(follow);
+        popup.setOnDismissListener(() -> anchor.getViewTreeObserver().removeOnGlobalLayoutListener(follow));
         panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
         rows.getChildAt(0).requestFocus();

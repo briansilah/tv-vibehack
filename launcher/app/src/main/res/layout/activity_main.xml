@@ -132,25 +132,25 @@
                 android:layout_marginBottom="6dp"
                 android:orientation="horizontal">
 
-                <TextView
+                <com.gathin.tvhome.TopBarButton
                     android:id="@+id/btnInputs"
                     style="@style/TopButton"
                     android:text="@string/inputs"
-                    android:drawableStart="@drawable/ic_input"
+                    android:src="@drawable/ic_input"
                     android:nextFocusDown="@+id/grid" />
 
-                <TextView
+                <com.gathin.tvhome.TopBarButton
                     android:id="@+id/btnWifi"
                     style="@style/TopButton"
                     android:text="@string/wifi"
-                    android:drawableStart="@drawable/ic_wifi"
+                    android:src="@drawable/ic_wifi"
                     android:nextFocusDown="@+id/grid" />
 
-                <TextView
+                <com.gathin.tvhome.TopBarButton
                     android:id="@+id/btnSettings"
                     style="@style/TopButton"
                     android:text="@string/settings"
-                    android:drawableStart="@drawable/ic_settings"
+                    android:src="@drawable/ic_settings"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
         </RelativeLayout>
