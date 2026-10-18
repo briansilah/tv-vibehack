@@ -10,6 +10,7 @@ See docs/performance.md for the method and what each number means.
     perf.py run --label fix --scenarios dock    moving between two dock apps: top shelf latency and frames
     perf.py compare tools/perf-results/main.json tools/perf-results/fix.json
     perf.py trace --seconds 15 --action keys    Perfetto trace while it presses D-pad keys
+    perf.py trace --action dock                 ... while it moves between the first two dock apps
     perf.py summarize trace.perfetto-trace      slowest launcher trace sections (pip install perfetto)
 
 Connection: with TV_HOST set it connects like tools/tv.py (adb_shell, no adb binary). Otherwise, or with
@@ -45,6 +46,7 @@ DEFAULT_KEYS = "RIGHT RIGHT RIGHT LEFT LEFT LEFT DOWN RIGHT RIGHT DOWN LEFT LEFT
 # Puts focus on the first dock app from anywhere: Up climbs the grid to the top bar and stops there, Down
 # goes back to the dock, Left stops at the dock's first app.
 TO_FIRST_DOCK_APP = " ".join(["UP"] * 14 + ["DOWN"] + ["LEFT"] * 4)
+DOCK_TRACE_KEYS = "RIGHT LEFT RIGHT LEFT RIGHT LEFT RIGHT LEFT"
 ALL_SCENARIOS = ("cold", "warm", "jank", "dock", "mem")
 TRACE_REMOTE = "/data/misc/perfetto-traces/tvhome.perfetto-trace"
 TRACE_CONFIG_REMOTE = "/data/local/tmp/tvhome-perfetto.pbtx"
@@ -621,6 +623,9 @@ def cmd_trace(args):
         if args.action != "cold":
             sh.shell("am start -W -n " + ACTIVITY)
             time.sleep(2.0)
+        if args.action == "dock":
+            sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
+            time.sleep(1.5)
         sh.shell("rm -f " + TRACE_REMOTE)
         sh.shell("printf '%%s' '%s' > %s" % (perfetto_config(int(args.seconds * 1000)), TRACE_CONFIG_REMOTE))
         out = sh.shell("cat %s | perfetto --txt -c - -o %s --background" % (TRACE_CONFIG_REMOTE, TRACE_REMOTE))
@@ -638,7 +643,9 @@ def cmd_trace(args):
             time.sleep(2.0)
             sh.shell(HOME_INTENT)
         elif args.action == "keys":
-            sh.shell(key_loop(args.keys, args.key_interval), timeout=120)
+            sh.shell(key_loop(args.keys, args.key_interval or 0.35), timeout=120)
+        elif args.action == "dock":
+            sh.shell(key_loop(DOCK_TRACE_KEYS, args.key_interval or 1.2), timeout=120)
         remaining = args.seconds - (time.time() - start) + 2.0
         if remaining > 0:
             time.sleep(remaining)
@@ -665,6 +672,22 @@ group by thread, s.name order by total_ms desc limit %d
 """
 
 
+# tvhome:* sections that span frames (Perf.Span, e.g. tvhome:shelf) live on process tracks.
+ASYNC_SQL = """
+select s.name, count(*) as count, round(sum(s.dur) / 1e6, 1) as total_ms, round(avg(s.dur) / 1e6, 2) as avg_ms,
+       round(max(s.dur) / 1e6, 1) as max_ms
+from slice s join process_track pt on s.track_id = pt.id join process p using (upid)
+where p.name = '%s' and s.name like 'tvhome:%%' group by s.name order by total_ms desc
+"""
+
+# Frames as SurfaceFlinger saw them (android.surfaceflinger.frametimeline, Android 12+).
+FRAMES_SQL = """
+select a.jank_type, count(*) as count, round(avg(a.dur) / 1e6, 2) as avg_ms, round(max(a.dur) / 1e6, 1) as max_ms
+from actual_frame_timeline_slice a join process p using (upid)
+where p.name = '%s' group by a.jank_type order by count desc
+"""
+
+
 def cmd_summarize(args):
     sql = SUMMARY_SQL % (PKG, args.limit)
     try:
@@ -676,6 +699,11 @@ def cmd_summarize(args):
     tp = TraceProcessor(trace=args.trace)
     try:
         rows = list(tp.query(sql))
+        spans = list(tp.query(ASYNC_SQL % PKG))
+        try:
+            frames = list(tp.query(FRAMES_SQL % PKG))
+        except Exception:   # no frame timeline in traces from Android 11 and older
+            frames = []
     finally:
         tp.close()
     print("Slices on the launcher's main thread and RenderThread, plus its tvhome:* sections. Nested slices "
@@ -683,6 +711,16 @@ def cmd_summarize(args):
           "|---|---|---|---|---|---|")
     for r in rows:
         print("| %s | %s | %d | %s | %s | %s |" % (r.thread, r.name, r.count, r.total_ms, r.avg_ms, r.max_ms))
+    if spans:
+        print("\nSections across frames:\n\n| section | count | total ms | avg ms | max ms |\n|---|---|---|---|---|")
+        for r in spans:
+            print("| %s | %d | %s | %s | %s |" % (r.name, r.count, r.total_ms, r.avg_ms, r.max_ms))
+    if frames:
+        total = sum(r.count for r in frames)
+        print("\nFrames (SurfaceFlinger frame timeline), %d in all:\n\n| jank type | frames | avg ms | max ms |\n"
+              "|---|---|---|---|" % total)
+        for r in frames:
+            print("| %s | %d | %s | %s |" % (r.jank_type, r.count, r.avg_ms, r.max_ms))
 
 
 # ---- command line ------------------------------------------------------------------------------
@@ -722,9 +760,10 @@ def build_parser():
     t = sub.add_parser("trace", help="record a Perfetto trace while doing something")
     conn(t)
     t.add_argument("--seconds", type=float, default=12.0)
-    t.add_argument("--action", choices=("keys", "cold", "home", "none"), default="keys")
+    t.add_argument("--action", choices=("keys", "dock", "cold", "home", "none"), default="keys",
+                   help="keys: --keys; dock: Right/Left between the first two dock apps")
     t.add_argument("--keys", default=DEFAULT_KEYS)
-    t.add_argument("--key-interval", type=float, default=0.35)
+    t.add_argument("--key-interval", type=float, help="seconds between keys (default 0.35; 1.2 for dock)")
     t.add_argument("--out", help="local file (default tvhome-<time>.perfetto-trace)")
     t.set_defaults(func=cmd_trace)
 

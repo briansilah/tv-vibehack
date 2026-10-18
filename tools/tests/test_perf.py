@@ -220,6 +220,11 @@ class ParserTests(unittest.TestCase):
                          "for k in 22 21 20; do input keyevent $k; sleep 0.35; done")
         self.assertEqual(len(perf.DEFAULT_KEYS.split()), 16)
 
+    def test_summary_queries_name_the_launcher(self):
+        for sql in (perf.SUMMARY_SQL % (perf.PKG, 25), perf.ASYNC_SQL % perf.PKG, perf.FRAMES_SQL % perf.PKG):
+            self.assertIn("'com.gathin.tvhome'", sql)
+            self.assertNotIn("%", sql.replace("like 'tvhome:%'", ""))
+
     def test_perfetto_config_is_shell_safe(self):
         cfg = perf.perfetto_config(12000)
         self.assertNotIn("'", cfg)                       # it is wrapped in single quotes on the device

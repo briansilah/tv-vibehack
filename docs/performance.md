@@ -13,8 +13,8 @@ nothing is sent anywhere (no telemetry; see CONTRIBUTING.md).
 |---|---|
 | `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank, dock moves (top shelf latency) and memory, each repeated, saved as JSON with medians. |
 | `tools/perf.py compare` | A Markdown before/after table for a pull request. |
-| `tools/perf.py trace` | A [Perfetto](https://perfetto.dev) trace of a cold start, a Home press, or D-pad moves. |
-| `tools/perf.py summarize` | The slowest slices on the launcher's main thread and RenderThread in a trace. |
+| `tools/perf.py trace` | A [Perfetto](https://perfetto.dev) trace of a cold start, a Home press, D-pad moves, or moves between two dock apps. |
+| `tools/perf.py summarize` | The slowest slices on the launcher's main thread and RenderThread in a trace, its `tvhome:*` sections that span frames, and its frames by jank type. |
 | Trace sections in the app | `tvhome:*` slices (below) show where the launcher's own code spends time. |
 | Timing log lines | `TvHomePerf` log lines with app-side timings; `perf.py` switches them on while it runs. |
 
@@ -47,7 +47,7 @@ two measure that hand-over rather than the launcher alone. Use the default warm 
 5. **Find the cause** of a slow number with a trace:
 
    ```bash
-   tools/perf.py trace --action home --seconds 10     # or: --action cold | keys | none
+   tools/perf.py trace --action home --seconds 10     # or: --action cold | keys | dock | none
    pip install perfetto && tools/perf.py summarize tvhome-<time>.perfetto-trace
    ```
 
