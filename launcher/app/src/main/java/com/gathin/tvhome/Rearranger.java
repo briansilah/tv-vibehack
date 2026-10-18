@@ -2,14 +2,19 @@ package com.gathin.tvhome;
 
 import android.app.Activity;
 import android.graphics.Color;
-import android.graphics.Rect;
+import android.graphics.Outline;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
@@ -20,18 +25,24 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
 /**
- * Rearranging the home screen, as on tvOS 17 and later. Holding Select on an app opens its menu: Edit Home
- * Screen, Move to (or out of) Dock, and App Info (where Android keeps Uninstall; tvOS has Delete App there).
- * Edit Home Screen picks the app up: it jiggles, the D-pad moves it a slot or a row at a time and the other
- * apps make room. The dock is simply the first row, so apps move into and out of it the same way. Select saves
- * the new arrangement; Back puts the app back where it was.
+ * Arranging the home screen's apps with the remote, the way TV platforms do it (see the pull request for the
+ * research): no dragging, no jiggle; the app being moved is lifted, ringed, and shows chevrons on the sides it
+ * can still go to, while the others step back.
+ *
+ * <ul>
+ * <li>Hold OK on an app for its actions, full screen as on Google TV: Move, Move to (or out of) Dock, App info.
+ * <li>Move picks the app up. The arrows move it a slot or a row at a time, the dock being just the first row;
+ *     OK puts it down and saves, Back puts it back where it was.
+ * <li>The Arrange apps tile after the last app arranges several in one go: OK picks an app up and puts it down,
+ *     and Back or the tile, now Done, finishes.
+ * </ul>
+ *
+ * While arranging, a header in place of the top bar says what is going on and which keys do what.
  */
 final class Rearranger {
 
     /** How long the other apps take to slide out of the way. */
-    private static final long SHIFT_MS = 200L;
-    /** Gap between the menu and the app it belongs to. */
-    private static final float MENU_GAP_DP = 14f;
+    private static final long SHIFT_MS = 220L;
 
     private final Activity activity;
     private final FrameLayout root;
@@ -41,15 +52,38 @@ final class Rearranger {
     private final int columns;
     private final float density;
     private final DefaultItemAnimator shifter = new DefaultItemAnimator();
+    /**
+     * Slides move tiles by their render properties, which doesn't redraw the grid, so the dock panel (an item
+     * decoration) would stay behind; redraw it every frame while they run.
+     */
+    private final Runnable redraw = new Runnable() {
+        @Override
+        public void run() {
+            grid.invalidate();
+            if (SystemClock.uptimeMillis() < redrawUntil || shifter.isRunning()) grid.postOnAnimation(this);
+        }
+    };
+    private long redrawUntil;
 
-    /** The app being moved; null when not rearranging. */
-    private String key;
-    /** The order when rearranging started: to put the app back, and so an unchanged order isn't saved. */
-    private List<String> before;
-    /** Select went down while rearranging, so its release saves. */
+    private boolean arranging;
+    /** Arranging several apps (from the Arrange apps tile), rather than moving the one whose Move was picked. */
+    private boolean session;
+    /** The app picked up, or null. */
+    private String moving;
+    /** Where it was picked up, to put it back. */
+    private int pickedFrom;
+    /** The order last saved, or when arranging started, so only real changes are saved. */
+    private List<String> saved;
+    /** Select went down while arranging, so its release acts. */
     private boolean selectDown;
-    private TextView hint;
-    private PopupWindow menu;
+
+    private View header;
+    private TextView kicker;
+    private TextView title;
+    /** The legend's keys, built once: inflating text in the variable font on every move is slow on a TV. */
+    private final View[] keys = new View[3];
+    private View topBar;
+    private PopupWindow sheet;
 
     Rearranger(Activity activity, FrameLayout root, RecyclerView grid, AppAdapter adapter,
                AppAdapter.TileListener tiles, int columns) {
@@ -65,139 +99,213 @@ final class Rearranger {
     }
 
     boolean isActive() {
-        return key != null;
+        return arranging;
     }
 
-    // ---- the app's menu (held Select) -------------------------------------------------------------
+    // ---- an app's actions (OK held) ---------------------------------------------------------------
 
-    /** The menu for the app at {@code position}, popping up from its tile. */
-    void showMenu(int position, View card) {
-        if (key != null || menu != null) return;
+    void showActions(int position) {
+        if (arranging || sheet != null) return;
         final String app = adapter.keyAt(position);
         if (app == null) return;
 
-        View sheet = activity.getLayoutInflater().inflate(R.layout.popup_rearrange, root, false);
-        View panel = sheet.findViewById(R.id.panel);
-        ((TextView) sheet.findViewById(R.id.title)).setText(adapter.labelAt(position));
-        LinearLayout rows = sheet.findViewById(R.id.rows);
-        final PopupWindow popup = new PopupWindow(sheet, root.getWidth(), root.getHeight(), true);
+        View view = activity.getLayoutInflater().inflate(R.layout.sheet_app_actions, root, false);
+        View card = view.findViewById(R.id.sheetCard);
+        final float radius = 22 * density;
+        card.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+        card.setClipToOutline(true);
+        Drawable banner = adapter.bannerAt(position);
+        if (banner != null) {
+            ((ImageView) view.findViewById(R.id.sheetBanner)).setImageDrawable(banner);
+        } else {
+            ImageView icon = view.findViewById(R.id.sheetIcon);
+            icon.setImageDrawable(adapter.iconAt(position));
+            icon.setVisibility(View.VISIBLE);
+        }
+        ((TextView) view.findViewById(R.id.sheetName)).setText(adapter.labelAt(position));
+
+        final PopupWindow popup = new PopupWindow(view, root.getWidth(), root.getHeight(), true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));   // needed for Back to dismiss
         popup.setAnimationStyle(0);
         popup.setOnDismissListener(() -> {
-            if (menu == popup) menu = null;
+            if (sheet == popup) sheet = null;
         });
 
-        addOption(rows, popup, R.string.edit_home_screen, () -> start(app));
-        boolean inDock = position < columns;
-        if (AppOrder.dockToggleTarget(position, adapter.getItemCount(), columns) != position) {
-            addOption(rows, popup, inDock ? R.string.move_out_of_dock : R.string.move_to_dock, () -> {
-                int from = adapter.positionOf(app);
-                if (from < 0) return;
-                int to = AppOrder.dockToggleTarget(from, adapter.getItemCount(), columns);
-                grid.setItemAnimator(shifter);
-                moveTo(app, from, to);
-                adapter.saveOrder();
-                dropAnimator();
-            });
+        LinearLayout actions = view.findViewById(R.id.sheetActions);
+        addAction(actions, popup, R.string.move, () -> begin(app, false));
+        // Only the dock move that applies; there's nothing to show when there is no grid.
+        if (AppOrder.dockToggleTarget(position, adapter.appCount(), columns) != position) {
+            addAction(actions, popup, position < columns ? R.string.move_out_of_dock : R.string.move_to_dock,
+                    () -> moveAcrossDock(app));
         }
-        addOption(rows, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
+        addAction(actions, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
 
-        placeNextTo(panel, card);
-        menu = popup;
+        sheet = popup;
         int[] at = new int[2];
         root.getLocationOnScreen(at);
-        sheet.setAlpha(0f);
-        panel.setScaleX(0.9f);
-        panel.setScaleY(0.9f);
         popup.showAtLocation(root, Gravity.TOP | Gravity.START, at[0], at[1]);
-        sheet.animate().alpha(1f).setDuration(140).start();
-        panel.animate().scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new DecelerateInterpolator(1.6f)).start();
-        rows.getChildAt(0).requestFocus();
-    }
 
-    /** Above the tile (the focused row is always near the bottom of the screen), centred on it. */
-    private void placeNextTo(View panel, View card) {
-        int width = (int) (280 * density);
-        panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        Rect tile = new Rect(0, 0, card.getWidth(), card.getHeight());
-        root.offsetDescendantRectToMyCoords(card, tile);
-        // The focused tile is scaled about its centre.
-        float halfH = tile.height() * card.getScaleY() / 2f;
-        float margin = 16 * density, gap = MENU_GAP_DP * density;
-        int x = Math.round(tile.exactCenterX() - width / 2f);
-        x = (int) Math.max(margin, Math.min(x, root.getWidth() - width - margin));
-        int y = Math.round(tile.exactCenterY() - halfH - gap - panel.getMeasuredHeight());
-        panel.setPivotY(panel.getMeasuredHeight());
-        if (y < margin) {
-            y = Math.round(tile.exactCenterY() + halfH + gap);   // no room above: hang below instead
-            panel.setPivotY(0f);
+        // In: the screen darkens, the app settles into place and its actions slide in after it.
+        DecelerateInterpolator ease = new DecelerateInterpolator(1.8f);
+        view.setAlpha(0f);
+        view.animate().alpha(1f).setDuration(180).start();
+        View appSide = view.findViewById(R.id.sheetApp);
+        appSide.setScaleX(0.92f);
+        appSide.setScaleY(0.92f);
+        appSide.animate().scaleX(1f).scaleY(1f).setDuration(300).setInterpolator(ease).start();
+        for (int i = 0; i < actions.getChildCount(); i++) {
+            View row = actions.getChildAt(i);
+            row.setAlpha(0f);
+            row.setTranslationX(32 * density);
+            row.animate().alpha(1f).translationX(0f).setStartDelay(60 + 40L * i).setDuration(260)
+                    .setInterpolator(ease).start();
         }
-        panel.setPivotX(Math.max(0f, Math.min(width, tile.exactCenterX() - x)));
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, FrameLayout.LayoutParams.WRAP_CONTENT);
-        lp.gravity = Gravity.TOP | Gravity.START;
-        lp.leftMargin = x;
-        lp.topMargin = y;
-        panel.setLayoutParams(lp);
+        actions.getChildAt(0).requestFocus();
+        // Likely next: build the header now, while the sheet covers the screen.
+        root.post(this::ensureHeader);
     }
 
-    private void addOption(LinearLayout rows, PopupWindow popup, int text, Runnable action) {
-        TextView row = (TextView) activity.getLayoutInflater().inflate(R.layout.item_option, rows, false);
+    private void addAction(LinearLayout actions, PopupWindow popup, int text, Runnable action) {
+        TextView row = (TextView) activity.getLayoutInflater().inflate(R.layout.sheet_action, actions, false);
         row.setText(text);
+        if (actions.getChildCount() == 0) ((ViewGroup.MarginLayoutParams) row.getLayoutParams()).topMargin = 0;
         row.setOnClickListener(v -> {
             popup.dismiss();
             action.run();
         });
-        rows.addView(row);
+        actions.addView(row);
     }
 
-    // ---- Edit Home Screen -------------------------------------------------------------------------
-
-    /** Picks the app up: it jiggles and the D-pad moves it. */
-    private void start(String app) {
-        if (key != null || adapter.positionOf(app) < 0) return;
-        key = app;
-        before = adapter.keys();
-        selectDown = false;
+    /** Move to Dock (its last slot) or Move out of Dock (the grid's first), saved straight away. */
+    private void moveAcrossDock(String app) {
+        int from = adapter.positionOf(app);
+        if (from < 0) return;
         grid.setItemAnimator(shifter);
-        adapter.setEditing(key);
-        showHint(true);
-    }
-
-    /** Drops the app: where it is, saving the order if it changed, or ({@code save} false) back where it was. */
-    void finish(boolean save) {
-        if (menu != null) menu.dismiss();
-        if (key == null) return;
-        String app = key;
-        key = null;
-        selectDown = false;
-        adapter.setEditing(null);
-        if (!save) {
-            // Only this app moved, so putting it back at its old index restores the order exactly.
-            int from = adapter.positionOf(app), to = before.indexOf(app);
-            if (from >= 0 && to >= 0 && to < adapter.getItemCount()) moveTo(app, from, to);
-        } else if (!adapter.keys().equals(before)) {
-            adapter.saveOrder();
-        }
-        before = null;
-        showHint(false);
+        moveTo(app, from, AppOrder.dockToggleTarget(from, adapter.appCount(), columns));
+        adapter.saveOrder();
         dropAnimator();
     }
 
+    // ---- arranging --------------------------------------------------------------------------------
+
+    /** The Arrange apps tile, or Done while arranging. */
+    void onActionTile() {
+        if (arranging) {
+            end();
+        } else {
+            begin(null, true);
+            follow(adapter.keyAt(0));
+        }
+    }
+
     /**
-     * Focus reached a tile. While rearranging only the app being moved should have it; if the grid hands
-     * focus to another tile (say the app's view went off screen), take it back.
+     * Starts arranging: picking up {@code app} for a single move, or, with {@code several}, waiting for one to
+     * be picked up.
      */
+    private void begin(String app, boolean several) {
+        if (arranging) return;
+        arranging = true;
+        session = several;
+        moving = null;
+        selectDown = false;
+        saved = adapter.keys();
+        grid.setItemAnimator(shifter);
+        showHeader(true);
+        if (app != null) pickUp(app);
+        else adapter.setArranging(true, null);
+        updateHeader();
+        refreshFocused();   // the header takes over from the top shelf
+    }
+
+    /** Stops arranging, keeping any app picked up where it is, and saves the order if it changed. */
+    void end() {
+        if (sheet != null) sheet.dismiss();
+        if (!arranging) return;
+        arranging = false;
+        moving = null;
+        selectDown = false;
+        adapter.setArranging(false, null);
+        saveIfChanged();
+        showHeader(false);
+        dropAnimator();
+        refreshFocused();   // the top shelf returns if focus is on the dock
+    }
+
+    /** Reports the focused tile again, so the top shelf follows whether we're arranging. */
+    private void refreshFocused() {
+        View item = grid.getFocusedChild();
+        if (item == null) return;
+        int pos = grid.getChildAdapterPosition(item);
+        View card = item.findViewById(R.id.card);
+        if (pos != RecyclerView.NO_POSITION && card != null) tiles.onTileFocused(pos, card);
+    }
+
+    private void pickUp(String app) {
+        moving = app;
+        pickedFrom = adapter.positionOf(app);
+        adapter.setArranging(true, app);
+        updateHeader();
+    }
+
+    private void putDown() {
+        moving = null;
+        if (!session) {
+            end();
+            return;
+        }
+        adapter.setArranging(true, null);
+        saveIfChanged();
+        updateHeader();
+    }
+
+    /** Puts the app back where it was picked up: only it moved since, so that restores the order exactly. */
+    private void putBack() {
+        String app = moving;
+        moving = null;
+        int from = adapter.positionOf(app);
+        if (from >= 0 && pickedFrom >= 0 && pickedFrom < adapter.appCount() && from != pickedFrom) {
+            moveTo(app, from, pickedFrom);
+        }
+        if (!session) {
+            end();
+            return;
+        }
+        adapter.setArranging(true, null);
+        updateHeader();
+    }
+
+    private void saveIfChanged() {
+        List<String> now = adapter.keys();
+        if (!now.equals(saved)) {
+            adapter.saveOrder();
+            saved = now;
+        }
+    }
+
+    /** Back: puts down a picked-up app where it was, or finishes arranging. Returns false when not arranging. */
+    boolean onBack() {
+        if (!arranging) return false;
+        if (moving != null) putBack();
+        else end();
+        return true;
+    }
+
+    /** Focus reached a tile. While an app is picked up only it should have focus; take it back if the grid moved it. */
     void onTileFocused(int position) {
-        if (key != null && !key.equals(adapter.keyAt(position))) {
-            final String app = key;
+        if (moving != null && !moving.equals(adapter.keyAt(position))) {
+            final String app = moving;
             grid.post(() -> follow(app));
         }
     }
 
-    /** Every key on a tile. Returns true when rearranging handled it. */
-    boolean onKey(KeyEvent event) {
-        if (key == null) return false;
+    /** Every key on a tile. Returns true when arranging handled it. */
+    boolean onKey(int position, KeyEvent event) {
+        if (!arranging) return false;
         int code = event.getKeyCode();
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
         if (AppAdapter.isSelect(code)) {
@@ -205,46 +313,42 @@ final class Rearranger {
                 if (event.getRepeatCount() == 0) selectDown = true;
                 return true;
             }
-            if (selectDown && !event.isCanceled()) finish(true);
+            if (selectDown && !event.isCanceled()) {
+                if (moving != null) putDown();
+                else if (adapter.isActionTile(position)) end();
+                else if (adapter.keyAt(position) != null) pickUp(adapter.keyAt(position));
+            }
             selectDown = false;
             return true;
         }
-        switch (code) {
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-            case KeyEvent.KEYCODE_DPAD_UP:
-            case KeyEvent.KEYCODE_DPAD_DOWN:
-                if (down) {
-                    int from = adapter.positionOf(key);
-                    int to = AppOrder.step(from, adapter.getItemCount(), columns, code);
-                    // It stays put at the row ends, on the last row and below the top bar, as focus does.
-                    if (from >= 0 && to >= 0 && to != from) moveTo(key, from, to);
-                }
-                return true;
-            default:
-                return false;
+        if (code != KeyEvent.KEYCODE_DPAD_LEFT && code != KeyEvent.KEYCODE_DPAD_RIGHT
+                && code != KeyEvent.KEYCODE_DPAD_UP && code != KeyEvent.KEYCODE_DPAD_DOWN) {
+            return false;
         }
+        if (moving == null) {
+            // Choosing an app: move focus as usual, but not up into the top bar, which the header replaces.
+            return code == KeyEvent.KEYCODE_DPAD_UP && position < columns;
+        }
+        if (down) {
+            int from = adapter.positionOf(moving);
+            int to = AppOrder.step(from, adapter.appCount(), columns, code);
+            // It stays put at the row ends, on the last row and at the top, as focus does.
+            if (from >= 0 && to >= 0 && to != from) moveTo(moving, from, to);
+        }
+        return true;
     }
 
     private void moveTo(String app, int from, int to) {
         adapter.move(from, to);
         // Dock tiles have extra room above and below: recompute it for the slots that changed hands.
         if (Math.min(from, to) < columns && Math.max(from, to) >= columns) grid.invalidateItemDecorations();
-        // Once laid out, keep the app in view and the top shelf on it, as when focus moves.
+        if (app.equals(moving)) updateHeader();
+        // Once laid out, keep the app in view, as when focus moves.
         afterLayout(() -> follow(app));
-    }
-
-    /** Runs {@code r} once the grid has laid out its pending changes (and queued their animations). */
-    private void afterLayout(Runnable r) {
-        grid.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-            @Override
-            public boolean onPreDraw() {
-                grid.getViewTreeObserver().removeOnPreDrawListener(this);
-                grid.post(r);
-                return true;
-            }
-        });
-        grid.invalidate();
+        // The slide starts with the next layout; keep redrawing at least that long.
+        redrawUntil = SystemClock.uptimeMillis() + SHIFT_MS + 150;
+        grid.removeCallbacks(redraw);
+        grid.postOnAnimation(redraw);
     }
 
     private void follow(String app) {
@@ -272,22 +376,87 @@ final class Rearranger {
         else card.requestFocus();
     }
 
-    /** Outside rearranging the grid has no item animations; let the last slide finish first. */
+    /** Runs {@code r} once the grid has laid out its pending changes (and queued their animations). */
+    private void afterLayout(Runnable r) {
+        grid.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                grid.getViewTreeObserver().removeOnPreDrawListener(this);
+                grid.post(r);
+                return true;
+            }
+        });
+        grid.invalidate();
+    }
+
+    /** Outside arranging the grid has no item animations; let the last slide finish first. */
     private void dropAnimator() {
         afterLayout(() -> shifter.isRunning(() -> {
-            if (key == null && grid.getItemAnimator() == shifter) grid.setItemAnimator(null);
+            if (!arranging && grid.getItemAnimator() == shifter) grid.setItemAnimator(null);
         }));
     }
 
-    /** How to finish: there's no Done button, and Back cancelling isn't obvious. */
-    private void showHint(boolean show) {
-        if (hint == null) {
-            if (!show) return;
-            hint = (TextView) activity.getLayoutInflater().inflate(R.layout.rearrange_hint, root, false);
-            root.addView(hint);
+    // ---- header -----------------------------------------------------------------------------------
+
+    private void ensureHeader() {
+        if (header != null) return;
+        header = activity.getLayoutInflater().inflate(R.layout.arrange_header, root, false);
+        kicker = header.findViewById(R.id.arrangeKicker);
+        title = header.findViewById(R.id.arrangeTitle);
+        LinearLayout legend = header.findViewById(R.id.arrangeLegend);
+        for (int i = 0; i < keys.length; i++) {
+            keys[i] = activity.getLayoutInflater().inflate(R.layout.legend_item, legend, false);
+            if (i == 0) ((ViewGroup.MarginLayoutParams) keys[i].getLayoutParams()).setMarginStart(0);
+            legend.addView(keys[i]);
         }
-        hint.animate().cancel();
-        hint.animate().alpha(show ? 1f : 0f).translationY(show ? 0f : 8 * density)
-                .setDuration(show ? 220 : 160).start();
+        root.addView(header);
+        View left = root.findViewById(R.id.leftBlock);
+        topBar = left != null ? (View) left.getParent() : null;
+    }
+
+    private void showHeader(boolean show) {
+        if (header == null && !show) return;
+        ensureHeader();
+        header.animate().cancel();
+        header.setTranslationY(show ? -10 * density : 0f);
+        header.animate().alpha(show ? 1f : 0f).translationY(0f).setDuration(show ? 240 : 160)
+                .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+        if (topBar != null) {
+            topBar.animate().cancel();
+            topBar.animate().alpha(show ? 0f : 1f).setDuration(show ? 160 : 240).start();
+        }
+    }
+
+    /** What is going on, where the app is, and the keys that do something now. */
+    private void updateHeader() {
+        if (header == null) return;
+        if (moving != null) {
+            int pos = adapter.positionOf(moving);
+            title.setText(activity.getString(R.string.moving_title, adapter.labelAt(pos)));
+            kicker.setText(pos < columns ? activity.getString(R.string.location_dock)
+                    : activity.getString(R.string.location_row, pos / columns));
+            setKey(0, R.drawable.ic_dpad, R.string.legend_move);
+            setKey(1, 0, session ? R.string.legend_drop : R.string.legend_done);
+            setKey(2, R.drawable.ic_back, R.string.legend_cancel);
+        } else {
+            title.setText(R.string.arrange_title);
+            kicker.setText(R.string.home_screen);
+            setKey(0, 0, R.string.legend_pick_up);
+            setKey(1, R.drawable.ic_back, R.string.legend_done);
+            keys[2].setVisibility(View.GONE);
+        }
+    }
+
+    /** Legend key {@code i}: the remote key's icon, or OK when {@code icon} is 0, and what it does. */
+    private void setKey(int i, int icon, int label) {
+        View item = keys[i];
+        item.setVisibility(View.VISIBLE);
+        ImageView glyph = item.findViewById(R.id.keyIcon);
+        TextView ok = item.findViewById(R.id.keyText);
+        if (icon != 0) glyph.setImageResource(icon);
+        else ok.setText(R.string.key_ok);
+        glyph.setVisibility(icon != 0 ? View.VISIBLE : View.GONE);
+        ok.setVisibility(icon != 0 ? View.GONE : View.VISIBLE);
+        ((TextView) item.findViewById(R.id.keyLabel)).setText(label);
     }
 }

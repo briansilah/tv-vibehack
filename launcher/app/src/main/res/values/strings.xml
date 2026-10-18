@@ -21,10 +21,22 @@
     <string name="cant_open">Can\'t open %1$s</string>
     <string name="date_format">EEEE  d MMMM</string>
     <string name="dream_name">Clock</string>
-    <string name="rearrange_hint">Arrows to move  ·  OK to save  ·  Back to cancel</string>
-    <string name="edit_home_screen">Edit Home Screen</string>
+    <string name="home_button_description">Opens this launcher when you press Home, while Google TV\'s own launcher stays installed for its quick settings panel. Holding Home opens that panel.</string>
+    <string name="arrange_apps">Arrange apps</string>
+    <string name="done">Done</string>
+    <string name="move">Move</string>
     <string name="move_to_dock">Move to Dock</string>
     <string name="move_out_of_dock">Move out of Dock</string>
-    <string name="app_info">App Info</string>
-    <string name="home_button_description">Opens this launcher when you press Home, while Google TV\'s own launcher stays installed for its quick settings panel. Holding Home opens that panel.</string>
+    <string name="app_info">App info</string>
+    <string name="home_screen">Home screen</string>
+    <string name="arrange_title">Arrange your apps</string>
+    <string name="moving_title">Moving %1$s</string>
+    <string name="key_ok" translatable="false">OK</string>
+    <string name="legend_pick_up">Pick up</string>
+    <string name="legend_move">Move</string>
+    <string name="legend_drop">Drop</string>
+    <string name="legend_cancel">Cancel</string>
+    <string name="legend_done">Done</string>
+    <string name="location_dock">In the Dock</string>
+    <string name="location_row">Row %1$d</string>
 </resources>

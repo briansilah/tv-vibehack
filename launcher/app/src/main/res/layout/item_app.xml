@@ -49,6 +49,15 @@
             android:visibility="gone" />
     </FrameLayout>
 
+    <!-- Ring and chevrons around the app being moved: the card plus MoveMarks.MARGIN_DP on each side. -->
+    <com.gathin.tvhome.MoveMarks
+        android:id="@+id/marks"
+        android:layout_width="260dp"
+        android:layout_height="181dp"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="-40dp"
+        android:importantForAccessibility="no" />
+
     <TextView
         android:id="@+id/name"
         android:layout_width="180dp"

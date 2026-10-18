@@ -229,13 +229,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        rearranger.finish(true);   // Home pressed while rearranging: keep the new arrangement
+        rearranger.end();   // Home pressed while arranging: keep the new arrangement
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        rearranger.finish(true);
+        rearranger.end();
         handler.removeCallbacks(minuteTick);
         handler.removeCallbacks(shelfSwap);
     }
@@ -249,8 +249,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onBackPressed() {
-        // Home screen: Back goes nowhere, except to put back an app being rearranged.
-        rearranger.finish(false);
+        // Home screen: Back goes nowhere, except while arranging apps.
+        rearranger.onBack();
     }
 
     // ---- focus -----------------------------------------------------------------------------------
@@ -269,7 +269,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int decoratedTop = item.getTop() - (int) (6 * density);
             int dy = decoratedTop - grid.getPaddingTop();
             if (Math.abs(dy) > 1) grid.smoothScrollBy(0, dy);
-            showHero(position, r.top - dy);
+            // While arranging, the header says what's going on instead of the top shelf.
+            if (rearranger.isActive() || adapter.isActionTile(position)) hideHero();
+            else showHero(position, r.top - dy);
         } else {
             hideHero();
             // Scroll just enough to show the whole grown tile, its shadow and its name.
@@ -360,15 +362,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
-    /** Holding Select on an app opens its menu (Edit Home Screen, Move to Dock, App Info), as on tvOS. */
+    /** Holding Select on an app opens its actions: Move, Move to Dock, App info. */
     @Override
     public void onTileLongPressed(int position, View card) {
-        rearranger.showMenu(position, card);
+        rearranger.showActions(position);
     }
 
     @Override
     public boolean onTileKey(int position, KeyEvent event) {
-        return rearranger.onKey(event);
+        return rearranger.onKey(position, event);
+    }
+
+    @Override
+    public void onActionTile() {
+        rearranger.onActionTile();
     }
 
     private void focusTile(int position) {
