@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- StockLauncherBridge: only watches which window comes to the front; it reads no content and filters no keys. -->
+<!-- StockLauncherBridge: watches which window comes to the front. Window content is only read to check which app is
+     in front (the package of the active window); no text is read and no keys are filtered. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="0"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:description="@string/bridge_description" />

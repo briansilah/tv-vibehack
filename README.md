@@ -187,8 +187,8 @@ takes the panel with it. And while it is enabled it always wins Home, whatever t
 
 So on Google TV the install script keeps the stock launcher enabled and turns on a small
 accessibility service, `StockLauncherBridge`: whenever Google TV's home screen comes to the front
-(Home, boot, wake), it brings this launcher back over it. It reads no screen content and filters no
-keys. The remote's Settings button, long-press Home and the app buttons the stock launcher handles
+(Home, boot, wake), it brings this launcher back over it. It filters no keys and only checks which
+app is in front. The remote's Settings button, long-press Home and the app buttons the stock launcher handles
 keep working, and the Settings button on the top bar opens the same panel.
 
 ```bash

@@ -32,10 +32,12 @@ APK=app/build/outputs/apk/debug/app-debug.apk
     "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted"
   if [ "$KEEP_STOCK_LAUNCHER" = 1 ]; then
     # Keep the stock launcher (and its quick settings panel); the bridge brings this launcher back over its home.
+    # The service only reacts to windows coming to the front, so open this launcher once at the end.
     # Appends to enabled_accessibility_services instead of overwriting other services.
     printf '%s\n' \
       "pm enable $STOCK_LAUNCHER" \
-      's=$(settings get secure enabled_accessibility_services); case "$s" in *StockLauncherBridge*) ;; null|"") settings put secure enabled_accessibility_services '"$BRIDGE"' ;; *) settings put secure enabled_accessibility_services "$s:'"$BRIDGE"'" ;; esac; settings put secure accessibility_enabled 1; echo bridge-enabled'
+      's=$(settings get secure enabled_accessibility_services); case "$s" in *StockLauncherBridge*) ;; null|"") settings put secure enabled_accessibility_services '"$BRIDGE"' ;; *) settings put secure enabled_accessibility_services "$s:'"$BRIDGE"'" ;; esac; settings put secure accessibility_enabled 1; echo bridge-enabled' \
+      "am start -n com.gathin.tvhome/.MainActivity"
   else
     printf '%s\n' \
       "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \

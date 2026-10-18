@@ -47,12 +47,14 @@ Write-Host $out
 if ("$out" -notmatch 'Success') { throw 'pm install failed; the stock launcher was left untouched' }
 if ($KeepStockLauncher -eq '1') {
     # Keep the stock launcher (and its quick settings panel); the bridge brings this launcher back over its home.
+    # The service only reacts to windows coming to the front, so open this launcher once at the end.
     # Appends to enabled_accessibility_services instead of overwriting other services.
     $enableBridge = 's=$(settings get secure enabled_accessibility_services); case "$s" in *StockLauncherBridge*) ;; null|"") settings put secure enabled_accessibility_services ' + $bridge + ' ;; *) settings put secure enabled_accessibility_services "$s:' + $bridge + '" ;; esac; settings put secure accessibility_enabled 1; echo bridge-enabled'
     @(
         'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
         "pm enable $StockLauncher",
-        $enableBridge
+        $enableBridge,
+        'am start -n com.gathin.tvhome/.MainActivity'
     ) | & $py -I ..\tools\tv.py --batch
 } else {
     $out = & $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome'
