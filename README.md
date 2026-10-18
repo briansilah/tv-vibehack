@@ -69,13 +69,14 @@ first time; with this repo as context, people report about fifteen minutes.
 
 A home screen that is yours again:
 
-- **Pitch-black background** and a dock of your four favourite apps at the bottom, in a lighter
-  rounded band, exactly where Apple TV puts it.
+- **Pitch-black background** and a dock of your four favourite apps at the bottom, in a translucent
+  full-width rounded panel, exactly where Apple TV puts it.
 - **A top shelf** showing the focused app's name in large type, with an ambient glow in a colour
-  taken from the app's own artwork.
+  taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
+  sweeping along the dock doesn't flash every colour.
 - **The rest of your apps in a grid** that slides up when you press Down.
-- **One floating glass highlight** that springs from tile to tile instead of each tile drawing its
-  own border. The focused tile lifts slightly and shows its name.
+- **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
+  onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
 - **Three frosted buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
   network you're on) and Settings.
 - **A greeting, a large thin clock and the date**, set in

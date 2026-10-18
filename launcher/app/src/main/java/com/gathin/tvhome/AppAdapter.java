@@ -18,12 +18,14 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.view.animation.OvershootInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.dynamicanimation.animation.DynamicAnimation;
+import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
@@ -42,8 +44,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     interface TileListener {
         void onTileFocused(int position, View card);
 
-        /** Called for D-pad Up/Down on a tile. Return true when handled. */
-        boolean onTileVerticalKey(int position, int keyCode);
+        /** Called for every D-pad direction on a tile. Return true when handled. */
+        boolean onTileDpadKey(int position, int keyCode);
     }
 
     static final class Entry {
@@ -63,7 +65,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
     }
 
-    static final float FOCUS_SCALE = 1.10f;
+    /** Focused tile size relative to the others, as measured on an Apple TV 4K (about 152 vs 124 px). */
+    static final float FOCUS_SCALE = 1.22f;
+    /** Lift of the focused tile, for the soft drop shadow tvOS draws under it. */
+    private static final float FOCUS_LIFT_DP = 12f;
+    /** The focused tile's name sits this far below its resting place, clear of the scaled tile. */
+    private static final float NAME_SHIFT_DP = 12f;
 
     private final Context ctx;
     private final TileListener listener;
@@ -126,10 +133,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         Entry e = items.get(position);
         h.name.setText(e.label);
         h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);   // the dock has no labels
-        boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
-        h.name.setAlpha(focused ? 1f : 0f);
-        h.card.setScaleX(focused ? FOCUS_SCALE : 1f);
-        h.card.setScaleY(focused ? FOCUS_SCALE : 1f);
+        h.settle(h.card.isFocused());   // a rebind after reload() can hit the focused tile
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
@@ -227,6 +231,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         final ImageView icon;
         final TextView label;
         final TextView name;
+        private final SpringAnimation scaleX;
+        private final SpringAnimation scaleY;
+        private final float density;
 
         Holder(View v, TileListener listener) {
             super(v);
@@ -235,8 +242,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             icon = v.findViewById(R.id.icon);
             label = v.findViewById(R.id.label);
             name = v.findViewById(R.id.name);
+            density = v.getResources().getDisplayMetrics().density;
+            scaleX = new SpringAnimation(card, DynamicAnimation.SCALE_X, 1f);
+            scaleY = new SpringAnimation(card, DynamicAnimation.SCALE_Y, 1f);
 
-            final float density = v.getResources().getDisplayMetrics().density;
             final float radius = density * 16f;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
@@ -248,25 +257,62 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
             card.setOnKeyListener((view, keyCode, event) -> {
                 if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-                if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN) return false;
+                if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN
+                        && keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    return false;
+                }
                 int pos = getBindingAdapterPosition();
-                return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileVerticalKey(pos, keyCode);
+                return listener != null && pos != RecyclerView.NO_POSITION && listener.onTileDpadKey(pos, keyCode);
             });
 
             card.setOnFocusChangeListener((view, focused) -> {
-                float s = focused ? FOCUS_SCALE : 1.0f;
-                view.animate().scaleX(s).scaleY(s)
-                        .setDuration(focused ? 260 : 180)
-                        .setInterpolator(new OvershootInterpolator(focused ? 1.6f : 0f))
-                        .start();
-                name.animate().alpha(focused ? 1f : 0f)
-                        .translationY(focused ? density * 4f : -density * 6f)
-                        .setDuration(220).start();
+                animateFocus(focused);
                 int pos = getBindingAdapterPosition();
                 if (focused && listener != null && pos != RecyclerView.NO_POSITION) {
                     listener.onTileFocused(pos, view);
                 }
             });
+        }
+
+        /**
+         * tvOS focus: the tile itself grows, quickly and with a hint of overshoot (about 110 ms to its peak),
+         * and lifts onto a soft shadow; the tile losing focus eases back down over about 220 ms. Springs keep
+         * the motion continuous when focus moves again mid-animation (holding the D-pad).
+         */
+        private void animateFocus(boolean focused) {
+            // Fitted to an Apple TV 4K screen recording (frame-by-frame tile widths).
+            float stiffness = focused ? 1100f : 500f;
+            float damping = focused ? 0.68f : 1f;
+            float s = focused ? FOCUS_SCALE : 1f;
+            for (SpringAnimation a : new SpringAnimation[]{scaleX, scaleY}) {
+                a.getSpring().setStiffness(stiffness).setDampingRatio(damping);
+                a.animateToFinalPosition(s);
+            }
+            card.animate().translationZ(focused ? FOCUS_LIFT_DP * density : 0f)
+                    .setDuration(focused ? 120 : 220)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .start();
+            name.animate().alpha(focused ? 1f : 0f)
+                    .translationY(nameShift(focused))
+                    .setDuration(focused ? 200 : 140).start();
+        }
+
+        /** Jumps to the resting focused or unfocused state, without animation. */
+        void settle(boolean focused) {
+            scaleX.cancel();
+            scaleY.cancel();
+            card.animate().cancel();
+            name.animate().cancel();
+            float s = focused ? FOCUS_SCALE : 1f;
+            card.setScaleX(s);
+            card.setScaleY(s);
+            card.setTranslationZ(focused ? FOCUS_LIFT_DP * density : 0f);
+            name.setAlpha(focused ? 1f : 0f);
+            name.setTranslationY(nameShift(focused));
+        }
+
+        private float nameShift(boolean focused) {
+            return (focused ? NAME_SHIFT_DP : NAME_SHIFT_DP - 10f) * density;
         }
     }
 }
