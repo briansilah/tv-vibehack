@@ -329,6 +329,7 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result["cold"]["summary"]["fully_drawn_ms"]["median"], 1250)
         self.assertEqual(result["warm"]["summary"]["focus_restored_ms"]["median"], 600.0)
         self.assertEqual(result["warm"]["summary"]["reload_load_ms"]["median"], 350.0)
+        self.assertEqual(result["warm"]["summary"]["home_frames"]["median"], 10516)
         self.assertEqual(result["jank"]["summary"]["janky_pct"]["n"], 2)
         # dock: 8 swaps per round (the "show" when focus lands on the dock is left out), frames per round
         self.assertEqual(result["dock"]["summary"]["shelf_ms"]["n"], 16)

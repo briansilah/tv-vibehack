@@ -340,10 +340,13 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
     for i in range(runs):
         open_other_app(sh, other)
         time.sleep(settle)
+        sh.shell("dumpsys gfxinfo %s reset" % PKG)
         t = device_epoch(sh)
         s = parse_am_start(sh.shell(HOME_INTENT if via_home else "am start -W -n " + ACTIVITY))
         time.sleep(settle)
         s.update(launcher_logs(sh, t))
+        g = parse_gfxinfo(sh.shell("dumpsys gfxinfo " + PKG))
+        s["home_frames"], s["home_janky_frames"] = g.get("total_frames"), g.get("janky_frames")
         if s.get("activity") and not s["activity"].startswith(PKG):
             log("  warning: Home opened %s, not the launcher; is it the default home app?" % s["activity"])
         if s.get("total_ms") is None or s.get("launch_state") == "UNKNOWN":
@@ -506,6 +509,7 @@ METRICS = [
     ("cold.summary.reload_ms", "  of which: app list reload", "ms"),
     ("warm.summary.total_ms", "Home / warm start (TotalTime)", "ms"),
     ("warm.summary.focus_restored_ms", "Home: onResume to focus restored", "ms"),
+    ("warm.summary.home_frames", "  frames drawn until Home settles", ""),
     ("warm.summary.resume_ms", "  onResume main-thread time", "ms"),
     ("warm.summary.reload_ms", "  of which: app list reload", "ms"),
     ("warm.summary.reload_load_ms", "    loading banners/icons/labels", "ms"),
