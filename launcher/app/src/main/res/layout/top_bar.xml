@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Top right of the home screen. Inflated with the theme overlay for config.xml's top_bar_style, which
+     picks the bar's and buttons' styles (values/styles.xml). The root's size is set here, not by its style:
+     the parent resolves the root's layout attributes without the overlay. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    style="?attr/topBarStyle">
+
+    <com.gathin.tvhome.TopBarButton
+        android:id="@+id/btnInputs"
+        style="?attr/topButtonStyle"
+        android:text="@string/inputs"
+        android:src="@drawable/ic_input"
+        android:nextFocusDown="@+id/grid" />
+
+    <com.gathin.tvhome.TopBarButton
+        android:id="@+id/btnWifi"
+        style="?attr/topButtonStyle"
+        android:text="@string/wifi"
+        android:src="@drawable/ic_wifi"
+        android:nextFocusDown="@+id/grid" />
+
+    <com.gathin.tvhome.TopBarButton
+        android:id="@+id/btnSettings"
+        style="?attr/topButtonStyle"
+        android:text="@string/settings"
+        android:src="@drawable/ic_settings"
+        android:nextFocusDown="@+id/grid" />
+</LinearLayout>

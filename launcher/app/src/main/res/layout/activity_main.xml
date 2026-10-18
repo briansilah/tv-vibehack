@@ -123,36 +123,16 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/topButtons"
+            <!-- Inflated in MainActivity with the look chosen in config.xml (top_bar_style). -->
+            <ViewStub
+                android:id="@+id/topBarStub"
+                android:inflatedId="@+id/topButtons"
+                android:layout="@layout/top_bar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
                 android:layout_alignBottom="@id/leftBlock"
-                android:layout_marginBottom="6dp"
-                android:orientation="horizontal">
-
-                <com.gathin.tvhome.TopBarButton
-                    android:id="@+id/btnInputs"
-                    style="@style/TopButton"
-                    android:text="@string/inputs"
-                    android:src="@drawable/ic_input"
-                    android:nextFocusDown="@+id/grid" />
-
-                <com.gathin.tvhome.TopBarButton
-                    android:id="@+id/btnWifi"
-                    style="@style/TopButton"
-                    android:text="@string/wifi"
-                    android:src="@drawable/ic_wifi"
-                    android:nextFocusDown="@+id/grid" />
-
-                <com.gathin.tvhome.TopBarButton
-                    android:id="@+id/btnSettings"
-                    style="@style/TopButton"
-                    android:text="@string/settings"
-                    android:src="@drawable/ic_settings"
-                    android:nextFocusDown="@+id/grid" />
-            </LinearLayout>
+                android:layout_marginBottom="6dp" />
         </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
@@ -177,4 +157,21 @@
                 android:descendantFocusability="afterDescendants" />
         </FrameLayout>
     </LinearLayout>
+
+    <!-- Google TV-style top bar: the focused button's name, under the bar (positioned in code). -->
+    <TextView
+        android:id="@+id/topCaption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:alpha="0"
+        android:maxWidth="240dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:importantForAccessibility="no"
+        android:textColor="#FFE4F3FF"
+        android:textSize="13sp"
+        android:fontFamily="@font/outfit"
+        android:fontVariationSettings="'wght' 500"
+        android:letterSpacing="0.01" />
 </FrameLayout>

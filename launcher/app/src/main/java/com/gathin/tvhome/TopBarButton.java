@@ -1,6 +1,7 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Outline;
 import android.graphics.Rect;
@@ -9,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -17,12 +19,27 @@ import androidx.dynamicanimation.animation.FloatPropertyCompat;
 import androidx.dynamicanimation.animation.SpringAnimation;
 
 /**
- * A top bar button, tvOS style: a round icon button that, when focused, widens into a pill showing its
- * label, and closes back to the icon when focus leaves. The width follows a spring on an expansion
- * fraction (0 = circle, 1 = pill). The top bar is right-aligned, so a button grows leftward and only the
- * buttons before it glide aside.
+ * A top bar button: an icon and a label, in one of three looks (attribute topBarMode, set by the theme
+ * overlay for config.xml's top_bar_style):
+ * <ul>
+ * <li>{@link #MODE_PILL}: a pill with icon and label, always.</li>
+ * <li>{@link #MODE_EXPAND}, Apple TV: a round icon button that, when focused, widens into the pill and
+ * closes back to the icon when focus leaves. The width follows a spring on an expansion fraction
+ * (0 = circle, 1 = pill). The top bar is right-aligned, so a button grows leftward and only the buttons
+ * before it glide aside.</li>
+ * <li>{@link #MODE_CAPTION}, Google TV: a round icon button that grows a little and lifts when focused;
+ * MainActivity shows its label under the bar.</li>
+ * </ul>
  */
 public class TopBarButton extends ViewGroup {
+
+    static final int MODE_PILL = 0;
+    static final int MODE_EXPAND = 1;
+    static final int MODE_CAPTION = 2;
+
+    /** Focused size in caption mode, as on the Google TV home screen (about 64 to 70 px). */
+    static final float CAPTION_FOCUS_SCALE = 1.1f;
+    private static final float CAPTION_LIFT_DP = 6f;
 
     /**
      * The tile focus spring ({@link AppAdapter}): quick, with a hint of overshoot. Closing uses the same
@@ -48,7 +65,10 @@ public class TopBarButton extends ViewGroup {
 
     private final ImageView icon;
     private final TextView label;
+    private final int mode;
     private final SpringAnimation spring;
+    private final SpringAnimation scaleX;
+    private final SpringAnimation scaleY;
     private float expansion;
     private int expandedWidth;
 
@@ -61,6 +81,14 @@ public class TopBarButton extends ViewGroup {
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.TopBarButton);
         icon.setImageDrawable(a.getDrawable(R.styleable.TopBarButton_android_src));
         CharSequence text = a.getText(R.styleable.TopBarButton_android_text);
+        mode = a.getInt(R.styleable.TopBarButton_topBarMode, MODE_EXPAND);
+        int iconSize = a.getDimensionPixelSize(R.styleable.TopBarButton_topBarIconSize, 0);
+        if (iconSize > 0) {
+            icon.getLayoutParams().width = iconSize;
+            icon.getLayoutParams().height = iconSize;
+        }
+        ColorStateList tint = a.getColorStateList(R.styleable.TopBarButton_topBarIconTint);
+        if (tint != null) icon.setImageTintList(tint);
         a.recycle();
         label.setText(text);
         if (getContentDescription() == null) setContentDescription(text);   // icon-only: name it for accessibility
@@ -77,10 +105,21 @@ public class TopBarButton extends ViewGroup {
         spring = new SpringAnimation(this, EXPANSION, 0f);
         spring.getSpring().setStiffness(STIFFNESS).setDampingRatio(DAMPING);
         spring.setMinimumVisibleChange(DynamicAnimation.MIN_VISIBLE_CHANGE_SCALE);
-        setExpansion(0f);
+        scaleX = new SpringAnimation(this, DynamicAnimation.SCALE_X, 1f);
+        scaleY = new SpringAnimation(this, DynamicAnimation.SCALE_Y, 1f);
+        setExpansion(mode == MODE_PILL ? 1f : 0f);
     }
 
-    /** Text shown when expanded. */
+    /** Whether MainActivity should show this button's label under the bar while it is focused. */
+    boolean showsCaption() {
+        return mode == MODE_CAPTION;
+    }
+
+    CharSequence getLabel() {
+        return label.getText();
+    }
+
+    /** Text shown in the pill (or the caption). */
     void setLabel(CharSequence text) {
         label.setText(text);
     }
@@ -93,7 +132,27 @@ public class TopBarButton extends ViewGroup {
     @Override
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
-        spring.animateToFinalPosition(gainFocus ? 1f : 0f);
+        if (mode == MODE_EXPAND) {
+            spring.animateToFinalPosition(gainFocus ? 1f : 0f);
+        } else if (mode == MODE_CAPTION) {
+            lift(gainFocus);
+        }
+        // MODE_PILL: the background alone shows focus.
+    }
+
+    /** Caption mode: grow and lift onto a shadow with the tile focus springs (AppAdapter). */
+    private void lift(boolean focused) {
+        float stiffness = focused ? 1100f : 500f;
+        float damping = focused ? 0.68f : 1f;
+        for (SpringAnimation a : new SpringAnimation[]{scaleX, scaleY}) {
+            a.getSpring().setStiffness(stiffness).setDampingRatio(damping);
+            a.animateToFinalPosition(focused ? CAPTION_FOCUS_SCALE : 1f);
+        }
+        float density = getResources().getDisplayMetrics().density;
+        animate().translationZ(focused ? CAPTION_LIFT_DP * density : 0f)
+                .setDuration(focused ? 120 : 220)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
     }
 
     private void setExpansion(float value) {
@@ -165,6 +224,18 @@ public class TopBarButton extends ViewGroup {
         float f = Math.max(0f, Math.min(1f, expansion));
         float centred = (height - iconWidth) / 2f;
         return Math.round(centred + (paddingStart - centred) * f);
+    }
+
+    /** The theme overlay for config.xml's top_bar_style; Google TV for anything unknown. */
+    static int themeFor(String style) {
+        switch (style == null ? "" : style.trim()) {
+            case "pills":
+                return R.style.ThemeOverlay_TopBar_Pills;
+            case "apple":
+                return R.style.ThemeOverlay_TopBar_Apple;
+            default:
+                return R.style.ThemeOverlay_TopBar_Google;
+        }
     }
 
     static float labelAlpha(float expansion) {

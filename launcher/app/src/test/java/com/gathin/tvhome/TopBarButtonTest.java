@@ -44,6 +44,15 @@ public class TopBarButtonTest {
     }
 
     @Test
+    public void topBarStyleFromConfig() {
+        assertEquals(R.style.ThemeOverlay_TopBar_Pills, TopBarButton.themeFor("pills"));
+        assertEquals(R.style.ThemeOverlay_TopBar_Apple, TopBarButton.themeFor(" apple "));
+        assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor("google"));
+        assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor("unknown"));
+        assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor(null));
+    }
+
+    @Test
     public void labelFadesInOverTheLastPartOfTheOpening() {
         assertEquals(0f, TopBarButton.labelAlpha(0f), 0f);
         assertEquals(0f, TopBarButton.labelAlpha(TopBarButton.LABEL_FADE_FROM), 0f);

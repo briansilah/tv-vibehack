@@ -23,9 +23,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewStub;
 import android.view.ViewTreeObserver;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AnimationUtils;
@@ -78,6 +81,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean tilesEntered;
     private TextView greeting;
     private TopBarButton btnWifi;
+    private View topBar;
+    /** Google TV look: the focused top bar button's name, under the bar. */
+    private TextView topCaption;
     // Static so they survive the activity being destroyed while another app is open (low-memory TVs,
     // or Developer options → "Don't keep activities"); they only reset when the process dies.
     private static int lastFocused = 0;
@@ -126,7 +132,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         greeting = findViewById(R.id.greeting);
-        btnWifi = findViewById(R.id.btnWifi);
+        ViewStub topBarStub = findViewById(R.id.topBarStub);
+        topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
+                TopBarButton.themeFor(getString(R.string.top_bar_style)))));
+        topBar = topBarStub.inflate();
+        topCaption = findViewById(R.id.topCaption);
+        btnWifi = topBar.findViewById(R.id.btnWifi);
 
         grid = findViewById(R.id.grid);
         grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
@@ -148,8 +159,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         });
 
-        View btnInputs = findViewById(R.id.btnInputs);
-        View btnSettings = findViewById(R.id.btnSettings);
+        TopBarButton btnInputs = topBar.findViewById(R.id.btnInputs);
+        TopBarButton btnSettings = topBar.findViewById(R.id.btnSettings);
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         btnSettings.setOnClickListener(v -> openSettings());
@@ -170,6 +181,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
+        View.OnFocusChangeListener captionFollow = (v, focused) -> {
+            if (focused) showCaption((TopBarButton) v);
+            else topCaption.setAlpha(0f);
+        };
+        for (TopBarButton b : new TopBarButton[]{btnInputs, btnWifi, btnSettings}) {
+            if (b.showsCaption()) b.setOnFocusChangeListener(captionFollow);
+        }
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
@@ -413,6 +431,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi.setLabel(text);
         String wifi = getString(R.string.wifi);
         btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
+        if (btnWifi.showsCaption() && btnWifi.isFocused()) showCaption(btnWifi);
+    }
+
+    /**
+     * Google TV look: the focused button's name, centred under it just below the bar. Like the stock
+     * launcher, it moves with focus at once instead of animating.
+     */
+    private void showCaption(TopBarButton b) {
+        topCaption.setText(b.getLabel());
+        int unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        topCaption.measure(unspecified, unspecified);
+        Rect button = new Rect(0, 0, b.getWidth(), b.getHeight());
+        root.offsetDescendantRectToMyCoords(b, button);
+        Rect bar = new Rect(0, 0, topBar.getWidth(), topBar.getHeight());
+        root.offsetDescendantRectToMyCoords(topBar, bar);
+        float w = topCaption.getMeasuredWidth();
+        float x = Math.min(button.exactCenterX() - w / 2f, root.getWidth() - w - 24 * density);
+        topCaption.setX(Math.max(0f, x));
+        topCaption.setY(bar.bottom + 4 * density);
+        topCaption.setAlpha(1f);
     }
 
     /** Google TV's quick settings panel, like the remote's Settings button; the full Settings app elsewhere. */
@@ -431,7 +469,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Dropdown menu under the Inputs button: HDMI ports (with connection state), AV and Live TV. */
     private void showInputs() {
-        TopBarButton anchor = findViewById(R.id.btnInputs);
+        TopBarButton anchor = topBar.findViewById(R.id.btnInputs);
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
 
@@ -516,7 +554,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (popup.isShowing()) popup.update(anchor, 0, yOff, -1, -1);
         };
         anchor.getViewTreeObserver().addOnGlobalLayoutListener(follow);
-        popup.setOnDismissListener(() -> anchor.getViewTreeObserver().removeOnGlobalLayoutListener(follow));
+        // The Google TV caption would sit under the dropdown.
+        topCaption.setAlpha(0f);
+        popup.setOnDismissListener(() -> {
+            anchor.getViewTreeObserver().removeOnGlobalLayoutListener(follow);
+            if (anchor.showsCaption() && anchor.isFocused()) showCaption(anchor);
+        });
         panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
         rows.getChildAt(0).requestFocus();

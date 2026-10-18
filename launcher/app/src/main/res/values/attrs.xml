@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The top bar's look, set by the theme overlay for config.xml's top_bar_style. -->
+    <attr name="topBarStyle" format="reference" />
+    <attr name="topButtonStyle" format="reference" />
+
     <declare-styleable name="TopBarButton">
         <attr name="android:src" />
         <attr name="android:text" />
+        <attr name="topBarMode">
+            <!-- Icon and label, always (the original pills). -->
+            <enum name="pill" value="0" />
+            <!-- Icon only; opens into a labelled pill when focused (Apple TV). -->
+            <enum name="expand" value="1" />
+            <!-- Icon only; grows a little when focused, its name shown underneath (Google TV). -->
+            <enum name="caption" value="2" />
+        </attr>
+        <attr name="topBarIconSize" format="dimension" />
+        <attr name="topBarIconTint" format="color" />
     </declare-styleable>
 </resources>
