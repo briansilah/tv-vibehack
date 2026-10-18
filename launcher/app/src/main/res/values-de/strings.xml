@@ -19,4 +19,5 @@
     <string name="not_available">Auf diesem TV nicht verfügbar</string>
     <string name="cant_open">%1$s lässt sich nicht öffnen</string>
     <string name="date_format">EEEE, d. MMMM</string>
+    <string name="home_button_description">Öffnet diesen Launcher, wenn du Home drückst, während der Launcher von Google TV für seine Schnelleinstellungen installiert bleibt. Home gedrückt halten öffnet diese.</string>
 </resources>

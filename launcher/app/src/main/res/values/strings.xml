@@ -20,4 +20,5 @@
     <string name="cant_open">Can\'t open %1$s</string>
     <string name="date_format">EEEE  d MMMM</string>
     <string name="dream_name">Clock</string>
+    <string name="home_button_description">Opens this launcher when you press Home, while Google TV\'s own launcher stays installed for its quick settings panel. Holding Home opens that panel.</string>
 </resources>
