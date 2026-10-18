@@ -130,3 +130,21 @@ measured on a Xiaomi MiTV-MOOR2 (Android 11), not from our TVs.
 
 Rough expectation: 1–4 decide how fast Home feels and how much memory the launcher takes; 5–7 decide
 smoothness on weak GPUs; 8–11 are probably small, so fix them only if a trace says otherwise.
+
+## Findings so far (Android TV emulator, pending TV verification)
+
+Measured with `perf.py` on an Android TV emulator (Android 14, 1920×1080 at 320 dpi, 2 cores, 2 GB,
+software GPU), with stub apps standing in for the dock apps. Emulator numbers are relative only:
+they rank causes and show which way a change moves, not what the TV does. Each change was measured on
+its own; the before/after tables are in the pull request that made it.
+
+| | Finding | What changed |
+|---|---|---|
+| New | **The top shelf waited on purpose**: 280 ms for focus to settle, then 100 + 220 ms of fades. The new app's name showed 674 ms after the move, and each move drew about 32 frames. This is most of "moving between two apps feels slow". | The shelf follows focus at once with short fades: 270 ms, about 16 frames per move. |
+| 2 | Confirmed: every Home press reloaded the app list (8.8 ms of `onResume`, 7.5 ms of it the reload), then faded the shelf in again (27 frames). | Reload only when a TV app changes, and keep the shelf: 0.8 ms, 2 frames. |
+| 1 | Confirmed: the debug build. A release build compiled with `speed` cuts cold start by 37 %, PSS by 18 % and the APK by 86 %. `adb install` leaves a release build at `verify` (no ahead-of-time code; an embedded Baseline Profile needs ProfileInstaller or Play), so the install scripts compile it. | The install scripts build and compile a release build. |
+| 8 | Confirmed, small: 1.3–1.7 ms on the main thread per dock app, at its first focus. | Sampled on a background thread after loading. |
+| 5 | Not measurable on the emulator: removing the root's black fill, `forceHasOverlappingRendering(false)` on the glow, an opaque glow. RenderThread time per frame stayed at about 20 ms. | Not applied; try them on the TV's GPU. |
+| 6 | **The glow is the most expensive part of a frame**: 20.2 ms of RenderThread time per frame with it, 14.9 ms without. A hardware layer on it makes frames slower (23.3 ms). | Remaining: fewer animated frames (above) is what helped. |
+| 7 | Tile shadows and rounded clipping cost at most 0.5 ms per frame. | Remaining, low. |
+| – | Changing the shelf's name laid out the screen again on every swap (8 measure/layout passes per 8 moves). | The name view is full width: 1 pass. |
