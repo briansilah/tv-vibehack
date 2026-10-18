@@ -77,9 +77,11 @@ A home screen that is yours again:
 - **The rest of your apps in a grid** that slides up when you press Down.
 - **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
-- **Three frosted buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
+- **Three icon buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
   network you're on) and Settings. On Google TV, Settings opens the TV's quick settings panel, as
-  the remote's Settings button does.
+  the remote's Settings button does. Pick their look in `config.xml` (`top_bar_style`): grouped in
+  one tray with the focused button's name underneath, as on Google TV (the default); round icons
+  that open into labelled pills, as on Apple TV; or frosted pills that always show their names.
 - **A greeting, a large thin clock and the date**, set in
   [Outfit](https://fonts.google.com/specimen/Outfit).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.

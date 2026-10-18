@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Content of TopBarButton: the icon, and the label it shows when focused. -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:tint="@drawable/pill_text"
+        android:duplicateParentState="true"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="9dp"
+        android:maxWidth="240dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="@drawable/pill_text"
+        android:duplicateParentState="true"
+        android:importantForAccessibility="no"
+        android:textSize="15sp"
+        android:fontFamily="@font/outfit"
+        android:fontVariationSettings="'wght' 500"
+        android:letterSpacing="0.01" />
+</merge>
