@@ -218,6 +218,7 @@ class FakeTv:
         self.cold_runs = 0
         self.stopped = False
         self.launcher_visible = False
+        self.survives_kill = False
 
     def shell(self, cmd, timeout=120):
         self.commands.append(cmd)
@@ -238,8 +239,12 @@ class FakeTv:
             self.clock += 10
             return "%d\n" % self.clock
         if cmd.startswith("am force-stop"):
-            self.stopped = True
+            raise AssertionError("force-stop turns the launcher's accessibility service off")
+        if cmd.startswith("am kill"):
+            self.stopped = not self.survives_kill
             return ""
+        if cmd.startswith("pidof"):
+            return "" if self.stopped else "4400\n"
         if cmd.startswith("am start -W -n " + perf.ACTIVITY) and self.stopped:
             self.stopped = False
             self.cold_runs += 1
@@ -312,6 +317,14 @@ class EndToEndTests(unittest.TestCase):
         loops = [c for c in tv.commands if c.startswith("for k in")]
         self.assertEqual(len(loops), 2)
         self.assertEqual(len(loops[0].split(";")[0].split()) - 3, 16)
+        # cold starts end the launcher with `am kill`, never `am force-stop`
+        self.assertEqual(sum(c == "am kill " + perf.PKG for c in tv.commands), 3)
+
+    def test_cold_warns_when_the_process_survives(self):
+        tv = FakeTv()
+        tv.survives_kill = True
+        _, logs, _ = self.run_perf(tv, "alive", "--scenarios", "cold")
+        self.assertEqual(sum("not cold" in line for line in logs), 3)
 
     def test_compare_table(self):
         a, _, a_path = self.run_perf(FakeTv(), "main")

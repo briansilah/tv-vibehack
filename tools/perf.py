@@ -275,12 +275,26 @@ def open_other_app(sh, component):
     sh.shell("am start -W -n " + component if component else SETTINGS_APP)
 
 
+def kill_launcher(sh, log):
+    """Ends the launcher's main process while another app is in front, for a cold start.
+
+    Not `am force-stop`: force-stopping a package turns its accessibility services off for good (Android
+    removes them from Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), which would switch off the Google TV
+    HomeButtonService. `am kill` only ends the package's background processes, so the service's own
+    ":home" process, which the system keeps bound, survives. Returns True when the main process is gone."""
+    sh.shell("am kill " + PKG)
+    gone = not sh.shell("pidof " + PKG).strip()
+    if not gone:
+        log("  warning: the launcher's process survived `am kill` (still in front?); this start is not cold")
+    return gone
+
+
 def scenario_cold(sh, runs, settle, other, log):
     samples = []
     for i in range(runs):
         open_other_app(sh, other)
         time.sleep(settle)
-        sh.shell("am force-stop " + PKG)
+        kill_launcher(sh, log)
         time.sleep(settle)
         t = device_epoch(sh)
         s = parse_am_start(sh.shell("am start -W -n " + ACTIVITY))
@@ -550,7 +564,7 @@ def cmd_trace(args):
         if args.action == "cold":
             open_other_app(sh, other)
             time.sleep(1.0)
-            sh.shell("am force-stop " + PKG)
+            kill_launcher(sh, log)
             sh.shell("am start -W -n " + ACTIVITY)
         elif args.action == "home":
             open_other_app(sh, other)
