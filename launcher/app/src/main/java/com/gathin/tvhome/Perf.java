@@ -60,7 +60,8 @@ final class Perf {
      * Times an on-screen change that finishes in parts (e.g. the top shelf's name and its glow), from what
      * started it to its last part: a "tvhome:&lt;event&gt;" async trace section and, with logging on, a line
      * {@code "<event> ms=<until the last part> <part>_ms=<each part> <extra>"}. Starting again restarts it;
-     * a change that is cut short logs nothing. Main thread only.
+     * a change that is cut short logs nothing, and parts reported for an earlier start are ignored.
+     * Main thread only.
      */
     static final class Span {
         private final String event;
@@ -78,17 +79,19 @@ final class Perf {
             this.partNanos = new long[parts.length];
         }
 
-        void start(String extra) {
+        /** Returns this start's token for {@link #part}. */
+        int start(String extra) {
             cancel();
             start = now();
             java.util.Arrays.fill(partNanos, 0L);
             this.extra = extra;
             beginAsync(section, ++cookie);
+            return cookie;
         }
 
-        /** Part {@code i} is on screen. */
-        void part(int i) {
-            if (start == 0 || partNanos[i] != 0) return;
+        /** Part {@code i} of the change started with {@code token} is on screen. */
+        void part(int i, int token) {
+            if (start == 0 || token != cookie || partNanos[i] != 0) return;
             partNanos[i] = now();
             for (long p : partNanos) {
                 if (p == 0) return;

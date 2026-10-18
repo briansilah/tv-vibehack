@@ -164,8 +164,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     /** From a dock focus change until the top shelf shows that app (name and glow); tools/perf.py's dock scenario. */
     private final Perf.Span shelfTiming = new Perf.Span("shelf", "text", "glow");
-    private final Runnable shelfTextShown = () -> shelfTiming.part(0);
-    private final Runnable shelfGlowShown = () -> shelfTiming.part(1);
+    private static final int SHELF_TEXT = 0, SHELF_GLOW = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -375,27 +374,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // Coming (back) to the dock: show this app straight away.
             heroShown = true;
             shelfKey = key;
-            shelfTiming.start(Perf.enabled() ? "kind=show pkg=" + key : null);
+            final int span = shelfTiming.start(Perf.enabled() ? "kind=show pkg=" + key : null);
             heroName.animate().cancel();
             heroName.setText(adapter.labelAt(position));
             heroName.setY(y);
             heroName.setTranslationX(0f);
             heroName.animate().alpha(1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
-                    .withEndAction(shelfTextShown).start();
+                    .withEndAction(() -> shelfTiming.part(SHELF_TEXT, span)).start();
             if (ambientFade != null) ambientFade.cancel();
             setAmbient(adapter.ambientColorAt(position));
             ambient.animate().alpha(1f).setDuration(SHELF_SHOW_GLOW_MS).setInterpolator(DECELERATE)
-                    .withEndAction(shelfGlowShown).start();
+                    .withEndAction(() -> shelfTiming.part(SHELF_GLOW, span)).start();
         } else if (key != null && !key.equals(shelfKey)) {
-            shelfTiming.start(Perf.enabled() ? "kind=swap pkg=" + key : null);
-            swapShelf(position, y);
+            swapShelf(position, y, shelfTiming.start(Perf.enabled() ? "kind=swap pkg=" + key : null));
         } else {
             heroName.setY(y);
         }
     }
 
     /** Changes the top shelf (name and ambient glow) to the dock app that just got focus. */
-    private void swapShelf(int position, float y) {
+    private void swapShelf(int position, float y, int span) {
         final String label = adapter.labelAt(position);
         shelfKey = adapter.keyAt(position);
         heroName.animate().cancel();
@@ -407,12 +405,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     heroName.setY(y);
                     heroName.setTranslationX(8 * density);
                     heroName.animate().alpha(1f).translationX(0f).setDuration(NAME_IN_MS)
-                            .setInterpolator(DECELERATE).withEndAction(shelfTextShown).start();
+                            .setInterpolator(DECELERATE).withEndAction(() -> shelfTiming.part(SHELF_TEXT, span))
+                            .start();
                 }).start();
         int color = adapter.ambientColorAt(position);
         if (ambientFade != null) ambientFade.cancel();
         if (color == ambientColor) {
-            shelfGlowShown.run();
+            shelfTiming.part(SHELF_GLOW, span);
             return;
         }
         // The glow's stops share their alpha, so blending the colour is a true cross-fade of the two glows.
@@ -421,7 +420,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambientFade.setInterpolator(DECELERATE);
         ambientFade.addUpdateListener(a -> {
             setAmbient((int) a.getAnimatedValue());
-            if (a.getAnimatedFraction() >= 1f) shelfGlowShown.run();
+            if (a.getAnimatedFraction() >= 1f) shelfTiming.part(SHELF_GLOW, span);
         });
         ambientFade.start();
     }
