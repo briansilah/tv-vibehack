@@ -38,6 +38,9 @@ Build with `TV_HOST=<ip> launcher/build-and-install.sh` (JDK 17, Android SDK pla
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
 `sdkmanager "platforms;android-34" "build-tools;34.0.0"`).
 
+Logic that doesn't need a TV (e.g. `AmbientColor`, which picks the top shelf's glow colour) has JVM
+unit tests: `cd launcher && ./gradlew testDebugUnitTest`.
+
 Ideas that fit the direction: an idle screensaver with clock and ambient colour, per-TV icon packs
 for apps without banners, a settings screen to edit the dock from the TV, localisation.
 Ideas that don't: recommendation rows, content feeds, ads, telemetry.
