@@ -9,8 +9,16 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-/** Draws the tvOS style lighter band behind the first (dock) row and adds a gap below it. */
+/**
+ * Draws the tvOS dock: a full-width, translucent rounded panel behind the first (dock) row, with room
+ * around the tiles for the focused one to grow, and adds a gap below it.
+ */
 public class DockDecoration extends RecyclerView.ItemDecoration {
+
+    /** Panel padding above and below the tiles: the focused tile grows into about half of it. */
+    static final float PAD_V_DP = 22f;
+    /** How far the panel reaches past the grid's content edges (into the grid's side padding). */
+    private static final float EDGE_DP = 16f;
 
     private final int dockSize;
     private final float density;
@@ -21,10 +29,11 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
     DockDecoration(int dockSize, float density) {
         this.dockSize = dockSize;
         this.density = density;
-        band.setColor(0xFF141416);
+        // Translucent like the Apple TV dock, so the top shelf's ambient glow shows through it.
+        band.setColor(0x17FFFFFF);
         edge.setStyle(Paint.Style.STROKE);
         edge.setStrokeWidth(density);
-        edge.setColor(0x1FFFFFFF);
+        edge.setColor(0x24FFFFFF);
     }
 
     @Override
@@ -49,26 +58,30 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
 
     private void drawBand(Canvas c, RecyclerView parent) {
         boolean any = false;
+        float top = 0, bottom = 0;
         for (int i = 0; i < parent.getChildCount(); i++) {
             View child = parent.getChildAt(i);
             int pos = parent.getChildAdapterPosition(child);
             if (pos < 0 || pos >= dockSize) continue;
             View card = child.findViewById(R.id.card);
             if (card == null) continue;
-            float l = child.getLeft() + card.getLeft();
             float t = child.getTop() + card.getTop() + child.getTranslationY();
-            float r = l + card.getWidth();
             float b = t + card.getHeight();
             if (!any) {
-                rect.set(l, t, r, b);
+                top = t;
+                bottom = b;
                 any = true;
             } else {
-                rect.union(l, t, r, b);
+                top = Math.min(top, t);
+                bottom = Math.max(bottom, b);
             }
         }
         if (!any) return;
-        float pad = 14 * density;
-        rect.inset(-pad, -pad);
+        // Full width whatever the number of dock apps, as on tvOS.
+        float edgeOut = EDGE_DP * density;
+        float padV = PAD_V_DP * density;
+        rect.set(parent.getPaddingLeft() - edgeOut, top - padV,
+                parent.getWidth() - parent.getPaddingRight() + edgeOut, bottom + padV);
         float radius = 26 * density;
         c.drawRoundRect(rect, radius, radius, band);
         c.drawRoundRect(rect, radius, radius, edge);

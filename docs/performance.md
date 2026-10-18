@@ -91,9 +91,9 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 | `tvhome:onCreate`, `tvhome:onResume` | `MainActivity` lifecycle |
 | `tvhome:reload`, `tvhome:reload.query`, `tvhome:loadApp <package>` | `AppAdapter.reload()`: the package query and each app's banner, icon and label |
 | `tvhome:vividColor` | ambient colour sampling for a dock app, on its first focus |
-| `tvhome:onTileFocused` | moving the glass highlight and scrolling on each focus change |
+| `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
-| `tvhome:GlassView.onDraw`, `tvhome:DockDecoration.onDraw` | custom drawing |
+| `tvhome:DockDecoration.onDraw` | the dock panel |
 | `tvhome:dream.setGlow` | screensaver glow colour, per animation frame |
 
 RecyclerView adds its own (`RV OnLayout`, `RV OnBindView`, `RV CreateView`), and the system adds
@@ -109,13 +109,13 @@ measured on a Xiaomi MiTV-MOOR2 (Android 11), not from our TVs.
 |---|---|---|---|---|
 | 1 | A **debug build** is installed: debuggable, not shrunk by R8, and ART runs debuggable apps without ahead-of-time compiled code. | `launcher/build-and-install.sh` (`assembleDebug`) | everything, cold start most; `build.debuggable` in the results | Gathin23/tv-vibehack#40: APK 1.66 MB → 222 KB; with Gathin23/tv-vibehack#39, cold start ~1.6 s → 0.42 s |
 | 2 | **Every Home press reloads all apps on the main thread**: package query, `loadBanner`/`loadIcon`/`loadLabel` for every app, then `notifyDataSetChanged` rebinds every tile. | `MainActivity.onResume` → `AppAdapter.reload()` | warm `focus_restored`, `resume`, `reload_load`; `tvhome:loadApp` slices | Gathin23/tv-vibehack#39: Home ~1.0 s → 0.41 s |
-| 3 | The **tile entrance animation replays on every Home press** (420 ms, staggered). | `grid.scheduleLayoutAnimation()` in `onResume` | warm: time until the grid is still; frames after Home | Gathin23/tv-vibehack#39 plays it only at start |
+| 3 | ~~The tile entrance animation replays on every Home press.~~ Plays once since #2; confirm with a warm run. | `grid.scheduleLayoutAnimation()` in `onResume` | warm: frames after Home | Gathin23/tv-vibehack#39 also plays it only at start |
 | 4 | **Banners at full source size** for every app, kept for the life of the activity and scaled at draw time. | `AppAdapter.reload()`, `item_app.xml` (`centerCrop`) | mem: native heap, graphics, PSS; `Slow bitmap uploads` | Gathin23/tv-vibehack#39: PSS 111 MB → 54 MB |
 | 5 | **Full-screen overdraw**: black window background plus a black root view, plus a full-screen ambient glow view. | `styles.xml`, `activity_main.xml` | GPU percentiles in jank; `setprop debug.hwui.overdraw show` | Gathin23/tv-vibehack#39 removed the second fill |
 | 6 | **Ambient glow**: a full-screen radial gradient whose colours change and whose alpha animates (500–600 ms) on dock focus changes. | `MainActivity.showHero`/`setAmbient` | jank and RenderThread `DrawFrame` while moving along the dock | – |
-| 7 | **Glass highlight**: alpha fades without `hasOverlappingRendering() == false`, clip path in `onDraw`. | `GlassView` | `tvhome:GlassView.onDraw` count (should be about one per size change), `DrawFrame` | Gathin23/tv-vibehack#39 draws it once into a GPU layer |
-| 8 | **Colour sampling on the main thread** at the first focus of each dock app (bitmap, drawable copy, 144 `getPixel`). | `AppAdapter.vividColor` | `tvhome:vividColor`, `ambient` log line | Gathin23/tv-vibehack#39 does it during loading |
-| 9 | **Allocation per focus/bind**: a new `OvershootInterpolator` per focus change, `Rect`s in `onTileFocused`, new click listeners per bind, `getItemId` builds a string per call, `positionOf` is O(n) with strings. | `AppAdapter`, `MainActivity` | GC slices in a `keys` trace; Java heap | Gathin23/tv-vibehack#39 |
+| 7 | **Focus lift** (since #2): each focus change runs scale springs on two tiles and animates `translationZ`, so the shadow is re-rendered every frame of the move. The floating glass highlight it replaced is gone. | `AppAdapter.Holder` | `DrawFrame` and GPU percentiles in jank; compare with #2's 60 fps on the TCL | – |
+| 8 | **Colour sampling on the main thread** at the first focus of each dock app: a drawable copy drawn into a 64×36 bitmap, then a hue histogram over 2,304 pixels (since #1). | `AppAdapter.vividColor` | `tvhome:vividColor`, `ambient` log line | Gathin23/tv-vibehack#39 does it during loading |
+| 9 | **Allocation per focus/bind**: `Rect`s in `onTileFocused`, new click listeners per bind, `getItemId` builds a string per call, `positionOf` is O(n) with strings. | `AppAdapter`, `MainActivity` | GC slices in a `keys` trace; Java heap | Gathin23/tv-vibehack#39 |
 | 10 | **Screensaver redraws a full-screen gradient every frame** during the 8 s colour shift each minute: heat and power on an idle TV, not latency. | `ClockDream.shiftGlow` | `tvhome:dream.setGlow` count (`trace --action none` while dreaming) | Gathin23/tv-vibehack#39: 5 fps steps |
 | 11 | Small main-thread work: `DockDecoration.onDraw` calls `findViewById` per tile per frame; `updateWifiLabel` makes binder calls in `onResume`; the Inputs menu sorts with `loadLabel` in the comparator; the grid's padding is set from a layout listener (second layout at start). | `DockDecoration`, `MainActivity` | their `tvhome:*` sections; `RV OnLayout` count at cold start | – |
 
