@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -31,7 +32,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver;
-import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
 import android.widget.FrameLayout;
@@ -59,11 +61,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     static int COLUMNS = 4;
     private static final long MINUTE_MS = 60_000L;
     /**
-     * Like tvOS, the top shelf waits for focus to settle on a dock app before changing (about 200-350 ms on
-     * an Apple TV), so sweeping along the dock doesn't flash every app's colour, then cross-fades.
+     * The top shelf follows focus along the dock straight away: the name swaps with a quick fade and the
+     * glow glides to the new app's colour, carrying on from wherever it is if focus moves again. (tvOS
+     * waits for focus to settle first; the 280 ms wait plus a 320 ms cross-fade felt sluggish.) Sweeping
+     * along the dock keeps the name hidden until focus stops, so no app's name flashes by.
      */
-    private static final long SHELF_DELAY_MS = 280L;
-    private static final long SHELF_FADE_MS = 220L;
+    private static final long NAME_OUT_MS = 70L;
+    private static final long NAME_IN_MS = 150L;
+    private static final long GLOW_BLEND_MS = 200L;
+    /** Coming to the dock from elsewhere, and leaving it. */
+    private static final long SHELF_SHOW_NAME_MS = 150L;
+    private static final long SHELF_SHOW_GLOW_MS = 250L;
+    private static final long SHELF_HIDE_NAME_MS = 120L;
+    private static final long SHELF_HIDE_GLOW_MS = 200L;
+    private static final TimeInterpolator DECELERATE = new DecelerateInterpolator(1.5f);
+    private static final TimeInterpolator LINEAR = new LinearInterpolator();
     private String liveTvPkg;
 
     private AppAdapter adapter;
@@ -77,8 +89,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean heroShown;
     /** App the top shelf shows, or is changing to. */
     private String shelfKey;
-    private int shelfPending;
-    private float shelfPendingY;
     private boolean tilesEntered;
     private TextView greeting;
     private TopBarButton btnWifi;
@@ -115,7 +125,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             handler.postDelayed(this, MINUTE_MS);
         }
     };
-    private final Runnable shelfSwap = this::swapShelf;
     /** From a dock focus change until the top shelf shows that app (name and glow); tools/perf.py's dock scenario. */
     private final Perf.Span shelfTiming = new Perf.Span("shelf", "text", "glow");
     private final Runnable shelfTextShown = () -> shelfTiming.part(0);
@@ -216,7 +225,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         final long t0 = Perf.now();
         Perf.begin("tvhome:onResume");
         super.onResume();
-        handler.removeCallbacks(shelfSwap);
         heroShown = false;
         heroName.animate().cancel();
         heroName.setAlpha(0f);
@@ -262,7 +270,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(minuteTick);
-        handler.removeCallbacks(shelfSwap);
         shelfTiming.cancel();
     }
 
@@ -309,7 +316,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void showHero(int position, float dockTopInRoot) {
         String key = adapter.keyAt(position);
         float y = dockTopInRoot - DockDecoration.PAD_V_DP * density - 26 * density - heroName.getHeight();
-        handler.removeCallbacks(shelfSwap);
 
         if (!heroShown) {
             // Coming (back) to the dock: show this app straight away.
@@ -320,36 +326,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroName.setText(adapter.labelAt(position));
             heroName.setY(y);
             heroName.setTranslationX(0f);
-            heroName.animate().alpha(1f).setDuration(260).withEndAction(shelfTextShown).start();
+            heroName.animate().alpha(1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
+                    .withEndAction(shelfTextShown).start();
             if (ambientFade != null) ambientFade.cancel();
             setAmbient(adapter.ambientColorAt(position));
-            ambient.animate().alpha(1f).setDuration(600).withEndAction(shelfGlowShown).start();
+            ambient.animate().alpha(1f).setDuration(SHELF_SHOW_GLOW_MS).setInterpolator(DECELERATE)
+                    .withEndAction(shelfGlowShown).start();
         } else if (key != null && !key.equals(shelfKey)) {
             shelfTiming.start(Perf.enabled() ? "kind=swap pkg=" + key : null);
-            shelfPending = position;
-            shelfPendingY = y;
-            handler.postDelayed(shelfSwap, SHELF_DELAY_MS);
+            swapShelf(position, y);
         } else {
-            shelfTiming.cancel();   // back on the app the shelf already shows
             heroName.setY(y);
         }
     }
 
-    /** Cross-fades the top shelf (name and ambient glow) to the dock app focus settled on. */
-    private void swapShelf() {
-        if (!heroShown) return;
-        final int position = shelfPending;
-        final float y = shelfPendingY;
+    /** Changes the top shelf (name and ambient glow) to the dock app that just got focus. */
+    private void swapShelf(int position, float y) {
         final String label = adapter.labelAt(position);
         shelfKey = adapter.keyAt(position);
         heroName.animate().cancel();
-        heroName.animate().alpha(0f).translationX(-12 * density).setDuration(100).withEndAction(() -> {
-            heroName.setText(label);
-            heroName.setY(y);
-            heroName.setTranslationX(12 * density);
-            heroName.animate().alpha(1f).translationX(0f).setDuration(SHELF_FADE_MS)
-                    .withEndAction(shelfTextShown).start();
-        }).start();
+        // Out from wherever the name is (a swap just before may still be fading it), then the new one in.
+        heroName.animate().alpha(0f).translationX(-8 * density)
+                .setDuration((long) (NAME_OUT_MS * heroName.getAlpha())).setInterpolator(LINEAR)
+                .withEndAction(() -> {
+                    heroName.setText(label);
+                    heroName.setY(y);
+                    heroName.setTranslationX(8 * density);
+                    heroName.animate().alpha(1f).translationX(0f).setDuration(NAME_IN_MS)
+                            .setInterpolator(DECELERATE).withEndAction(shelfTextShown).start();
+                }).start();
         int color = adapter.ambientColorAt(position);
         if (ambientFade != null) ambientFade.cancel();
         if (color == ambientColor) {
@@ -358,8 +363,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         // The glow's stops share their alpha, so blending the colour is a true cross-fade of the two glows.
         ambientFade = ValueAnimator.ofArgb(ambientColor, color);
-        ambientFade.setDuration(SHELF_FADE_MS);
-        ambientFade.setInterpolator(new AccelerateDecelerateInterpolator());
+        ambientFade.setDuration(GLOW_BLEND_MS);
+        ambientFade.setInterpolator(DECELERATE);
         ambientFade.addUpdateListener(a -> {
             setAmbient((int) a.getAnimatedValue());
             if (a.getAnimatedFraction() >= 1f) shelfGlowShown.run();
@@ -374,13 +379,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void hideHero() {
-        handler.removeCallbacks(shelfSwap);
         shelfTiming.cancel();
         if (!heroShown) return;
         heroShown = false;
         heroName.animate().cancel();   // drops a pending name swap's end action, which would fade it back in
-        heroName.animate().alpha(0f).setDuration(160).start();
-        ambient.animate().alpha(0f).setDuration(300).start();
+        heroName.animate().alpha(0f).setDuration(SHELF_HIDE_NAME_MS).setInterpolator(DECELERATE).start();
+        ambient.animate().alpha(0f).setDuration(SHELF_HIDE_GLOW_MS).setInterpolator(DECELERATE).start();
     }
 
     // ---- navigation ------------------------------------------------------------------------------
