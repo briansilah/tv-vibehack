@@ -144,11 +144,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
     };
+    /** A TV app changed while Home is showing. Focus only goes back to a tile if it was on one. */
     private final Runnable reloadNow = () -> {
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
-        appsChanged = false;
-        adapter.reload();
+        final boolean onTiles = grid.hasFocus();
+        reloadApps();
+        if (!onTiles) return;   // on the top bar or in the Inputs menu: leave it there
         grid.post(() -> {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
@@ -280,10 +282,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Read these before reload(): rebinding can move focus to the first tile and overwrite them.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
-        if (appsChanged) {
-            appsChanged = false;
-            adapter.reload();
-        }
+        if (appsChanged) reloadApps();
         // The tiles fly in once, when the launcher starts. Like tvOS, Home afterwards just shows the
         // home screen with focus where you left it, instead of replaying the entrance every time.
         if (!tilesEntered) {
@@ -303,6 +302,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         Perf.end();
         Perf.log("resume", t0, null);
+    }
+
+    private void reloadApps() {
+        appsChanged = false;
+        adapter.reload();
+        // The app the top shelf shows may have a new name or banner: make the next focus on it swap it in again.
+        shelfKey = null;
     }
 
     /** The first frame after focus is back on a tile: Home is usable. Feeds tools/perf.py. */
