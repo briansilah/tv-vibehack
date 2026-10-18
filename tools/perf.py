@@ -522,6 +522,7 @@ METRICS = [
     ("dock.summary.shelf_ms", "Dock move: top shelf shows the new app", "ms"),
     ("dock.summary.shelf_text_ms", "  name shown", "ms"),
     ("dock.summary.shelf_glow_ms", "  glow colour reached", "ms"),
+    ("dock.summary.total_frames", "Frames drawn per round of dock moves", ""),
     ("dock.summary.janky_pct", "Janky frames (dock moves)", "%"),
     ("dock.summary.p50_ms", "  50th percentile frame", "ms"),
     ("dock.summary.p90_ms", "  90th percentile frame", "ms"),
