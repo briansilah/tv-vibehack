@@ -24,4 +24,5 @@
     <string name="move_to_dock">Ins Dock verschieben</string>
     <string name="move_out_of_dock">Aus dem Dock nehmen</string>
     <string name="app_info">App-Info</string>
+    <string name="home_button_description">Öffnet diesen Launcher, wenn du Home drückst, während der Launcher von Google TV für seine Schnelleinstellungen installiert bleibt. Home gedrückt halten öffnet diese.</string>
 </resources>

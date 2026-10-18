@@ -25,4 +25,5 @@
     <string name="move_to_dock">Move to Dock</string>
     <string name="move_out_of_dock">Move out of Dock</string>
     <string name="app_info">App Info</string>
+    <string name="home_button_description">Opens this launcher when you press Home, while Google TV\'s own launcher stays installed for its quick settings panel. Holding Home opens that panel.</string>
 </resources>
