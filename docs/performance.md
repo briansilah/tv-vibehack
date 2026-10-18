@@ -11,7 +11,7 @@ nothing is sent anywhere (no telemetry; see CONTRIBUTING.md).
 
 | | What it gives you |
 |---|---|
-| `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank and memory, each repeated, saved as JSON with medians. |
+| `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank, dock moves (top shelf latency) and memory, each repeated, saved as JSON with medians. |
 | `tools/perf.py compare` | A Markdown before/after table for a pull request. |
 | `tools/perf.py trace` | A [Perfetto](https://perfetto.dev) trace of a cold start, a Home press, or D-pad moves. |
 | `tools/perf.py summarize` | The slowest slices on the launcher's main thread and RenderThread in a trace. |
@@ -54,10 +54,15 @@ two measure that hand-over rather than the launcher alone. Use the default warm 
    Or open the trace at <https://ui.perfetto.dev> and look at the `com.gathin.tvhome` main thread.
    `trace` uses `perfetto --txt`, so it needs Android 10 or newer.
 
-`run` takes about 3 minutes with the defaults. Options: `--scenarios cold,warm,jank,mem`,
+`run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem`,
 `--runs` (cold/warm repeats, default 10), `--rounds` (jank rounds, default 3), `--keys` (the D-pad
-sequence), `--via-home` (warm start through the HOME intent, like pressing Home), `--other-app`
-(see below).
+sequence), `--dock-moves` and `--dock-interval` (the dock scenario), `--via-home` (warm start through
+the HOME intent, like pressing Home), `--other-app` (see below).
+
+**Cold starts use `am kill`, never `am force-stop`.** Force-stopping a package also turns its
+accessibility services off for good (Android removes them from `enabled_accessibility_services`), which
+would switch off `HomeButtonService` on Google TV. `am kill` ends only the launcher's background process;
+the service's own `:home` process stays bound. `perf.py` warns when the launcher's process survives.
 
 **The background app.** Cold and warm starts first open another app so the launcher really goes to
 the background. It must cover the whole screen: TV Settings is see-through, so the launcher would
@@ -70,9 +75,10 @@ for A and B.
 
 | Scenario | How | Numbers |
 |---|---|---|
-| cold | Open another TV app, `am force-stop` the launcher, `am start -W` it | `TotalTime` (system: until the first frame); fully drawn (until focus is on a tile, via `reportFullyDrawn`); app-side `create`, `resume`, `reload` |
+| cold | Open another TV app, `am kill` the launcher, `am start -W` it | `TotalTime` (system: until the first frame); fully drawn (until focus is on a tile, via `reportFullyDrawn`); app-side `create`, `resume`, `reload` |
 | warm | Open another TV app, start the launcher again (or the HOME intent) | `TotalTime`; `focus_restored` = from `onResume` until the first frame with focus back on a tile, i.e. when Home is usable; `resume`; `reload` split into the package query and loading banners/icons/labels |
 | jank | `dumpsys gfxinfo reset`, 16 D-pad moves 0.35 s apart, `dumpsys gfxinfo` | janky frames %, frame-time percentiles, slow UI thread and high input latency counts |
+| dock | Focus on the first dock app, then Right/Left between the first two dock apps, one press every 1.2 s, 8 per round | `shelf`: from the focus change until the top shelf shows the new app, split into the name (`text`) and the glow colour (`glow`); janky frames and frame percentiles of those moves |
 | mem | `dumpsys meminfo` on Home after the other scenarios | PSS total, Java heap, native heap (bitmaps live here), graphics, view count |
 
 The JSON also records the device, the Android version, the APK size on the TV, whether the build is
@@ -94,6 +100,7 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 | `tvhome:reload`, `tvhome:reload.query`, `tvhome:loadApp <package>` | `AppAdapter.reload()`: the package query and each app's banner, icon and label |
 | `tvhome:vividColor` | ambient colour sampling for a dock app, on its first focus |
 | `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
+| `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
 | `tvhome:dream.setGlow` | screensaver glow colour, per animation frame |

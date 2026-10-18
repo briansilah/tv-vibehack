@@ -182,6 +182,26 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(r["fully_drawn_ms"], 1250)
         self.assertEqual(r["pkg"], "com.netflix.ninja")
 
+    def test_events_returns_every_occurrence(self):
+        out = LOGCAT + ("  1760800020.000  4400  4400 D TvHomePerf: shelf ms=601.5 text_ms=601.5 glow_ms=500.2 "
+                        "kind=swap pkg=com.amazon.amazonvideo.livingroom/.Main\n"
+                        "  1760800021.200  4400  4400 D TvHomePerf: shelf ms=598.0 text_ms=598.0 glow_ms=499.0 "
+                        "kind=swap pkg=com.netflix.ninja/.MainActivity\n")
+        e = perf.parse_events(out, "shelf", since=1760800010.0)
+        self.assertEqual([x["shelf_ms"] for x in e], [601.5, 598.0])
+        self.assertEqual(e[0]["shelf_text_ms"], 601.5)
+        self.assertEqual(e[0]["shelf_glow_ms"], 500.2)
+        self.assertEqual(e[1]["kind"], "swap")
+        self.assertEqual(e[1]["pkg"], "com.netflix.ninja/.MainActivity")
+        self.assertEqual(perf.parse_events(out, "shelf", since=1760800021.0)[0]["shelf_ms"], 598.0)
+        self.assertEqual(perf.parse_events(out, "nothing"), [])
+
+    def test_to_first_dock_app_keys(self):
+        keys = perf.TO_FIRST_DOCK_APP.split()
+        self.assertEqual(keys.count("DOWN"), 1)
+        self.assertLess(keys.index("UP"), keys.index("DOWN"))
+        self.assertGreaterEqual(keys.count("LEFT"), 3)   # four dock apps
+
     def test_components(self):
         self.assertEqual(perf.parse_components(QUERY_ACTIVITIES), [
             "com.netflix.ninja/.MainActivity", "com.gathin.tvhome/.MainActivity",
@@ -218,6 +238,7 @@ class FakeTv:
         self.cold_runs = 0
         self.stopped = False
         self.launcher_visible = False
+        self.survives_kill = False
 
     def shell(self, cmd, timeout=120):
         self.commands.append(cmd)
@@ -238,8 +259,12 @@ class FakeTv:
             self.clock += 10
             return "%d\n" % self.clock
         if cmd.startswith("am force-stop"):
-            self.stopped = True
+            raise AssertionError("force-stop turns the launcher's accessibility service off")
+        if cmd.startswith("am kill"):
+            self.stopped = not self.survives_kill
             return ""
+        if cmd.startswith("pidof"):
+            return "" if self.stopped else "4400\n"
         if cmd.startswith("am start -W -n " + perf.ACTIVITY) and self.stopped:
             self.stopped = False
             self.cold_runs += 1
@@ -254,7 +279,10 @@ class FakeTv:
                     "  %.3f  4400  4400 D TvHomePerf: resume ms=420.0\n"
                     "  %.3f  4400  4400 D TvHomePerf: focus_restored ms=600.0 first=1\n"
                     "  %.3f  1001  1140 I ActivityTaskManager: Fully drawn com.gathin.tvhome/.MainActivity: +1s250ms\n"
-                    % (t, t, t, t))
+                    "  %.3f  4400  4400 D TvHomePerf: shelf ms=300.0 text_ms=260.0 glow_ms=300.0 kind=show pkg=a/.A\n"
+                    % (t, t, t, t, t)
+                    + "".join("  %.3f  4400  4400 D TvHomePerf: shelf ms=%.1f text_ms=%.1f glow_ms=500.0 kind=swap "
+                              "pkg=b/.B\n" % (t + i, 600.0 + i, 600.0 + i) for i in range(8)))
         if cmd.startswith("dumpsys gfxinfo"):
             return fixture("gfxinfo_android14.txt")
         if cmd.startswith("dumpsys meminfo"):
@@ -297,6 +325,12 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result["warm"]["summary"]["focus_restored_ms"]["median"], 600.0)
         self.assertEqual(result["warm"]["summary"]["reload_load_ms"]["median"], 350.0)
         self.assertEqual(result["jank"]["summary"]["janky_pct"]["n"], 2)
+        # dock: 8 swaps per round (the "show" when focus lands on the dock is left out), frames per round
+        self.assertEqual(result["dock"]["summary"]["shelf_ms"]["n"], 16)
+        self.assertEqual(result["dock"]["summary"]["shelf_ms"]["median"], 603.5)
+        self.assertEqual(result["dock"]["summary"]["shelf_glow_ms"]["median"], 500.0)
+        self.assertEqual(result["dock"]["summary"]["janky_pct"]["n"], 2)
+        self.assertFalse(any("moves changed the shelf" in line for line in logs))
         self.assertEqual(result["mem"]["summary"]["total_pss_kb"]["median"], 132630)
         self.assertTrue(any("debuggable" in line for line in logs))
         # backgrounded with a full-screen TV app (first by name, never the launcher), not translucent Settings
@@ -310,8 +344,19 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(tv.commands[-2:], ["setprop log.tag.TvHomePerf ''", perf.HOME_INTENT])
         # the jank loop presses the 16 default keys
         loops = [c for c in tv.commands if c.startswith("for k in")]
-        self.assertEqual(len(loops), 2)
         self.assertEqual(len(loops[0].split(";")[0].split()) - 3, 16)
+        self.assertEqual(sum(c == perf.key_loop(perf.DEFAULT_KEYS, 0.35) for c in loops), 2)
+        # dock: to the first dock app, a warm-up, then 8 moves alternating between the first two apps per round
+        self.assertIn(perf.key_loop(perf.TO_FIRST_DOCK_APP, 0.15), loops)
+        self.assertEqual(sum(c == perf.key_loop("RIGHT LEFT " * 4, 1.2) for c in loops), 2)
+        # cold starts end the launcher with `am kill`, never `am force-stop`
+        self.assertEqual(sum(c == "am kill " + perf.PKG for c in tv.commands), 3)
+
+    def test_cold_warns_when_the_process_survives(self):
+        tv = FakeTv()
+        tv.survives_kill = True
+        _, logs, _ = self.run_perf(tv, "alive", "--scenarios", "cold")
+        self.assertEqual(sum("not cold" in line for line in logs), 3)
 
     def test_compare_table(self):
         a, _, a_path = self.run_perf(FakeTv(), "main")
@@ -320,6 +365,7 @@ class EndToEndTests(unittest.TestCase):
         self.assertIn("| Metric (median) | main | fix | change |", table)
         self.assertIn("| Cold start (am start TotalTime) | 1234 ms | 1234 ms | +0 % |", table)
         self.assertIn("| Memory (PSS) | 129.5 MB | 129.5 MB | +0 % |", table)
+        self.assertIn("| Dock move: top shelf shows the new app | 603.5 ms | 603.5 ms | +0 % |", table)
         self.assertIn("Debug vs release build", table)
         with mock.patch("builtins.print") as p:
             perf.main(["compare", a_path, b_path])

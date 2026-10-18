@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.os.Build;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.util.Log;
@@ -27,6 +28,15 @@ final class Perf {
         Trace.endSection();
     }
 
+    /** A section that can span frames (e.g. from a focus change until an animation ends). Android 10+. */
+    static void beginAsync(String section, int cookie) {
+        if (Build.VERSION.SDK_INT >= 29) Trace.beginAsyncSection(section, cookie);
+    }
+
+    static void endAsync(String section, int cookie) {
+        if (Build.VERSION.SDK_INT >= 29) Trace.endAsyncSection(section, cookie);
+    }
+
     static long now() {
         return SystemClock.elapsedRealtimeNanos();
     }
@@ -44,5 +54,61 @@ final class Perf {
 
     static double ms(long fromNanos, long toNanos) {
         return (toNanos - fromNanos) / 1e6;
+    }
+
+    /**
+     * Times an on-screen change that finishes in parts (e.g. the top shelf's name and its glow), from what
+     * started it to its last part: a "tvhome:&lt;event&gt;" async trace section and, with logging on, a line
+     * {@code "<event> ms=<until the last part> <part>_ms=<each part> <extra>"}. Starting again restarts it;
+     * a change that is cut short logs nothing. Main thread only.
+     */
+    static final class Span {
+        private final String event;
+        private final String section;
+        private final String[] parts;
+        private final long[] partNanos;
+        private long start;
+        private int cookie;
+        private String extra;
+
+        Span(String event, String... parts) {
+            this.event = event;
+            this.section = "tvhome:" + event;
+            this.parts = parts;
+            this.partNanos = new long[parts.length];
+        }
+
+        void start(String extra) {
+            cancel();
+            start = now();
+            java.util.Arrays.fill(partNanos, 0L);
+            this.extra = extra;
+            beginAsync(section, ++cookie);
+        }
+
+        /** Part {@code i} is on screen. */
+        void part(int i) {
+            if (start == 0 || partNanos[i] != 0) return;
+            partNanos[i] = now();
+            for (long p : partNanos) {
+                if (p == 0) return;
+            }
+            endAsync(section, cookie);
+            if (enabled()) {
+                StringBuilder sb = new StringBuilder();
+                for (int k = 0; k < parts.length; k++) {
+                    sb.append(parts[k]).append(String.format(Locale.US, "_ms=%.1f ", ms(start, partNanos[k])));
+                }
+                if (extra != null) sb.append(extra);
+                log(event, start, sb.toString().trim());
+            }
+            start = 0;
+        }
+
+        void cancel() {
+            if (start == 0) return;
+            endAsync(section, cookie);
+            start = 0;
+        }
     }
 }
