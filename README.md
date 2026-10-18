@@ -77,9 +77,9 @@ A home screen that is yours again:
 - **The rest of your apps in a grid** that slides up when you press Down.
 - **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
-- **Rearrange apps from the remote**, as on Apple TV: hold OK on an app and pick Edit Home Screen; it
-  jiggles, the arrows move it (into and out of the dock too) and OK saves. The same menu has Move to
-  Dock and App Info.
+- **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange apps tile at the
+  end of the grid. The app lifts, chevrons show where it can go, the arrows move it (into and out of
+  the dock too) and OK puts it down.
 - **Three icon buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
   network you're on) and Settings. On Google TV, Settings opens the TV's quick settings panel, as
   the remote's Settings button does. Pick their look in `config.xml` (`top_bar_style`): grouped in
@@ -162,14 +162,19 @@ service described below.
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
 the dock order, apps to hide, your TV's Live TV package, and the number of columns.
 
-**Rearrange** apps on the TV itself. Hold OK on an app for its menu:
+**Arrange** apps on the TV itself. Hold OK on an app for its actions:
 
-- **Edit Home Screen** picks the app up: it jiggles, and the arrows move it one slot or row at a time
-  while the other apps make room. The dock is just the first row, so an app moved into it pushes the
-  dock's last app down into the grid. OK saves; Back puts the app back where it was.
+- **Move** picks the app up. It lifts with a ring, chevrons show the ways it can go, and the other apps
+  dim. The arrows move it one slot or row at a time while the others make room; the dock is just the
+  first row, so an app moved into it pushes the dock's last app down into the grid. OK puts it down
+  and saves; Back puts it back where it was.
 - **Move to Dock** puts the app in the dock's last slot, whose app moves down to the start of the grid;
   **Move out of Dock** puts a dock app at the start of the grid.
-- **App Info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
+- **App info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
+
+To arrange several apps in one go, select **Arrange apps** at the end of the grid: OK picks an app up
+and puts it down, and Back (or the tile, now **Done**) finishes. While arranging, the top of the screen
+says what's happening and which remote keys do what.
 
 Your order is saved on the TV and replaces the `dock_apps` default from then on. Apps you install later
 go at the end, as on Apple TV; apps you uninstall drop out and the rest close up.
