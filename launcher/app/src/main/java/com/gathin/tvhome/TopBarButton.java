@@ -72,6 +72,7 @@ public class TopBarButton extends ViewGroup {
             }
         });
         setClipToOutline(true);   // the label is uncovered by the growing pill, inside its rounded ends
+        setClipToPadding(false);  // the paddings are the open pill's; the closed circle centres its icon over them
 
         spring = new SpringAnimation(this, EXPANSION, 0f);
         spring.getSpring().setStiffness(STIFFNESS).setDampingRatio(DAMPING);
