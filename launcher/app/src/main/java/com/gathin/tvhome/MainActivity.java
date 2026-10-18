@@ -4,8 +4,10 @@ import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -14,6 +16,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
+import android.net.Uri;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -119,6 +122,38 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             handler.post(MainActivity.this::updateWifiLabel);
         }
     };
+    /**
+     * Set when a TV app was installed, updated, removed, enabled or disabled while Home was in the background:
+     * the next onResume reloads the app list. Otherwise Home comes back without reloading every banner.
+     */
+    private boolean appsChanged = true;
+    private boolean resumed;
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Uri data = intent.getData();
+            String pkg = data != null ? data.getSchemeSpecificPart() : null;
+            if (pkg != null && !adapter.contains(pkg)
+                    && getPackageManager().getLeanbackLaunchIntentForPackage(pkg) == null) {
+                return;   // not a TV app, and not one we show (e.g. a background service package changing)
+            }
+            appsChanged = true;
+            if (resumed) {
+                handler.removeCallbacks(reloadNow);   // an update sends several broadcasts
+                handler.post(reloadNow);
+            }
+        }
+    };
+    private final Runnable reloadNow = () -> {
+        final String returnKey = lastFocusedKey;
+        final int returnSlot = lastFocused;
+        appsChanged = false;
+        adapter.reload();
+        grid.post(() -> {
+            int pos = adapter.positionOf(returnKey);
+            focusTile(pos >= 0 ? pos : returnSlot);
+        });
+    };
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -221,6 +256,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
+        IntentFilter packages = new IntentFilter();
+        packages.addAction(Intent.ACTION_PACKAGE_ADDED);
+        packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        packages.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        packages.addDataScheme("package");
+        registerReceiver(packageReceiver, packages);
+        IntentFilter storage = new IntentFilter(Intent.ACTION_EXTERNAL_APPLICATIONS_AVAILABLE);
+        storage.addAction(Intent.ACTION_EXTERNAL_APPLICATIONS_UNAVAILABLE);
+        registerReceiver(packageReceiver, storage);
         Perf.end();
         Perf.log("create", t0, null);
     }
@@ -230,15 +275,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         final long t0 = Perf.now();
         Perf.begin("tvhome:onResume");
         super.onResume();
-        heroShown = false;
-        heroName.animate().cancel();
-        heroName.setAlpha(0f);
-        ambient.animate().cancel();
-        ambient.setAlpha(0f);
+        resumed = true;
+        // The top shelf stays as it was when an app was opened, so Home comes back showing it at once
+        // instead of fading the name and glow in again; the focus restore below updates it if needed.
         // Read these before reload(): rebinding can move focus to the first tile and overwrite them.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
-        adapter.reload();
+        if (appsChanged) {
+            appsChanged = false;
+            adapter.reload();
+        }
         // The tiles fly in once, when the launcher starts. Like tvOS, Home afterwards just shows the
         // home screen with focus where you left it, instead of replaying the entrance every time.
         if (!tilesEntered) {
@@ -274,6 +320,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
+        handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
         shelfTiming.cancel();
     }
@@ -283,6 +331,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onDestroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.unregisterNetworkCallback(networkCallback);
+        unregisterReceiver(packageReceiver);
     }
 
     @Override

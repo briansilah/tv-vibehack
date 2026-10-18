@@ -223,6 +223,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return -1;
     }
 
+    /** Whether a tile shows an app of this package. */
+    boolean contains(String pkg) {
+        for (Entry e : items) {
+            if (e.pkg.equals(pkg)) return true;
+        }
+        return false;
+    }
+
     String labelAt(int position) {
         return position >= 0 && position < items.size() ? items.get(position).label : "";
     }
