@@ -20,6 +20,14 @@
             android:layout_height="match_parent"
             android:alpha="0" />
 
+        <!-- Top shelf art over the glow, full screen behind the dock as on tvOS: suggested content's backdrop or the
+             app's cover art (TopShelf). It covers the glow when it shows; without art, the glow shows. -->
+        <com.gathin.tvhome.TopShelfView
+            android:id="@+id/shelfArt"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+
         <!-- Last, over the top shelf's pictures: a soft shade in the top right corner, behind the time and the
              picture, so they stay legible over bright art. -->
         <com.gathin.tvhome.CornerShade
@@ -38,6 +46,36 @@
         android:alpha="0"
         android:textColor="#FFFFFFFF"
         style="@style/Text.LargeTitle"
+        android:includeFontPadding="false"
+        android:singleLine="true" />
+
+    <!-- The top shelf art's own words: a caption and the title's logo (or name), or the app's logo on its cover
+         art, in place of the name. Drawn in code, moved with the page. -->
+    <com.gathin.tvhome.ShelfInfoView
+        android:id="@+id/shelfInfo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
+
+    <!-- Up from a dock app showing suggested content: its action (Play, Resume, Open in the app), under the title,
+         as tvOS's Top Shelf shows its buttons. Placed in code (TopShelf); hidden otherwise. -->
+    <TextView
+        android:id="@+id/shelfAction"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:alpha="0"
+        android:visibility="invisible"
+        android:focusable="false"
+        android:gravity="center_vertical"
+        android:paddingStart="18dp"
+        android:paddingEnd="22dp"
+        android:background="@drawable/shelf_button_bg"
+        android:drawableStart="@drawable/ic_play"
+        android:drawablePadding="8dp"
+        android:drawableTint="@color/shelf_button_text"
+        android:textColor="@color/shelf_button_text"
+        style="@style/Text.Callout"
+        android:fontFamily="@font/text_semibold"
         android:includeFontPadding="false"
         android:singleLine="true" />
 

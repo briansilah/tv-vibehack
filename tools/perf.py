@@ -41,12 +41,13 @@ SETTINGS_APP = "am start -W -a android.settings.SETTINGS"
 LEANBACK_APPS = ("cmd package query-activities --brief -a android.intent.action.MAIN "
                  "-c android.intent.category.LEANBACK_LAUNCHER")
 HOME_INTENT = "am start -W -a android.intent.action.MAIN -c android.intent.category.HOME"
-KEYCODES = {"UP": 19, "DOWN": 20, "LEFT": 21, "RIGHT": 22, "CENTER": 23}
+KEYCODES = {"UP": 19, "DOWN": 20, "LEFT": 21, "RIGHT": 22, "CENTER": 23, "BACK": 4}
 # 16 moves across the dock and the first grid rows, then back to the dock.
 DEFAULT_KEYS = "RIGHT RIGHT RIGHT LEFT LEFT LEFT DOWN RIGHT RIGHT DOWN LEFT LEFT UP UP RIGHT LEFT"
-# Puts focus on the first dock app from anywhere: Up climbs the grid to the top bar and stops there, Down
-# goes back to the dock, Left stops at the dock's first app.
-TO_FIRST_DOCK_APP = " ".join(["UP"] * 14 + ["DOWN"] + ["LEFT"] * 4)
+# Puts focus on the first dock app from anywhere: Up climbs the grid (and the top shelf's button) to the top bar
+# and stops there, Back goes back to the dock (Down would stop at the top shelf's button), Left stops at the
+# dock's first app.
+TO_FIRST_DOCK_APP = " ".join(["UP"] * 14 + ["BACK"] + ["LEFT"] * 4)
 DOCK_TRACE_KEYS = "RIGHT LEFT RIGHT LEFT RIGHT LEFT RIGHT LEFT"
 ALL_SCENARIOS = ("cold", "warm", "jank", "dock", "mem")
 TRACE_REMOTE = "/data/misc/perfetto-traces/tvhome.perfetto-trace"
@@ -476,6 +477,7 @@ METRICS = [
     ("dock.summary.shelf_ms", "Dock move: top shelf shows the new app", "ms"),
     ("dock.summary.shelf_text_ms", "  name shown", "ms"),
     ("dock.summary.shelf_glow_ms", "  glow colour reached", "ms"),
+    ("dock.summary.shelf_art_ms", "  art shown", "ms"),
     ("dock.summary.total_frames", "Frames drawn per round of dock moves", ""),
     ("dock.summary.janky_pct", "Janky frames (dock moves)", "%"),
     ("dock.summary.p50_ms", "  50th percentile frame", "ms"),

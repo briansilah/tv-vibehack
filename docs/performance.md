@@ -4,8 +4,8 @@ The launcher runs on TVs with 1 GB of RAM and slow CPUs, so performance work her
 measure on a real TV, find where the time goes, change one thing, measure again. Each fix's pull
 request should include a before/after table from the same TV.
 
-Everything stays local. The launcher only writes to the TV's own log when you ask it to, and
-nothing is sent anywhere (no telemetry; see CONTRIBUTING.md).
+The measurements stay local. The launcher only writes to the TV's own log when you ask it to, and it
+sends no telemetry (CONTRIBUTING.md); its only network use is the top shelf's pictures.
 
 ## Tools
 
@@ -92,7 +92,7 @@ for A and B.
 | cold | Open another TV app, `am kill` the launcher, `am start -W` it | `TotalTime` (system: until the first frame); fully drawn (until focus is on a tile, via `reportFullyDrawn`); app-side `create`, `resume`, `reload` |
 | warm | Open another TV app, start the launcher again (or the HOME intent) | `TotalTime`; `focus_restored` = from `onResume` until the first frame with focus back on a tile, i.e. when Home is usable; `resume`; `reload` split into the package query and loading banners/icons/labels; frames drawn until Home settles (animations replayed on return; where the system fades Home in, as on Google TV, Home's 900 ms fall back into place draws about 55, see [transitions.md](transitions.md)) |
 | jank | `dumpsys gfxinfo reset`, 16 D-pad moves 0.35 s apart, `dumpsys gfxinfo` | janky frames %, frame-time percentiles, slow UI thread and high input latency counts |
-| dock | Focus on the first dock app, then Right/Left between the first two dock apps, one press every 1.2 s, 8 per round | `shelf`: from the focus change until the top shelf shows the new app, split into the name (`text`) and the glow colour (`glow`); janky frames and frame percentiles of those moves |
+| dock | Focus on the first dock app, then Right/Left between the first two dock apps, one press every 1.2 s, 8 per round | `shelf`: from the focus change until the top shelf shows the new app, split into the name (`text`; when the art shows its own title, until the name has gone), the glow colour (`glow`) and the art (`art`: its cross-fade, or 0 when there's none ready); janky frames and frame percentiles of those moves |
 | mem | `dumpsys meminfo` on Home after the other scenarios | PSS total, Java heap, native heap (bitmaps live here), graphics, view count |
 
 The JSON also records the device, the Android version, the APK size on the TV, whether the build is
@@ -117,6 +117,7 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 | `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
 | `tvhome:launch` | opening an app from a tile: starting it, then Home's push away; the `launch` log line splits it (`start_ms`, `check_ms`) |
 | `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
+| (threads) `tvhome-shelf`, `tvhome-shelf-net` | the top shelf's art: decoding pictures, cutting cover art, reading TvProvider; and fetching catalogues and pictures. Both at background priority |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
 | `tvhome:glass.record` | Liquid Glass (`LiquidGlass`): recording its copy of the top shelf behind the dock or the top right capsule, on frames where the shelf or the glass moved or changed; the GPU then blurs it during the RenderThread's `DrawFrame` |

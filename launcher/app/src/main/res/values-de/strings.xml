@@ -41,4 +41,15 @@
     <string name="glass_tinted">Getönt</string>
     <string name="glass_value">%1$d %%</string>
     <string name="glass_hint">Links und rechts zum Einstellen · OK, wenn fertig</string>
+    <!-- Top shelf: titles from Android TV's Watch Next: the next episode, new episodes, a saved title. -->
+    <string name="up_next">Als Nächstes</string>
+    <string name="new_episodes">Neue Folgen</string>
+    <string name="watchlist">Deine Merkliste</string>
+    <string name="continue_watching">Weiterschauen</string>
+    <!-- Top shelf: the button under a suggested title (Up from the dock). -->
+    <string name="shelf_play">Abspielen</string>
+    <string name="shelf_resume">Fortsetzen</string>
+    <string name="shelf_open">Öffnen</string>
+    <!-- %1$s: the app, e.g. Netflix. -->
+    <string name="shelf_open_in">In %1$s öffnen</string>
 </resources>

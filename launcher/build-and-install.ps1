@@ -67,6 +67,8 @@ try {
     if ($googleTv) {
         @(
             'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
+            # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
+            'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
             # Re-enable it in case an older version of this script disabled it.
             "pm enable $googleTvLauncher",
             # TCL only lets the system start an app's process for a service with its AUTO_START app op allowed; other
@@ -84,6 +86,8 @@ try {
         if ("$out" -match 'Error') { throw 'could not set the new launcher as home; the stock launcher was left untouched' }
         @(
             'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
+            # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
+            'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
             'cmd package set-home-activity --user 0 com.gathin.tvhome',
             "pm disable-user --user 0 $StockLauncher"
         ) | & $py -I ..\tools\tv.py --batch

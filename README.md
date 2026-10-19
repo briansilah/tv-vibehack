@@ -76,9 +76,12 @@ A home screen that is yours again:
   later; the bending needs Android 13). The top right's capsule is the same glass. How see-through it
   is goes on a slider like Apple's, from the clearest (the default) through Clear, Apple TV's own look,
   to Tinted: hold OK on any app and pick **Liquid Glass**.
-- **A top shelf** showing the focused app's name in large type, with an ambient glow in a colour
-  taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
-  sweeping along the dock doesn't flash every colour.
+- **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows what
+  it suggests: what you were watching first (with **Resume** a press of Up away), then your watchlist,
+  then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
+  Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
+  in every 10 seconds. An app without suggestions shows cover art: its logo on shapes in its own
+  colours. Otherwise, its name over an ambient glow in its colour. See [The top shelf](#the-top-shelf).
 - **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
   the dock row moves to the top, the time and profile picture scroll away with the page, and the rows
   get the whole screen. Back on the dock, they come back.
@@ -192,16 +195,18 @@ rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 230 KB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no video, no
-network, and no background services except, on Google TV, the small Home-button service described
-below. The only blur is the dock's and the top right's Liquid Glass, a small half-resolution layer
-redrawn only when the top shelf changes; it is measured in [docs/performance.md](docs/performance.md),
-off on low-RAM and pre-Android 12 TVs, and `liquid_glass_blur` in `config.xml` turns it off.
+network except the top shelf's pictures (below), and no background services except, on Google TV,
+the small Home-button service described below. The only blur is the dock's and the top right's
+Liquid Glass, a small half-resolution layer redrawn only when the top shelf changes; it is measured
+in [docs/performance.md](docs/performance.md), off on low-RAM and pre-Android 12 TVs, and
+`liquid_glass_blur` in `config.xml` turns it off.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
-the dock order, apps to hide, your TV's Live TV package, the number of columns, and how see-through the
-Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest and the default, 5 is Apple TV's Clear, 95 is Tinted).
+the dock order, apps to hide, your TV's Live TV package, the number of columns, the top shelf's art,
+feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
+and the default, 5 is Apple TV's Clear, 95 is Tinted).
 
 **Arrange** apps on the TV itself. Hold OK on an app for its actions:
 
@@ -224,6 +229,55 @@ says what's happening and which remote keys do what.
 
 Your order is saved on the TV and replaces the `dock_apps` default from then on. Apps you install later
 go at the end, as on Apple TV; apps you uninstall drop out and the rest close up.
+
+### The top shelf
+
+With focus on a dock app, the screen behind the dock shows the best of these that the app has, as
+Apple TV's Top Shelf does:
+
+1. **Suggested titles**, full screen with the title's logo (or name) and what it is ("Continue
+   watching", "Recommended for you", "Top 10 on Netflix · Kenya"). The next one pushes in from the
+   right every 10 seconds. First what you were watching, then what you saved (a watchlist, a library),
+   then what's popular and trending: the app's other suggestions and its feed's titles, one of each
+   in turn:
+   - **What the app publishes on the TV for the home screen**: Android TV's Watch Next and preview
+     channels (on our TV: YouTube's recommendations, Netflix's and Stremio's continue watching,
+     Stremio's library). Android only lets an app read other apps' rows with `READ_TV_LISTINGS`, which
+     `build-and-install.sh` grants. Without it, this source is skipped.
+   - **A public catalogue** per app, from `top_shelf_feeds` in `config.xml`: Netflix's Top 10 in your
+     TV's country (where its time zone is, else its language and region setting), and what's popular on Apple TV+, Prime
+     Video, Disney+, JioHotstar and Stremio. These are [Stremio](https://www.stremio.com) catalogues,
+     which need no account or key: Stremio's Cinemeta, and the open-source
+     [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
+     come from Stremio's image service (metahub).
+2. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
+   on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
+   in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
+   or offline, the logo cut out of the app's banner, never shown larger than it is.
+3. Otherwise the app's name over the ambient glow, as before.
+
+**Only sharp pictures show.** A title's backdrop must be at least about 720p once any black bars are
+cut off (YouTube's thumbnails are fetched at 1280 x 720; the small ones the apps publish are never
+used), or the title is passed over for the next. A title logo too small to read well gives way to
+the title in text.
+
+**Up** from a dock app showing a title moves to a button under it: **Resume** or **Play** opens it in
+the app (with the link the app published), **Open in …** opens a catalogue title in its app (a
+Stremio title's page, or a search for it in Netflix or Apple TV). Left and Right page through the
+titles; Down or Back returns to the dock, and Up again opens the top right corner. Apps don't let
+other apps add to their watchlists, so there's no such button.
+
+**The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
+the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept
+on the TV (up to 60 MB), so the shelf also works offline with what it last saw. Requests are plain
+GETs without cookies, accounts or identifiers. The Netflix Top 10 URL carries your TV's country, and
+the servers see your IP address, as for any download. The launcher sends no telemetry. To keep the
+launcher off the network, set `top_shelf_art` to `false` in `config.xml` (glow and name only), or
+remove a feed's line to keep that app to its own suggestions and cover art.
+
+**Memory**: on a TV with 1.5 GB of RAM or more, backdrops are fetched in 4K where available and
+shown at the screen's 1920 x 1080 (Android TV draws apps at 1080p, even on a 4K panel). On smaller
+TVs they're shown at 1280 x 720. Pictures not on screen are dropped when you open an app.
 
 **Build and install** with one command:
 

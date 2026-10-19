@@ -25,11 +25,14 @@ is reversible from the TV's own settings if the tools are gone.
 ## 2. Improve the launcher
 
 The launcher lives in `launcher/` and is deliberately small: plain Java, AndroidX RecyclerView and
-DynamicAnimation, no Kotlin, no Compose, no network. It targets TVs with 1 GB of RAM, so:
+DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
 
 - Blur only where it is measured cheap on a real TV (the dock's Liquid Glass blurs a small
   half-resolution layer, redrawn only when what's behind it changes, and falls back to a plain tint on
   older or low-RAM TVs). No video backgrounds, no polling, no background services.
+- The network only for the top shelf's pictures and public catalogues (README, "The top shelf"):
+  fetched off the main thread with short timeouts, cached on the TV so it works offline, without
+  accounts, keys or identifiers, and within each source's terms. Never telemetry.
 - Anything that depends on a specific TV goes in `app/src/main/res/values/config.xml`, not in code.
 - Keep D-pad navigation deterministic. Test Up/Down/Left/Right from every edge.
 - Verify on a real TV, not only the emulator. The easiest way is remote key injection plus a
@@ -43,12 +46,15 @@ build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` 
 `sdkmanager "platforms;android-34" "build-tools;34.0.0"`). It reaches the TV the way `tools/tv.py`
 does: the `adb` binary, or `adb_shell` with `TV_HOST=<ip>` (see [Connecting](README.md#connecting)).
 
-Logic that doesn't need a TV (e.g. `AmbientColor`, which picks the top shelf's glow colour) has JVM
-unit tests: `cd launcher && ./gradlew testDebugUnitTest`.
+Logic that doesn't need a TV (e.g. `AmbientColor`, which picks the top shelf's glow colour, `CoverArt`,
+which cuts an app's logo out of its banner, and `ShelfFeeds`, which orders the top shelf's titles) has
+JVM unit tests: `cd launcher && ./gradlew testDebugUnitTest`.
 
 Ideas that fit the direction: an idle screensaver with clock and ambient colour, per-TV icon packs
 for apps without banners, a settings screen to edit the dock from the TV, localisation.
-Ideas that don't: recommendation rows, content feeds, ads, telemetry.
+Ideas that don't: ads, telemetry, accounts, tracking, or anything that sends what you watch anywhere.
+The top shelf's suggestions are the exception that fits: what the apps already publish on the TV,
+and public catalogues fetched without identifiers.
 
 ## 3. Improve the prompt and tools
 
