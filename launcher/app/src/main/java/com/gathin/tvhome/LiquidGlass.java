@@ -52,8 +52,6 @@ final class LiquidGlass {
 
     /** More colourful than what's behind it, as the dock is over the top shelf's art: 1.5 times the saturation. */
     static final float SATURATION = 1.5f;
-    /** The copy of the backdrop is recorded and blurred at this fraction of the screen's resolution. */
-    static final float LAYER_SCALE = 0.5f;
     /** What tinted glass darkens towards: tvOS's dark grey (the tiles' own, drawable/tile_bg.xml). */
     static final int BODY = 0x1C1C1E;
 
@@ -115,11 +113,12 @@ final class LiquidGlass {
 
     /**
      * The dock: 9 % white (Apple TV lifts black to 35 and grey 55 to 76 of 255), a 3 px rim at 19 % white along the
-     * top fading to 9 % down the sides and bottom, and a 24 px band along the edge that bends the backdrop.
+     * top fading to 9 % down the sides and bottom, and a 12 px band along the edge that shows what's up to 20 px
+     * beyond it.
      */
-    static final Style DOCK = new Style(0x17, 0x30, 0x17, 0x17, 1.5f, 12f, 16f);
-    /** The top right capsule: smaller, so thinner; its tint and rim are the ones it had before. */
-    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 6f, 6f);
+    static final Style DOCK = new Style(0x17, 0x30, 0x17, 0x17, 1.5f, 6f, 10f);
+    /** The top right capsule: smaller, so thinner (a narrower lens); its tint and rim are the ones it had before. */
+    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 4f, 5f);
 
     /** Which tier this TV gets. */
     static int tier(Context context) {
@@ -364,15 +363,20 @@ final class LiquidGlass {
         return v.isAttachedToWindow();
     }
 
-    /** The copy of the backdrop behind one piece of glass. Android 12+. */
+    /**
+     * The copy of the backdrop behind one piece of glass. Android 12+. On a TV's GPU each pass over a texture costs
+     * more than the pixels in it (about 0.4 ms each on a Mali-G57, measured), so the layer takes two: the copy itself,
+     * then one effect. On Android 13+ that is {@link Optics}, blur, saturation and lens in one shader; on Android 12
+     * Skia's blur, with the saturation applied as the layer is drawn.
+     */
     @RequiresApi(31)
     private static final class Layer {
-        private static final ColorMatrixColorFilter VIBRANCY;
+        private static final Paint VIBRANCY = new Paint();
 
         static {
             ColorMatrix m = new ColorMatrix();
             m.setSaturation(SATURATION);
-            VIBRANCY = new ColorMatrixColorFilter(m);
+            VIBRANCY.setColorFilter(new ColorMatrixColorFilter(m));
         }
 
         private final RenderNode node = new RenderNode("LiquidGlass");
@@ -380,15 +384,23 @@ final class LiquidGlass {
         private final float bezel;
         private final float refract;
         @Nullable
-        private final Lens lens;
+        private final Optics optics;
         /** Around the shape, the copy also takes what the blur and the lens reach for, in px. */
         private float margin;
+        /** The copy's resolution, a fraction of the screen's: lower for a stronger blur. */
+        private float scale = MAX_SCALE;
+
+        /** The copy is never sharper than half resolution, nor coarser than a quarter. */
+        private static final float MAX_SCALE = 0.5f, MIN_SCALE = 0.25f;
+        /** Blur sigma in the copy's pixels that {@link Optics} spreads its taps for. */
+        private static final float LAYER_SIGMA = 1.75f;
 
         Layer(Style style, float density, boolean lens) {
             this.density = density;
+            optics = lens && Build.VERSION.SDK_INT >= 33 ? Optics.create() : null;
             bezel = style.bezelDp * density;
-            refract = lens ? style.refractDp * density : 0f;
-            this.lens = lens && Build.VERSION.SDK_INT >= 33 ? Lens.create() : null;
+            refract = optics != null ? style.refractDp * density : 0f;
+            if (optics == null) node.setUseCompositingLayer(true, VIBRANCY);
         }
 
         /**
@@ -403,7 +415,7 @@ final class LiquidGlass {
                 RecordingCanvas c = node.beginRecording(nw, nh);
                 try {
                     c.drawColor(Color.BLACK);   // the window's background, under the backdrop
-                    c.scale(LAYER_SCALE, LAYER_SCALE);
+                    c.scale(scale, scale);
                     c.translate(margin + dx, margin + dy);
                     backdrop.draw(c);
                 } finally {
@@ -415,27 +427,28 @@ final class LiquidGlass {
         }
 
         private void reshape(float w, float h, float radius, float sigma) {
+            // A stronger blur needs no more detail than this: Optics' taps stay LAYER_SIGMA apart.
+            scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, LAYER_SIGMA / Math.max(0.01f, sigma)));
             margin = (float) Math.ceil(refract + 3f * sigma + density);
-            int nw = (int) Math.ceil((w + 2f * margin) * LAYER_SCALE);
-            int nh = (int) Math.ceil((h + 2f * margin) * LAYER_SCALE);
+            int nw = (int) Math.ceil((w + 2f * margin) * scale);
+            int nh = (int) Math.ceil((h + 2f * margin) * scale);
             node.setPosition(0, 0, nw, nh);
-            // RenderEffect takes a radius, which Skia turns into sigma = 0.57735 * radius + 0.5.
-            float blur = Math.max(0f, (sigma * LAYER_SCALE - 0.5f) / 0.57735f);
-            RenderEffect e = RenderEffect.createColorFilterEffect(VIBRANCY);
-            if (blur > 0f) e = RenderEffect.createBlurEffect(blur, blur, e, Shader.TileMode.CLAMP);
-            if (lens != null && Build.VERSION.SDK_INT >= 33) {
-                float s = LAYER_SCALE;
-                e = lens.effect(e, margin * s, margin * s, w * s, h * s, radius * s,
-                        Math.min(bezel, radius) * s, refract * s);
+            float s = scale;
+            if (optics != null && Build.VERSION.SDK_INT >= 33) {
+                node.setRenderEffect(optics.effect(margin * s, margin * s, w * s, h * s, radius * s,
+                        Math.min(bezel, radius) * s, refract * s, sigma * s));
+            } else {
+                // RenderEffect takes a radius, which Skia turns into sigma = 0.57735 * radius + 0.5.
+                float blur = Math.max(0.01f, (sigma * s - 0.5f) / 0.57735f);
+                node.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
             }
-            node.setRenderEffect(e);
         }
 
         /** Draws the copy on a canvas at the shape's top left, already clipped to the shape. */
         void draw(Canvas canvas) {
             canvas.save();
             canvas.translate(-margin, -margin);
-            canvas.scale(1f / LAYER_SCALE, 1f / LAYER_SCALE);
+            canvas.scale(1f / scale, 1f / scale);
             canvas.drawRenderNode(node);
             canvas.restore();
         }
@@ -446,13 +459,20 @@ final class LiquidGlass {
     }
 
     /**
-     * The lens along the edge, as an AGSL shader: inside a band along the edge (the bezel), each pixel shows the
-     * backdrop from further out, most at the very edge, as through the rounded edge of a slab of glass. So what is just
-     * outside the glass also shows, squeezed, just inside its edge. The bezel's profile is a quarter circle, as in
-     * Kyant0's AndroidLiquidGlass and kube.io's recreations. Android 13+.
+     * Glass's optics in one AGSL shader, so the GPU makes one pass for them:
+     * <ul>
+     * <li>The lens: inside a band along the edge (the bezel), each pixel shows the backdrop from further out, most at
+     * the very edge, as through the rounded edge of a slab of glass, so what is just outside the glass shows, squeezed,
+     * just inside its edge. The bezel's profile is a quarter circle, as in Kyant0's AndroidLiquidGlass and kube.io's
+     * recreations.</li>
+     * <li>The blur, at the lens's point: a 5 by 5 binomial kernel (a Gaussian's sigma is its tap spacing) in 9 linearly
+     * filtered taps, each standing for two of the kernel's.</li>
+     * <li>Saturation, luminance kept, as {@link ColorMatrix#setSaturation}.</li>
+     * </ul>
+     * Android 13+.
      */
     @RequiresApi(33)
-    private static final class Lens {
+    private static final class Optics {
         private static final String AGSL = ""
                 + "uniform shader content;\n"
                 + "uniform float2 origin;\n"
@@ -460,43 +480,63 @@ final class LiquidGlass {
                 + "uniform float radius;\n"
                 + "uniform float bezel;\n"
                 + "uniform float reach;\n"
+                + "uniform float spread;\n"
+                + "uniform float saturation;\n"
+                + "half4 blurred(float2 c) {\n"
+                + "  float o = 1.2 * spread;\n"
+                + "  half4 s = content.eval(c) * 36.0;\n"
+                + "  s += (content.eval(c + float2(o, 0.0)) + content.eval(c - float2(o, 0.0))\n"
+                + "      + content.eval(c + float2(0.0, o)) + content.eval(c - float2(0.0, o))) * 30.0;\n"
+                + "  s += (content.eval(c + float2(o, o)) + content.eval(c - float2(o, o))\n"
+                + "      + content.eval(c + float2(o, -o)) + content.eval(c + float2(-o, o))) * 25.0;\n"
+                + "  return s / 256.0;\n"
+                + "}\n"
                 + "half4 main(float2 coord) {\n"
                 + "  float2 hs = size * 0.5;\n"
                 + "  float2 p = coord - origin - hs;\n"
                 + "  float2 q = abs(p) - hs + radius;\n"
                 + "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;\n"
-                + "  if (d >= 0.0 || d <= -bezel) return content.eval(coord);\n"
-                + "  float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));\n"
-                + "  float x = 1.0 + d / bezel;\n"
-                + "  float k = 1.0 - sqrt(max(0.0, 1.0 - x * x));\n"
-                + "  return content.eval(coord + n * sign(p) * (k * reach));\n"
+                + "  float2 at = coord;\n"
+                + "  if (d < 0.0 && d > -bezel) {\n"
+                + "    float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));\n"
+                + "    float x = 1.0 + d / bezel;\n"
+                + "    at += n * sign(p) * ((1.0 - sqrt(max(0.0, 1.0 - x * x))) * reach);\n"
+                + "  }\n"
+                + "  half4 c = blurred(at);\n"
+                + "  half l = dot(c.rgb, half3(0.213, 0.715, 0.072));\n"
+                + "  c.rgb = clamp(mix(half3(l), c.rgb, half(saturation)), 0.0, c.a);\n"
+                + "  return c;\n"
                 + "}\n";
 
         private final RuntimeShader shader;
 
-        private Lens(RuntimeShader shader) {
+        private Optics(RuntimeShader shader) {
             this.shader = shader;
         }
 
-        /** Null if this TV's shader compiler won't take it: the glass then keeps straight edges. */
+        /** Null if this TV's shader compiler won't take it: the glass then blurs with Skia, with straight edges. */
         @Nullable
-        static Lens create() {
+        static Optics create() {
             try {
-                return new Lens(new RuntimeShader(AGSL));
+                return new Optics(new RuntimeShader(AGSL));
             } catch (RuntimeException e) {
                 return null;
             }
         }
 
-        /** The lens over {@code input}, for a shape at {@code x, y}, {@code w} by {@code h}, in the layer's pixels. */
-        RenderEffect effect(RenderEffect input, float x, float y, float w, float h, float radius, float bezel,
-                            float refract) {
+        /**
+         * The effect for a shape at {@code x, y}, {@code w} by {@code h}, and a blur of {@code sigma}, all in the
+         * layer's pixels.
+         */
+        RenderEffect effect(float x, float y, float w, float h, float radius, float bezel, float refract, float sigma) {
             shader.setFloatUniform("origin", x, y);
             shader.setFloatUniform("size", w, h);
             shader.setFloatUniform("radius", radius);
             shader.setFloatUniform("bezel", Math.max(1f, bezel));
             shader.setFloatUniform("reach", refract);
-            return RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(shader, "content"), input);
+            shader.setFloatUniform("spread", sigma);
+            shader.setFloatUniform("saturation", SATURATION);
+            return RenderEffect.createRuntimeShaderEffect(shader, "content");
         }
     }
 }

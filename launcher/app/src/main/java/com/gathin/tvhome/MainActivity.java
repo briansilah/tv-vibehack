@@ -481,16 +481,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
         // Center, instead of showing it close. onResume moves focus back to the dock.
         if (corner.hasFocus()) corner.snapClosed();
-        if (glassPanel != null && glassPanel.getVisibility() == View.VISIBLE) {
-            glassPanel.animate().cancel();
-            glassPanel.setVisibility(View.GONE);
-        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         rearranger.end();
+        hideGlassSlider(false);   // Home pressed, or something opened over Home: the slider closes, as the sheet does
         resumed = false;
         handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
@@ -732,7 +729,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
                 @Override
                 public void onGlassDone() {
-                    hideGlassSlider();
+                    hideGlassSlider(true);
                 }
             });
         }
@@ -749,11 +746,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         slider.requestFocus();
     }
 
-    private void hideGlassSlider() {
-        glassPanel.animate().cancel();
-        glassPanel.animate().alpha(0f).setDuration(GLASS_PANEL_OUT_MS).setInterpolator(DECELERATE)
-                .withEndAction(() -> glassPanel.setVisibility(View.GONE)).start();
+    private void hideGlassSlider(boolean animate) {
+        if (glassPanel == null || glassPanel.getVisibility() != View.VISIBLE) return;
+        // Focus goes back to the app first: hiding the focused slider would hand focus to the first tile.
         focusTile(lastFocused);
+        glassPanel.animate().cancel();
+        if (animate) {
+            glassPanel.animate().alpha(0f).setDuration(GLASS_PANEL_OUT_MS).setInterpolator(DECELERATE)
+                    .withEndAction(() -> glassPanel.setVisibility(View.GONE)).start();
+        } else {
+            glassPanel.setVisibility(View.GONE);
+        }
     }
 
     private CharSequence glassLabel(int value) {
