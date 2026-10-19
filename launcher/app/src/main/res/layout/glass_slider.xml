@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Liquid Glass: how see-through the dock and the top right are (MainActivity.showGlassSlider). It hangs near the top of
+     the screen so the dock and the top right show the change as you move the slider. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="440dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="top|center_horizontal"
+    android:layout_marginTop="96dp"
+    android:orientation="vertical"
+    android:paddingStart="28dp"
+    android:paddingEnd="28dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="16dp"
+    android:background="@drawable/glass_panel">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/liquid_glass"
+            android:textColor="#FFFFFFFF"
+            style="@style/Text.Headline"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/glassValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:textColor="#B8FFFFFF"
+            style="@style/Text.Callout"
+            android:includeFontPadding="false" />
+    </FrameLayout>
+
+    <com.gathin.tvhome.GlassSlider
+        android:id="@+id/glassSlider"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="10dp"
+        android:contentDescription="@string/liquid_glass" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:text="@string/glass_hint"
+        android:textColor="#80FFFFFF"
+        style="@style/Text.Caption2"
+        android:includeFontPadding="false" />
+</LinearLayout>

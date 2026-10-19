@@ -38,4 +38,9 @@
     <string name="legend_done">Done</string>
     <string name="location_dock">In the Dock</string>
     <string name="location_row">Row %1$d</string>
+    <string name="liquid_glass">Liquid Glass</string>
+    <string name="glass_clear">Clear</string>
+    <string name="glass_tinted">Tinted</string>
+    <string name="glass_value">%1$d%%</string>
+    <string name="glass_hint">◀ ▶ to adjust · OK when done</string>
 </resources>

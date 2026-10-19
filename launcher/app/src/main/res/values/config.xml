@@ -36,6 +36,18 @@
          pills   frosted pills, each with its icon and name -->
     <string name="top_bar_style" translatable="false">tvos</string>
 
+    <!-- Liquid Glass, as on Apple TV, for the dock and the top right: how see-through it is, from 0 to 100, as
+         Apple's Liquid Glass slider. 5 is Clear, Apple TV's own look; 95 is Tinted, darker and more frosted, for
+         readability over busy pictures. You can also change it on the TV: hold OK on any app, then Liquid Glass.
+         That choice is kept until you change it again, or clear the launcher's storage. -->
+    <integer name="liquid_glass">5</integer>
+
+    <!-- On Android 12 and later what's behind the glass shows through blurred and more colourful, and on Android 13
+         and later it bends along its edges. It costs the GPU a small layer, redrawn only when the top shelf changes
+         (docs/performance.md). Set to false on a TV that stutters: the glass keeps its tint and rim, without the
+         blur. -->
+    <bool name="liquid_glass_blur">true</bool>
+
     <!-- Your name, for the profile picture in the top right: its initials, as Apple TV shows for a profile
          without a photo. Leave empty for the plain silhouette. (Android doesn't let apps read the TV's
          Google account name or photo.) -->

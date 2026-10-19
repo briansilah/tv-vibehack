@@ -2,15 +2,7 @@ package com.gathin.tvhome;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.LinearGradient;
-import android.graphics.Outline;
-import android.graphics.Paint;
-import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.graphics.RectF;
-import android.graphics.Shader;
-import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,7 +10,6 @@ import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.dynamicanimation.animation.DynamicAnimation;
 import androidx.dynamicanimation.animation.FloatPropertyCompat;
 import androidx.dynamicanimation.animation.SpringAnimation;
@@ -26,7 +17,8 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import java.util.Locale;
 
 /**
- * The top right of the home screen, as on Apple TV (tvOS 26): the time and the profile picture in a glass capsule.
+ * The top right of the home screen, as on Apple TV (tvOS 26): the time and the profile picture in a capsule of Liquid
+ * Glass ({@link LiquidGlass}), the same material as the dock's.
  * When focus moves into it, it opens like the header of Control Center:
  * <ul>
  * <li>The picture stays exactly where it is, at its size.</li>
@@ -102,7 +94,7 @@ public class ProfileCorner extends ViewGroup {
     };
 
     private final float density;
-    private final View capsule;
+    private final GlassView capsule;
     private final View divider;
     private final View ring;
     private TextView time;
@@ -123,8 +115,8 @@ public class ProfileCorner extends ViewGroup {
     public ProfileCorner(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
-        capsule = new FlatView(context);
-        capsule.setBackground(new GlassCapsule(density));
+        capsule = new GlassView(context);
+        capsule.setGlass(new LiquidGlass(null, LiquidGlass.CAPSULE, density));
         divider = new FlatView(context);
         divider.setBackgroundColor(DIVIDER_COLOR);
         divider.setAlpha(0f);
@@ -154,6 +146,11 @@ public class ProfileCorner extends ViewGroup {
     void setBar(View bar) {
         this.bar = bar;
         requestLayout();
+    }
+
+    /** What shows through the capsule's glass: the dock's backdrop. */
+    void setBackdrop(LiquidGlass.Backdrop backdrop) {
+        capsule.setGlass(new LiquidGlass(backdrop, LiquidGlass.CAPSULE, density));
     }
 
     View getAvatar() {
@@ -379,7 +376,7 @@ public class ProfileCorner extends ViewGroup {
     }
 
     /** A view whose fades draw straight to the screen, without an offscreen layer: it is one flat shape. */
-    private static final class FlatView extends View {
+    private static class FlatView extends View {
         FlatView(Context context) {
             super(context);
         }
@@ -390,57 +387,24 @@ public class ProfileCorner extends ViewGroup {
         }
     }
 
-    /**
-     * tvOS's glass capsule over a dark screen: about 8 % white, with a brighter rim along the top that fades out
-     * towards the bottom (sampled from Apple TV frames). Without the blur: behind it there is only black or the
-     * dock app's soft glow, which a blur wouldn't change.
-     */
-    static final class GlassCapsule extends Drawable {
-        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF rect = new RectF();
-        private final float rimWidth;
+    /** The capsule: a flat shape too, of Liquid Glass with round ends. */
+    private static final class GlassView extends FlatView {
+        private LiquidGlass glass;
 
-        GlassCapsule(float density) {
-            fill.setColor(0x14FFFFFF);
-            rimWidth = Math.max(1f, 0.75f * density);
-            rim.setStyle(Paint.Style.STROKE);
-            rim.setStrokeWidth(rimWidth);
+        GlassView(Context context) {
+            super(context);
+            setWillNotDraw(false);
+        }
+
+        void setGlass(LiquidGlass glass) {
+            this.glass = glass;
+            invalidate();
         }
 
         @Override
-        protected void onBoundsChange(@NonNull Rect b) {
-            rim.setShader(new LinearGradient(0, b.top, 0, b.bottom,
-                    new int[]{0x33FFFFFF, 0x00FFFFFF, 0x0AFFFFFF}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
-        }
-
-        @Override
-        public void draw(@NonNull Canvas canvas) {
-            Rect b = getBounds();
-            float r = b.height() / 2f;
-            rect.set(b);
-            canvas.drawRoundRect(rect, r, r, fill);
-            float inset = rimWidth / 2f;
-            rect.inset(inset, inset);
-            canvas.drawRoundRect(rect, r - inset, r - inset, rim);
-        }
-
-        @Override
-        public void getOutline(@NonNull Outline outline) {
-            outline.setEmpty();   // no shadow, no clipping
-        }
-
-        @Override
-        public void setAlpha(int alpha) {
-        }
-
-        @Override
-        public void setColorFilter(ColorFilter colorFilter) {
-        }
-
-        @Override
-        public int getOpacity() {
-            return PixelFormat.TRANSLUCENT;
+        protected void onDraw(Canvas canvas) {
+            float h = getHeight();
+            glass.draw(canvas, this, 0f, 0f, getWidth(), h, h / 2f);
         }
     }
 }

@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -85,6 +86,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final long CAPTION_FADE_MS = 150L;
     private static final long CAPTION_OPEN_DELAY_MS = 180L;
     private static final int TAB_CAPTION_COLOR = 0xE6FFFFFF;
+    /**
+     * How see-through the Liquid Glass is (see {@link LiquidGlass.Look}): saved from the slider, and an intent extra to
+     * set it from a computer, {@code adb shell am start -n com.gathin.tvhome/.MainActivity --ei liquid_glass 50}
+     * (-1 goes back to config.xml's).
+     */
+    private static final String PREF_GLASS = "liquid_glass";
+    static final String EXTRA_GLASS = "liquid_glass";
+    private static final long GLASS_PANEL_IN_MS = 180L;
+    private static final long GLASS_PANEL_OUT_MS = 140L;
     /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
     private static final String USER_SETTINGS = "android.settings.USER_SETTINGS";
     private String liveTvPkg;
@@ -94,6 +104,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private Rearranger rearranger;
     private FrameLayout root;
     private View ambient;
+    /** What shows through the dock's and the top right's glass: the top shelf. */
+    private LiquidGlass.Backdrop backdrop;
+    /** The Liquid Glass slider, once shown. */
+    private View glassPanel;
+    /** Stand-in top shelf art, when asked for (GlassTestArt.EXTRA). */
+    private GlassTestArt testArt;
+    private SharedPreferences prefs;
     private TextView heroName;
     private GradientDrawable ambientGlow;
     private int ambientColor;
@@ -232,7 +249,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.setBackground(ambientGlow);
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
+        prefs = getSharedPreferences("home", MODE_PRIVATE);
+        backdrop = new LiquidGlass.Backdrop(findViewById(R.id.backdrop), LiquidGlass.tier(this),
+                new LiquidGlass.Look(prefs.getInt(PREF_GLASS, getResources().getInteger(R.integer.liquid_glass))));
         corner = findViewById(R.id.corner);
+        corner.setBackdrop(backdrop);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
         topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
                 TopBarButton.themeFor(getString(R.string.top_bar_style)))));
@@ -250,11 +271,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         scroller = new GridScroller(grid);
         grid.setHasFixedSize(true);
         grid.setItemAnimator(null);
-        grid.addItemDecoration(new DockDecoration(COLUMNS, density));
+        grid.addItemDecoration(new DockDecoration(COLUMNS, density, backdrop));
         grid.setLayoutAnimation(new LayoutAnimationController(
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
         grid.setAdapter(adapter);
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
+        rearranger.setGlassAction(this::showGlassSlider);
+        applyGlassExtra(getIntent());
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -391,6 +414,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onNewIntent(intent);
         rearranger.end();   // Home pressed while arranging: keep the new arrangement
         showMode = intent.getIntExtra(Transitions.EXTRA_SHOW, Transitions.SHOW_INTENT);
+        applyGlassExtra(intent);
     }
 
     /**
@@ -457,6 +481,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
         // Center, instead of showing it close. onResume moves focus back to the dock.
         if (corner.hasFocus()) corner.snapClosed();
+        if (glassPanel != null && glassPanel.getVisibility() == View.VISIBLE) {
+            glassPanel.animate().cancel();
+            glassPanel.setVisibility(View.GONE);
+        }
     }
 
     @Override
@@ -475,6 +503,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.unregisterNetworkCallback(networkCallback);
         unregisterReceiver(packageReceiver);
+        backdrop.release();
     }
 
     @Override
@@ -583,6 +612,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     .withEndAction(() -> shelfTiming.part(SHELF_TEXT, span)).start();
             if (ambientFade != null) ambientFade.cancel();
             setAmbient(adapter.ambientColorAt(position));
+            if (testArt != null) testArt.show(position);
             ambient.animate().alpha(1f).setDuration(SHELF_SHOW_GLOW_MS).setInterpolator(DECELERATE)
                     .withEndAction(() -> shelfTiming.part(SHELF_GLOW, span)).start();
         } else if (key != null && !key.equals(shelfKey)) {
@@ -608,6 +638,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                             .setInterpolator(DECELERATE).withEndAction(() -> shelfTiming.part(SHELF_TEXT, span))
                             .start();
                 }).start();
+        if (testArt != null) testArt.show(position);
         int color = adapter.ambientColorAt(position);
         if (ambientFade != null) ambientFade.cancel();
         if (color == ambientColor) {
@@ -638,6 +669,97 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroName.animate().cancel();   // drops a pending name swap's end action, which would fade it back in
         heroName.animate().alpha(0f).setDuration(SHELF_HIDE_NAME_MS).setInterpolator(DECELERATE).start();
         ambient.animate().alpha(0f).setDuration(SHELF_HIDE_GLOW_MS).setInterpolator(DECELERATE).start();
+        if (testArt != null) testArt.hide();
+    }
+
+    // ---- Liquid Glass ----------------------------------------------------------------------------
+
+    /** How see-through the glass is, 0 to 100; saved, unless it comes from config.xml. */
+    private void setGlass(int value, boolean save) {
+        backdrop.setLook(new LiquidGlass.Look(value));
+        if (save) prefs.edit().putInt(PREF_GLASS, backdrop.look().value).apply();
+    }
+
+    /** The adb extras: {@code --ei liquid_glass 50} (-1 for config.xml's value), {@code --ez glass_test_art true}. */
+    private void applyGlassExtra(Intent intent) {
+        if (intent == null) return;
+        if (intent.hasExtra(GlassTestArt.EXTRA)) showTestArt(intent.getBooleanExtra(GlassTestArt.EXTRA, false));
+        if (!intent.hasExtra(EXTRA_GLASS)) return;
+        Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_GLASS) : null;
+        int value;
+        try {
+            value = extra instanceof Number ? ((Number) extra).intValue() : Integer.parseInt(String.valueOf(extra).trim());
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (value < 0) {
+            prefs.edit().remove(PREF_GLASS).apply();
+            setGlass(getResources().getInteger(R.integer.liquid_glass), false);
+        } else {
+            setGlass(value, true);
+        }
+    }
+
+    private void showTestArt(boolean on) {
+        ViewGroup into = (ViewGroup) backdrop.view;
+        if (on && testArt == null) {
+            testArt = new GlassTestArt(this);
+            into.addView(testArt, 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+            if (heroShown) testArt.show(lastFocused % COLUMNS);
+        } else if (!on && testArt != null) {
+            into.removeView(testArt);
+            testArt = null;
+        }
+    }
+
+    /**
+     * Apple's Liquid Glass slider, near the top of the screen so the dock and the top right show each step as you
+     * take it. From the actions of any app (OK held on it).
+     */
+    private void showGlassSlider() {
+        if (glassPanel == null) {
+            glassPanel = getLayoutInflater().inflate(R.layout.glass_slider, root, false);
+            root.addView(glassPanel);
+            final GlassSlider slider = glassPanel.findViewById(R.id.glassSlider);
+            final TextView label = glassPanel.findViewById(R.id.glassValue);
+            slider.setListener(new GlassSlider.Listener() {
+                @Override
+                public void onGlassChanged(int value) {
+                    setGlass(value, true);
+                    label.setText(glassLabel(value));
+                }
+
+                @Override
+                public void onGlassDone() {
+                    hideGlassSlider();
+                }
+            });
+        }
+        GlassSlider slider = glassPanel.findViewById(R.id.glassSlider);
+        int value = backdrop.look().value;
+        slider.setValue(value);
+        ((TextView) glassPanel.findViewById(R.id.glassValue)).setText(glassLabel(value));
+        glassPanel.animate().cancel();
+        glassPanel.setVisibility(View.VISIBLE);
+        glassPanel.setAlpha(0f);
+        glassPanel.setTranslationY(-8 * density);
+        glassPanel.animate().alpha(1f).translationY(0f).setDuration(GLASS_PANEL_IN_MS).setInterpolator(DECELERATE)
+                .start();
+        slider.requestFocus();
+    }
+
+    private void hideGlassSlider() {
+        glassPanel.animate().cancel();
+        glassPanel.animate().alpha(0f).setDuration(GLASS_PANEL_OUT_MS).setInterpolator(DECELERATE)
+                .withEndAction(() -> glassPanel.setVisibility(View.GONE)).start();
+        focusTile(lastFocused);
+    }
+
+    private CharSequence glassLabel(int value) {
+        if (value == LiquidGlass.Look.CLEAR) return getString(R.string.glass_clear);
+        if (value == LiquidGlass.Look.TINTED) return getString(R.string.glass_tinted);
+        return getString(R.string.glass_value, value);
     }
 
     // ---- navigation ------------------------------------------------------------------------------
