@@ -48,6 +48,11 @@ public class ShelfFeedsTest {
         assertEquals("global", ShelfFeeds.country(null));
         assertEquals("global", ShelfFeeds.country("419"));   // Latin America, a UN M.49 region
         assertEquals("https://a/netflix-top10-ke.json", ShelfFeeds.url("https://a/netflix-top10-{country}.json", "ke"));
+        // The time zone's country wins: a TV in Nairobi with its language on English (United States) is in Kenya.
+        assertEquals("ke", ShelfFeeds.country("KE", "US"));
+        assertEquals("us", ShelfFeeds.country("001", "US"));   // UTC and the like: no country
+        assertEquals("us", ShelfFeeds.country(null, "US"));
+        assertEquals("global", ShelfFeeds.country("001", ""));
     }
 
     @Test

@@ -51,8 +51,8 @@
     <bool name="top_shelf_art">true</bool>
 
     <!-- Public catalogues of suggested titles, per app: "package | caption | URL | URL ...", each URL a Stremio
-         catalogue (JSON with "metas": id, name, background, logo). {country} in a URL becomes the TV's country from
-         its language and region settings (ke, us, ...), or "global" without one; the caption then names it.
+         catalogue (JSON with "metas": id, name, background, logo). {country} in a URL becomes the TV's country (ke, us, ...):
+         its time zone's, else its language and region setting's, else "global"; the caption then names it.
          Fetched at most every 6 hours, only when Home shows, and kept on the TV for offline use. Remove a line to
          keep an app to its own suggestions and cover art. -->
     <string-array name="top_shelf_feeds" translatable="false">

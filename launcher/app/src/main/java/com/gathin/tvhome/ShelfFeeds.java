@@ -227,13 +227,29 @@ final class ShelfFeeds {
         return feeds;
     }
 
-    /** The two-letter country code for feed URLs, or {@link #GLOBAL} when the locale has none. */
+    /**
+     * The TV's country for feed URLs, as a lower-case two-letter code: where its time zone is (set from the network,
+     * so it's where the TV is, even with its language left on English (United States)), else its locale's region,
+     * else {@link #GLOBAL}.
+     */
+    static String country(String timeZoneRegion, String localeCountry) {
+        String tz = code(timeZoneRegion);
+        if (tz != null) return tz;
+        String loc = code(localeCountry);
+        return loc != null ? loc : GLOBAL;
+    }
+
     static String country(String localeCountry) {
-        if (localeCountry == null) return GLOBAL;
-        String c = localeCountry.trim().toLowerCase(Locale.ROOT);
-        if (c.length() != 2) return GLOBAL;
+        return country(null, localeCountry);
+    }
+
+    /** A two-letter country code, lower case, or null ("001", the world, and the like aren't countries). */
+    private static String code(String s) {
+        if (s == null) return null;
+        String c = s.trim().toLowerCase(Locale.ROOT);
+        if (c.length() != 2) return null;
         for (int i = 0; i < 2; i++) {
-            if (c.charAt(i) < 'a' || c.charAt(i) > 'z') return GLOBAL;
+            if (c.charAt(i) < 'a' || c.charAt(i) > 'z') return null;
         }
         return c;
     }

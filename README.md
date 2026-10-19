@@ -231,7 +231,7 @@ Apple TV's Top Shelf does:
      Stremio's library). Android only lets an app read other apps' rows with `READ_TV_LISTINGS`, which
      `build-and-install.sh` grants. Without it, this source is skipped.
    - **A public catalogue** per app, from `top_shelf_feeds` in `config.xml`: Netflix's Top 10 in your
-     TV's country (from its language and region settings), and what's popular on Apple TV+, Prime
+     TV's country (where its time zone is, else its language and region setting), and what's popular on Apple TV+, Prime
      Video, Disney+, JioHotstar and Stremio. These are [Stremio](https://www.stremio.com) catalogues,
      which need no account or key: Stremio's Cinemeta, and the open-source
      [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures

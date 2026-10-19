@@ -156,9 +156,9 @@ final class ShelfSource {
         this.listener = listener;
         this.feeds = ShelfFeeds.parse(feedLines);
         this.links = ShelfFeeds.parseLinks(linkLines);
-        Locale locale = Locale.getDefault();
-        this.country = ShelfFeeds.country(locale.getCountry());
-        this.countryName = ShelfFeeds.GLOBAL.equals(country) ? "" : locale.getDisplayCountry();
+        this.country = ShelfFeeds.country(timeZoneRegion(), Locale.getDefault().getCountry());
+        this.countryName = ShelfFeeds.GLOBAL.equals(country) ? ""
+                : new Locale("", country.toUpperCase(Locale.ROOT)).getDisplayCountry();
         this.dir = new File(this.ctx.getCacheDir(), "shelf");
         this.continueWatching = ctx.getString(R.string.continue_watching);
         this.upNext = ctx.getString(R.string.up_next);
@@ -376,6 +376,15 @@ final class ShelfSource {
     }
 
     static final String READ_TV_LISTINGS = "android.permission.READ_TV_LISTINGS";
+
+    /** The country of the TV's time zone ("KE" for Africa/Nairobi), from the system's own tables; or null. */
+    private static String timeZoneRegion() {
+        try {
+            return android.icu.util.TimeZone.getRegion(java.util.TimeZone.getDefault().getID());
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
 
     private static List<ShelfFeeds.Item> own(Map<String, List<ShelfFeeds.Item>> m, String pkg) {
         List<ShelfFeeds.Item> l = m.get(pkg);
