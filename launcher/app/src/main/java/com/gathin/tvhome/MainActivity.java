@@ -83,6 +83,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private AppAdapter adapter;
     private RecyclerView grid;
+    private Rearranger rearranger;
     private FrameLayout root;
     private View ambient;
     private TextView heroName;
@@ -202,6 +203,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
         adapter = new AppAdapter(this, this, COLUMNS);
         grid.setAdapter(adapter);
+        rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -318,8 +320,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        rearranger.end();   // Home pressed while arranging: keep the new arrangement
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
+        rearranger.end();
         resumed = false;
         handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
@@ -336,7 +345,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onBackPressed() {
-        // Home screen: Back goes nowhere.
+        // Home screen: Back goes nowhere, except while arranging apps.
+        rearranger.onBack();
     }
 
     // ---- focus -----------------------------------------------------------------------------------
@@ -344,6 +354,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public void onTileFocused(int position, View card) {
         Perf.begin("tvhome:onTileFocused");
+        rearranger.onTileFocused(position);
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
         // Tile rect in root coordinates, using layout positions (ignores the scale animation).
@@ -355,7 +366,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int decoratedTop = item.getTop() - (int) (6 * density);
             int dy = decoratedTop - grid.getPaddingTop();
             if (Math.abs(dy) > 1) grid.smoothScrollBy(0, dy);
-            showHero(position, r.top - dy);
+            // While arranging, the header says what's going on instead of the top shelf.
+            if (rearranger.isActive() || adapter.isActionTile(position)) hideHero();
+            else showHero(position, r.top - dy);
         } else {
             hideHero();
             // Scroll just enough to show the whole grown tile, its shadow and its name.
@@ -449,29 +462,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean onTileDpadKey(int position, int keyCode) {
-        int count = adapter.getItemCount();
-        int target;
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-                if (position % COLUMNS == 0) return true;      // first in its row: stay put
-                target = position - 1;
-                break;
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-                if (position % COLUMNS == COLUMNS - 1 || position >= count - 1) return true;   // row end
-                target = position + 1;
-                break;
-            case KeyEvent.KEYCODE_DPAD_UP:
-                if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
-                target = position - COLUMNS;
-                break;
-            default: {
-                int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
-                if (position >= lastRowStart) return true;     // already on the last row: stay put
-                target = Math.min(position + COLUMNS, count - 1);
-            }
-        }
-        focusTile(target);
+        int target = AppOrder.step(position, adapter.getItemCount(), COLUMNS, keyCode);
+        if (target < 0) return false;                      // Up from the dock: let focus move to the top bar
+        if (target != position) focusTile(target);         // otherwise stay put at the row ends and last row
         return true;
+    }
+
+    /** Holding Select on an app opens its actions: Move, Move to Dock, App info. */
+    @Override
+    public void onTileLongPressed(int position, View card) {
+        rearranger.showActions(position);
+    }
+
+    @Override
+    public boolean onTileKey(int position, KeyEvent event) {
+        return rearranger.onKey(position, event);
+    }
+
+    @Override
+    public void onActionTile() {
+        rearranger.onActionTile();
     }
 
     private void focusTile(int position) {

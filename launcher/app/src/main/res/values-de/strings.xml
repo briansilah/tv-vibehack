@@ -21,4 +21,20 @@
     <string name="cant_open">%1$s lässt sich nicht öffnen</string>
     <string name="date_format">EEEE, d. MMMM</string>
     <string name="home_button_description">Öffnet diesen Launcher, wenn du Home drückst, während der Launcher von Google TV für seine Schnelleinstellungen installiert bleibt. Home gedrückt halten öffnet diese.</string>
+    <string name="arrange_apps">Apps anordnen</string>
+    <string name="done">Fertig</string>
+    <string name="move">Verschieben</string>
+    <string name="move_to_dock">Ins Dock verschieben</string>
+    <string name="move_out_of_dock">Aus dem Dock nehmen</string>
+    <string name="app_info">App-Info</string>
+    <string name="home_screen">Startbildschirm</string>
+    <string name="arrange_title">Apps anordnen</string>
+    <string name="moving_title">%1$s verschieben</string>
+    <string name="legend_pick_up">Aufnehmen</string>
+    <string name="legend_move">Bewegen</string>
+    <string name="legend_drop">Ablegen</string>
+    <string name="legend_cancel">Abbrechen</string>
+    <string name="legend_done">Fertig</string>
+    <string name="location_dock">Im Dock</string>
+    <string name="location_row">Reihe %1$d</string>
 </resources>
