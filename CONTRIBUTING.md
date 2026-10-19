@@ -36,9 +36,10 @@ DynamicAnimation, no Kotlin, no Compose, no network. It targets TVs with 1 GB of
 - For performance changes, include a before/after table from `tools/perf.py compare`, measured on
   the same TV ([docs/performance.md](docs/performance.md)).
 
-Build with `TV_HOST=<ip> launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
+Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
-`sdkmanager "platforms;android-34" "build-tools;34.0.0"`).
+`sdkmanager "platforms;android-34" "build-tools;34.0.0"`). It reaches the TV the way `tools/tv.py`
+does: the `adb` binary, or `adb_shell` with `TV_HOST=<ip>` (see [Connecting](README.md#connecting)).
 
 Logic that doesn't need a TV (e.g. `AmbientColor`, which picks the top shelf's glow colour) has JVM
 unit tests: `cd launcher && ./gradlew testDebugUnitTest`.
@@ -53,8 +54,11 @@ Ideas that don't: recommendation rows, content feeds, ads, telemetry.
 usually belongs in the prompt as one extra sentence, not in a script. Keep it brand-neutral; put
 brand-specific knowledge in `examples/`.
 
-`tools/tv.py` and `tools/b64push.py` exist because the stock `adb` is blocked on recent macOS. If
-you find a cleaner workaround, open an issue first.
+Every script reaches the TV through `tools/tv.py`, which uses the `adb` binary or, with `TV_HOST`
+set, the pure-Python `adb_shell` client. Keep both working: `adb_shell` exists because the stock
+`adb` is blocked on some macOS setups, and the `adb` binary is the only way to reach TVs that offer
+just wireless debugging. `tools/tests` covers both offline:
+`python3 -m unittest discover -s tools/tests`. If you find a cleaner workaround, open an issue first.
 
 ## Pull requests
 

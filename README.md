@@ -51,7 +51,8 @@ You need a computer on the same Wi-Fi as the TV and a coding assistant with shel
 **1. On the TV**
 Settings → Device Preferences → About → press OK on **Build** seven times → go back →
 Developer options → turn on **USB debugging**. Some TVs also show a Network or ADB debugging
-toggle; turn it on too. Keep the TV switched on.
+toggle; turn it on too. Newer ones (Android 11+) may only offer **Wireless debugging**, which
+pairs with a code instead; see [Connecting](#connecting). Keep the TV switched on.
 
 **2. On your computer**
 Open your assistant, paste the prompt from [`PROMPT.md`](PROMPT.md), and fill in your TV model.
@@ -116,15 +117,18 @@ list afterwards, the next person with your model skips that step. See
 
 ## Doing it by hand
 
-Everything the assistant does, you can run yourself. The tools need Python 3 and nothing else.
+Everything the assistant does, you can run yourself. The tools need Python 3 and either the `adb`
+binary or, for network ADB on port 5555, nothing else.
 
 ```bash
 python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt
-export TV_HOST=192.168.1.50                                   # your TV's IP address
+# connect one of two ways (see "Connecting" below):
+#   adb binary: pair and connect the TV with adb, leave TV_HOST unset
+#   adb_shell:  export TV_HOST=192.168.1.50   # your TV's IP, network ADB on port 5555
 
 tools/venv/bin/python -I tools/tv.py --probe                 # model, Android version, firmware
 tools/venv/bin/python -I tools/tv.py 'pm list packages'      # run one shell command on the TV
-printf 'cmd1\ncmd2\n' | tools/venv/bin/python -I tools/tv.py --batch   # several, one connection
+printf 'cmd1\ncmd2\n' | tools/venv/bin/python -I tools/tv.py --batch   # several, one per line
 
 tools/disable.sh examples/xiaomi-mi-tv-4a/debloat.txt        # apply a debloat list
 tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt        # undo it and restore the stock launcher
@@ -132,21 +136,39 @@ tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt        # undo it and resto
 
 | Tool | What it does |
 |---|---|
-| [`tools/tv.py`](tools/tv.py) | A pure-Python ADB client: shell, batch, push, pull. Works where the stock `adb` binary is blocked. |
-| [`tools/b64push.py`](tools/b64push.py) | Uploads larger files such as APKs as base64 chunks and verifies the checksum. |
+| [`tools/tv.py`](tools/tv.py) | Runs commands on the TV: shell, batch, push, pull. Every script goes through it. Uses the `adb` binary, or the pure-Python `adb_shell` client where that binary is blocked. |
+| [`tools/b64push.py`](tools/b64push.py) | Uploads larger files such as APKs and verifies the checksum: `adb push` with the adb binary, base64 chunks through the shell with `adb_shell`. |
 | [`tools/disable.sh`](tools/disable.sh) / [`tools/restore.sh`](tools/restore.sh) | Apply or undo a debloat list. PowerShell versions sit next to them. |
+
+### Connecting
+
+`tools/tv.py`, and every script through it, picks the connection like this:
+
+| | When | How |
+|---|---|---|
+| **`adb` binary** (`TV_HOST` unset) | Android 11+ **wireless debugging** (pairing code, random port), USB, or anything `adb devices` lists | Install Android platform-tools (`brew install android-platform-tools`, or `sdkmanager platform-tools`). `tv.py` finds `adb` on `PATH`, in `ANDROID_HOME` / `ANDROID_SDK_ROOT`, or in Android Studio's SDK folder. On the TV: Developer options → Wireless debugging → Pair device with pairing code, then `adb pair <ip>:<pairing port>` once and `adb connect <ip>:<port>` (`adb mdns services` shows both ports). It uses the only device `adb devices` lists; with several, pick one with `ANDROID_SERIAL='<serial>'`. |
+| **`adb_shell`** (`TV_HOST` set) | Network ADB on port 5555 (TVs that show "Network debugging" or open it with USB debugging), and macOS setups that block the `adb` binary | `export TV_HOST=<tv ip>`, plus `TV_PORT` if it isn't 5555. No `adb` binary needed. |
+
+`TV_TRANSPORT=adb` (or `tv.py --adb`) uses the adb binary even with `TV_HOST` set: it runs
+`adb connect $TV_HOST:$TV_PORT` first. `TV_TRANSPORT=adb_shell` forces the Python client. With the
+adb binary, `tv.py` itself needs only Python 3, so `python3 tools/tv.py --probe` works without the venv.
 
 ### Windows
 
 The PowerShell scripts work without WSL or Git Bash. With Android Studio installed nothing else
-is needed: the install script uses Android Studio's bundled JDK and the default SDK location.
+is needed: the install script uses Android Studio's bundled JDK and the default SDK location,
+where `tv.py` also finds `adb`.
 
 ```powershell
 python -m venv tools\venv; tools\venv\Scripts\python.exe -m pip install -r tools\requirements.txt
-powershell -ExecutionPolicy Bypass -File launcher\build-and-install.ps1 -TvHost 192.168.1.50
-powershell -ExecutionPolicy Bypass -File tools\disable.ps1 -TvHost 192.168.1.50 examples\xiaomi-mi-tv-4a\debloat.txt
-powershell -ExecutionPolicy Bypass -File tools\restore.ps1 -TvHost 192.168.1.50 examples\xiaomi-mi-tv-4a\debloat.txt
+powershell -ExecutionPolicy Bypass -File launcher\build-and-install.ps1                     # adb binary
+powershell -ExecutionPolicy Bypass -File launcher\build-and-install.ps1 -TvHost 192.168.1.50  # adb_shell
+powershell -ExecutionPolicy Bypass -File tools\disable.ps1 examples\xiaomi-mi-tv-4a\debloat.txt
+powershell -ExecutionPolicy Bypass -File tools\restore.ps1 examples\xiaomi-mi-tv-4a\debloat.txt
 ```
+
+Each script takes `-TvHost <tv ip>` for `adb_shell` and `-Serial <adb serial>` to pick one of
+several adb devices.
 
 The install script stops before touching the stock launcher if the install or the home-screen
 switch fails. Git Bash also works; the `.sh` scripts detect a Windows venv and disable MSYS path
@@ -182,9 +204,11 @@ go at the end, as on Apple TV; apps you uninstall drop out and the rest close up
 **Build and install** with one command:
 
 ```bash
-TV_HOST=192.168.1.50 launcher/build-and-install.sh
+launcher/build-and-install.sh                       # adb binary (wireless debugging, USB)
+TV_HOST=192.168.1.50 launcher/build-and-install.sh  # or network ADB on port 5555
 ```
 
+It connects as described in [Connecting](#connecting), and checks the connection before building.
 It needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0). On macOS:
 
 ```bash
@@ -261,7 +285,11 @@ Things that bit us or contributors, so they don't bite you.
 
 - **macOS: `adb connect` says "No route to host"** although the port is open. Recent macOS treats
   the Google-signed `adb` as its own app under Local Network privacy and silently blocks it.
-  `tools/tv.py` avoids the binary entirely.
+  Set `TV_HOST` and `tools/tv.py` uses `adb_shell` instead, which avoids the binary entirely.
+- **Only "Wireless debugging"** (Android 11+, seen on a TCL Google TV 14): it pairs with a code and
+  listens on a random port with TLS, which `adb_shell` can't do (`tv.py` says so when `TV_HOST`
+  points at it). Pair with the `adb` binary and leave `TV_HOST` unset; see [Connecting](#connecting).
+  The device then shows up under an mDNS name such as `adb-XXXX._adb-tls-connect._tcp`.
 - **No "wireless debugging" toggle** on some TVs, Xiaomi among them. USB debugging alone opens
   network ADB on port 5555.
 - **Windows PowerShell 5.1 adds a byte-order mark** to text piped into a program, which turned the
@@ -273,7 +301,8 @@ Things that bit us or contributors, so they don't bite you.
 
 - **Chained `pm` commands** (`pm disable a; pm disable b`) may silently stop after the first. Run
   one per shell call; `--batch` does exactly that.
-- **Large pushes hang** through the Python client. Use `tools/b64push.py` for APKs.
+- **Large pushes hang** through the Python client. `tools/b64push.py` sends APKs as base64 chunks
+  with `adb_shell` (and uses `adb push` with the adb binary).
 - **Screenshots come out empty** while Live TV or an HDMI input is on screen, seen on TCL. Press
   Home before `screencap`.
 - **Disable the stock launcher only after the new one is installed**, or the Home button lands on

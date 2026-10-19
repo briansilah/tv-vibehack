@@ -18,6 +18,9 @@ do with screenshots pulled from the TV. Ask me before anything that depends on m
 
 Connect
 - Find the TV on my network (hostname, ARP table, or ask me for the IP) and connect over ADB on port 5555.
+- If the TV only offers Wireless debugging (Android 11+: a pairing code and a random port, no port 5555),
+  pair and connect with the adb binary (`adb pair`, `adb connect`, `adb mdns services`). The repo's
+  `tools/tv.py` uses the adb binary whenever TV_HOST is unset.
 - If the stock adb binary fails with "No route to host" on macOS even though the port is open, that is
   macOS Local Network privacy blocking adb. Don't debug it: use the Python `adb-shell` package in a venv
   as the ADB client instead. If its file push hangs on larger files, transfer files as base64 chunks

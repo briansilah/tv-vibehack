@@ -20,13 +20,16 @@ nothing is sent anywhere (no telemetry; see CONTRIBUTING.md).
 
 ### Connecting
 
-`perf.py` connects like the other tools: with `TV_HOST` set it uses `tools/tv.py` (no `adb` binary
+`perf.py` connects like the other tools, through `tools/tv.py` (see the README's
+[Connecting](../README.md#connecting)): with `TV_HOST` set it uses `adb_shell` (no `adb` binary
 needed). Without `TV_HOST`, or with `--adb`, it uses the `adb` binary, which you need for Android 11+
-wireless debugging (TLS pairing). Pick the device with `--serial` or `ANDROID_SERIAL`.
+wireless debugging (TLS pairing). Pick the device with `--serial` or `ANDROID_SERIAL` when more than
+one is attached.
 
 ```bash
 TV_HOST=192.168.1.50 tools/venv/bin/python -I tools/perf.py run --label main
-ANDROID_SERIAL=192.168.1.50:37123 python3 tools/perf.py run --label main   # adb binary
+python3 tools/perf.py run --label main                                       # adb binary, the only device
+ANDROID_SERIAL=192.168.1.50:37123 python3 tools/perf.py run --label main     # adb binary, one of several
 ```
 
 The launcher must be installed (`launcher/build-and-install.sh`). It doesn't need to be the default

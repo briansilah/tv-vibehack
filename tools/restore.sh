@@ -2,7 +2,9 @@
 # Re-enable every package listed in a debloat file, restore the stock launcher as home and reset
 # animation scales. Pass the same list you used with tools/disable.sh.
 #
-# Usage: TV_HOST=192.168.1.50 tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt [stock.launcher.package]
+# Usage: tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt [stock.launcher.package]  # adb binary
+#        TV_HOST=192.168.1.50 tools/restore.sh ...                                        # adb_shell, port 5555
+# tools/tv.py explains how it picks the connection (ANDROID_SERIAL, TV_TRANSPORT).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 LIST="${1:?usage: restore.sh <debloat list> [stock launcher package]}"
