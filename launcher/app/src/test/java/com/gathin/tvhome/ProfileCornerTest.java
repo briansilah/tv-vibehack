@@ -9,21 +9,14 @@ public class ProfileCornerTest {
 
     @Test
     public void capsuleFitsTimeAndPicture() {
-        // tvOS at 1080p: 24 px, "8:52 PM" 88 px, 12 px, the 50 px picture and 5 px make the 180 px capsule.
+        // tvOS at 1080p: 24 px, "8:52 PM" 88 px, 12 px, the 50 px picture and 5 px make the 179 px capsule.
         assertEquals(179, ProfileCorner.restWidth(24, 88, 12, 50, 5));
     }
 
     @Test
-    public void openTimeSitsWhereControlCentersPanelStarts() {
-        // 444 px from the right end, well clear of the buttons.
-        assertEquals(1000 - 444, ProfileCorner.openTimeLeft(1000, 444, 800, 32, 100));
-    }
-
-    @Test
-    public void openTimeKeepsClearOfWideButtons() {
-        // Buttons from 500: the time ends 32 px before them instead.
-        assertEquals(500 - 32 - 100, ProfileCorner.openTimeLeft(1000, 444, 500, 32, 100));
-        assertEquals(0, ProfileCorner.openTimeLeft(300, 444, 100, 32, 100));
+    public void openTimeSitsJustBeforeTheDivider() {
+        assertEquals(800 - 24 - 100, ProfileCorner.openTimeLeft(800, 24, 100));
+        assertEquals(0, ProfileCorner.openTimeLeft(100, 24, 100));
     }
 
     @Test

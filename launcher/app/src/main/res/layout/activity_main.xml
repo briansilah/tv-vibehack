@@ -53,7 +53,7 @@
             android:descendantFocusability="afterDescendants" />
     </FrameLayout>
 
-    <!-- Top right, over the grid, as on Apple TV: the time and the profile picture in a capsule whose right edge
+    <!-- Top right, over the grid, as on Apple TV, a fifth larger (ProfileCorner.SIZE): the time and the profile picture in a capsule whose right edge
          lines up with the dock panel's (DockDecoration: 16dp past the tiles, 40dp from the screen's edge). Moving
          up there opens it like Control Center's header, with the top bar's buttons, which come out from under the
          picture a little beyond the capsule: nothing here clips them. -->
@@ -81,7 +81,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#B8FFFFFF"
-                android:textSize="13sp"
+                android:textSize="15.6sp"
                 style="@style/Outfit.Medium"
                 android:includeFontPadding="false"
                 android:singleLine="true" />
@@ -96,8 +96,8 @@
 
             <FrameLayout
                 android:id="@+id/avatar"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="31.2dp"
+                android:layout_height="31.2dp"
                 android:background="@drawable/avatar_bg"
                 android:focusable="true"
                 android:clickable="true"
@@ -119,7 +119,7 @@
                     android:gravity="center"
                     android:visibility="gone"
                     android:textColor="#FFFFFFFF"
-                    android:textSize="11sp"
+                    android:textSize="13sp"
                     style="@style/Outfit.Medium"
                     android:includeFontPadding="false"
                     android:importantForAccessibility="no" />

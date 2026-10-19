@@ -30,7 +30,8 @@ import java.util.Locale;
  * When focus moves into it, it opens like the header of Control Center, as measured frame by frame on tvOS:
  * <ul>
  * <li>Opening: the capsule clears, the time glides left, and the top bar's buttons slide in from the right as one
- * row, passing under the picture, which shrinks to the size of a tab.</li>
+ * row, passing under the picture, which shrinks to the size of a tab. Unlike tvOS, which puts the time much further
+ * left (where Control Center's panel starts), the time stops just before the buttons, past a thin divider.</li>
  * <li>Closing: the buttons are gone at once and the picture is back at its size; the capsule is back too, still
  * stretched to the time, and its left end follows the time home.</li>
  * </ul>
@@ -38,35 +39,45 @@ import java.util.Locale;
  * <p>Children: the capsule, the time (a TextView), the top bar (set with {@link #setBar}) and the picture
  * ({@code R.id.avatar}), drawn in that order so the buttons pass under the picture. They are laid out once, where
  * they sit when open; opening and closing change translations, alpha and scale (render properties), and redraw
- * only the capsule while it closes. Sizes are tvOS's, measured at 1080p, where 1 dp is 2 px; the PR that added this
- * has the table and the recordings.
+ * only the capsule while it closes. Sizes are tvOS's, measured at 1080p, where 1 dp is 2 px, times {@link #SIZE}; the
+ * PR that added this has the table and the recordings.
  */
 public class ProfileCorner extends ViewGroup {
 
+    /** Everything a fifth larger than on tvOS, which looked small on a TV across the room. layout/activity_main.xml
+     *  and the TopButton.Tvos style use the same factor. */
+    static final float SIZE = 1.2f;
+
     // ---- at rest: the capsule ------------------------------------------------------------------------------
     /** Capsule height: 60 px on tvOS. */
-    static final float CAPSULE_HEIGHT_DP = 30f;
+    static final float CAPSULE_HEIGHT_DP = 30f * SIZE;
     /** From the capsule's left end to the time: 24 px. */
-    static final float TIME_INSET_DP = 12f;
+    static final float TIME_INSET_DP = 12f * SIZE;
     /** From the time to the picture: 12 px. */
-    static final float TIME_GAP_DP = 6f;
+    static final float TIME_GAP_DP = 6f * SIZE;
     /** The picture, 50 px across, 5 px inside the capsule's right end. */
-    static final float AVATAR_REST_DP = 25f;
-    static final float AVATAR_REST_INSET_DP = 2.5f;
+    static final float AVATAR_REST_DP = 25f * SIZE;
+    static final float AVATAR_REST_INSET_DP = 2.5f * SIZE;
 
     // ---- open: Control Center's header -------------------------------------------------------------------
     /** Each tab, and the picture, take a 60 px circle, side by side; the last ends 10 px inside the capsule's end. */
-    static final float SLOT_DP = 30f;
-    static final float OPEN_INSET_DP = 5f;
+    static final float SLOT_DP = 30f * SIZE;
+    static final float OPEN_INSET_DP = 5f * SIZE;
     /** The picture is 38 px across among the tabs, 52 px when focused. The view is laid out at the focused size. */
-    static final float AVATAR_OPEN_DP = 19f;
-    static final float AVATAR_FOCUSED_DP = 26f;
-    /** The time moves to 444 px from the capsule's right end (the left edge of Control Center's panel). */
-    static final float HEADER_WIDTH_DP = 222f;
-    /** Never closer than this to the first button, when the buttons or the time are wider than tvOS's. */
-    static final float MIN_TIME_GAP_DP = 16f;
+    static final float AVATAR_OPEN_DP = 19f * SIZE;
+    static final float AVATAR_FOCUSED_DP = 26f * SIZE;
+    /**
+     * Open, the time sits this far before a thin divider, and the divider this far before the first button's circle;
+     * the button's glyph is another 8.5 dp in (TopButton.Tvos), so the divider looks about centred between the time
+     * and the glyph.
+     */
+    static final float TIME_DIVIDER_GAP_DP = 12f * SIZE;
+    static final float DIVIDER_TAB_GAP_DP = 4f * SIZE;
+    /** The divider: as tall as half the capsule, a quarter white. */
+    static final float DIVIDER_HEIGHT_DP = 15f * SIZE;
+    static final int DIVIDER_COLOR = 0x40FFFFFF;
     /** The row of buttons slides in from 231 px right of where it ends, on the same spring as the time. */
-    static final float TAB_TRAVEL_DP = 115.5f;
+    static final float TAB_TRAVEL_DP = 115.5f * SIZE;
 
     /**
      * The motion: a spring fitted to three recordings of tvOS 26 opening and closing Control Center (two at 60 fps,
@@ -119,6 +130,7 @@ public class ProfileCorner extends ViewGroup {
     private final float density;
     private final View capsule;
     private final GlassCapsule glass;
+    private final View divider;
     private TextView time;
     private View avatar;
     private View bar;
@@ -153,6 +165,11 @@ public class ProfileCorner extends ViewGroup {
         capsule.setBackground(glass);
         capsule.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         addView(capsule, 0);   // first, so it is drawn under the time and the picture
+        divider = new View(context);
+        divider.setBackgroundColor(DIVIDER_COLOR);
+        divider.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        divider.setAlpha(0f);
+        addView(divider, 1);
 
         openSpring = new SpringAnimation(this, OPENNESS, 0f);
         openSpring.getSpring().setStiffness(STIFFNESS).setDampingRatio(DAMPING);
@@ -260,6 +277,11 @@ public class ProfileCorner extends ViewGroup {
         return Math.round(v * density);
     }
 
+    /** A hairline: 1 px, or 2 px from 1080p on (1 dp there). */
+    private int dividerWidth() {
+        return Math.max(1, Math.round(density / 2f));
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
@@ -270,11 +292,16 @@ public class ProfileCorner extends ViewGroup {
         int exact = MeasureSpec.makeMeasureSpec(avatarSize, MeasureSpec.EXACTLY);
         avatar.measure(exact, exact);
 
+        int dividerW = dividerWidth();
+        divider.measure(MeasureSpec.makeMeasureSpec(dividerW, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(dp(DIVIDER_HEIGHT_DP), MeasureSpec.EXACTLY));
         int barWidth = hasBar ? bar.getMeasuredWidth() : 0;
-        int openWidth = dp(OPEN_INSET_DP) + dp(SLOT_DP) + barWidth + dp(MIN_TIME_GAP_DP) + time.getMeasuredWidth();
+        int openWidth = dp(OPEN_INSET_DP) + dp(SLOT_DP) + barWidth + dp(DIVIDER_TAB_GAP_DP) + dividerW
+                + dp(TIME_DIVIDER_GAP_DP) + time.getMeasuredWidth();
         int restWidth = restWidth(dp(TIME_INSET_DP), time.getMeasuredWidth(), dp(TIME_GAP_DP), dp(AVATAR_REST_DP),
                 dp(AVATAR_REST_INSET_DP));
-        int w = Math.max(restWidth, Math.max(dp(HEADER_WIDTH_DP), openWidth)) + dp(TIME_INSET_DP);
+        // Room on the left for the capsule's end, which follows the time home when closing.
+        int w = Math.max(restWidth, openWidth) + dp(TIME_INSET_DP);
         int capsuleHeight = dp(CAPSULE_HEIGHT_DP);
         // The capsule view spans the whole width; its drawable is as wide as the time needs (see apply()).
         capsule.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
@@ -308,7 +335,10 @@ public class ProfileCorner extends ViewGroup {
         time.getPaint().getTextBounds("0", 0, 1, digits);
         int tw = time.getMeasuredWidth(), th = time.getMeasuredHeight();
         int timeTop = Math.round(cy + digits.height() / 2f - time.getBaseline());
-        int timeLeft = openTimeLeft(w, dp(HEADER_WIDTH_DP), barLeft, dp(MIN_TIME_GAP_DP), tw);
+        int dividerW = divider.getMeasuredWidth(), dividerH = divider.getMeasuredHeight();
+        int dividerLeft = barLeft - dp(DIVIDER_TAB_GAP_DP) - dividerW;
+        divider.layout(dividerLeft, cy - dividerH / 2, dividerLeft + dividerW, cy - dividerH / 2 + dividerH);
+        int timeLeft = openTimeLeft(dividerLeft, dp(TIME_DIVIDER_GAP_DP), tw);
         time.layout(timeLeft, timeTop, timeLeft + tw, timeTop + th);
 
         int restWidth = restWidth(dp(TIME_INSET_DP), tw, dp(TIME_GAP_DP), dp(AVATAR_REST_DP), dp(AVATAR_REST_INSET_DP));
@@ -335,6 +365,8 @@ public class ProfileCorner extends ViewGroup {
         avatar.setScaleX(s);
         avatar.setScaleY(s);
 
+        // The divider fades in where it stands as the buttons come; closing, it goes with them at once.
+        divider.setAlpha(open ? Math.max(0f, Math.min(1f, f)) : 0f);
         if (bar == null) return;
         bar.setTranslationX(TAB_TRAVEL_DP * density * closed);
         bar.setAlpha(open ? 1f : 0f);   // and the buttons are gone
@@ -346,12 +378,9 @@ public class ProfileCorner extends ViewGroup {
         return timeInset + timeWidth + timeGap + avatarRest + avatarInset;
     }
 
-    /**
-     * Where the time's left edge goes when open: {@code headerWidth} from the right end as on tvOS, or further left
-     * to keep {@code minGap} from the first button.
-     */
-    static int openTimeLeft(int width, int headerWidth, int barLeft, int minGap, int timeWidth) {
-        return Math.max(0, Math.min(width - headerWidth, barLeft - minGap - timeWidth));
+    /** Where the time's left edge goes when open: {@code gap} before the divider. */
+    static int openTimeLeft(int dividerLeft, int gap, int timeWidth) {
+        return Math.max(0, dividerLeft - gap - timeWidth);
     }
 
     /** Scale of the picture's view (laid out at its focused size): 50 px at rest, 38 px open, 52 px focused. */

@@ -81,6 +81,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The top bar is gone once the page has moved this far up from the dock's place. */
     private static final float TOP_BAR_FADE_DP = 110f;
     private static final TimeInterpolator LINEAR = new LinearInterpolator();
+    /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
+    private static final String USER_SETTINGS = "android.settings.USER_SETTINGS";
     private String liveTvPkg;
 
     private AppAdapter adapter;
@@ -755,9 +757,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!QuickSettings.open(this)) open(new Intent(Settings.ACTION_SETTINGS));
     }
 
-    /** The profile picture: the TV's accounts and profiles in Settings, or Settings if it has no such page. */
+    /**
+     * The profile picture: the TV's accounts and profiles (on Google TV, "Accounts &amp; Profiles", where you switch
+     * profiles), or Settings if it has no such page. Google TV's own profile chooser only answers Google Play
+     * services.
+     */
     private void openProfile() {
-        Intent accounts = new Intent(Settings.ACTION_SYNC_SETTINGS);
+        Intent accounts = new Intent(USER_SETTINGS);
         if (accounts.resolveActivity(getPackageManager()) == null) accounts = new Intent(Settings.ACTION_SETTINGS);
         open(accounts);
     }

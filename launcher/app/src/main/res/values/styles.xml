@@ -105,13 +105,14 @@
     </style>
 
     <!-- Apple TV (tvOS 26), the tabs of Control Center's header: a grey glyph, in a white circle when focused.
-         Measured on tvOS at 1080p: 60 px circles side by side, glyphs about 28 px. -->
+         Measured on tvOS at 1080p: 60 px circles side by side, glyphs about 28 px; a fifth larger here
+         (ProfileCorner.SIZE). -->
     <style name="TopButton.Tvos">
-        <item name="android:layout_height">30dp</item>
+        <item name="android:layout_height">36dp</item>
         <item name="android:layout_marginStart">0dp</item>
         <item name="android:background">@drawable/tab_bg</item>
         <item name="topBarMode">tab</item>
-        <item name="topBarIconSize">16dp</item>
+        <item name="topBarIconSize">19dp</item>
         <item name="topBarIconTint">@drawable/tab_icon</item>
     </style>
 </resources>
