@@ -14,6 +14,9 @@ import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Process;
 import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -36,8 +39,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * App tiles. The first {@link MainActivity#COLUMNS} positions are the dock. Until the user rearranges, the dock
@@ -128,20 +134,43 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     void reload() {
+        long t0 = Perf.now();
+        Perf.begin("tvhome:reload");
+        try {
+            reloadTraced(t0);
+        } finally {
+            Perf.end();
+        }
+    }
+
+    private void reloadTraced(long t0) {
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
-        List<ResolveInfo> found = pm.queryIntentActivities(probe, 0);
+        Perf.begin("tvhome:reload.query");
+        List<ResolveInfo> found;
+        try {
+            found = pm.queryIntentActivities(probe, 0);
+        } finally {
+            Perf.end();
+        }
+        long tQuery = Perf.now();
         List<Entry> fresh = new ArrayList<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(ctx.getPackageName()) || hidden.contains(pkg)) continue;
-            Drawable banner = ri.activityInfo.loadBanner(pm);
-            if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
-            Drawable icon = ri.loadIcon(pm);
-            String label = String.valueOf(ri.loadLabel(pm));
-            fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
+            Perf.begin("tvhome:loadApp " + pkg);
+            try {
+                Drawable banner = ri.activityInfo.loadBanner(pm);
+                if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+                Drawable icon = ri.loadIcon(pm);
+                String label = String.valueOf(ri.loadLabel(pm));
+                fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
+            } finally {
+                Perf.end();
+            }
         }
+        long tLoad = Perf.now();
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());
@@ -152,6 +181,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         items.clear();
         for (String key : order) items.add(byKey.get(key));
         notifyDataSetChanged();
+        sampleDockColours();
+        if (Perf.enabled()) {
+            Perf.log("reload", t0, String.format(Locale.US, "apps=%d query_ms=%.1f load_ms=%.1f",
+                    fresh.size(), Perf.ms(t0, tQuery), Perf.ms(tQuery, tLoad)));
+        }
     }
 
     /** The apps' keys in their current order. */
@@ -343,6 +377,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return d.getConstantState() != null ? d.getConstantState().newDrawable().mutate() : d;
     }
 
+    /** Whether a tile shows an app of this package. */
+    boolean contains(String pkg) {
+        for (Entry e : items) {
+            if (e.pkg.equals(pkg)) return true;
+        }
+        return false;
+    }
+
     String labelAt(int position) {
         return position >= 0 && position < items.size() ? items.get(position).label : "";
     }
@@ -351,14 +393,63 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     int ambientColorAt(int position) {
         if (position < 0 || position >= items.size()) return AmbientColor.FALLBACK;
         Entry e = items.get(position);
-        if (e.ambient == 0) e.ambient = vividColor(e.banner != null ? e.banner : e.icon);
+        if (e.ambient == 0) {
+            long t0 = Perf.now();
+            Perf.begin("tvhome:vividColor");
+            try {
+                e.ambient = vividColor(e.banner != null ? e.banner : e.icon);
+            } finally {
+                Perf.end();
+            }
+            Perf.log("ambient", t0, "pkg=" + e.pkg);
+        }
         return e.ambient;
     }
+
+    /**
+     * Samples the dock apps' glow colours on a background thread, so focusing a dock app for the first time
+     * doesn't draw and scan its banner on the main thread. A focus that comes first samples it there, as before.
+     */
+    private void sampleDockColours() {
+        final List<Entry> dock = new ArrayList<>();
+        final List<Drawable> copies = new ArrayList<>();
+        for (int i = 0; i < Math.min(dockSize, items.size()); i++) {
+            Entry e = items.get(i);
+            Drawable live = e.banner != null ? e.banner : e.icon;
+            if (e.ambient != 0 || live == null || live.getConstantState() == null) continue;
+            dock.add(e);
+            copies.add(live.getConstantState().newDrawable().mutate());   // private copies, drawn off the main thread
+        }
+        if (dock.isEmpty()) return;
+        BACKGROUND.execute(() -> {
+            final int[] colours = new int[copies.size()];
+            for (int i = 0; i < colours.length; i++) colours[i] = sample(copies.get(i));
+            MAIN.post(() -> {
+                for (int i = 0; i < colours.length; i++) {
+                    if (dock.get(i).ambient == 0) dock.get(i).ambient = colours[i];
+                }
+            });
+        });
+    }
+
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final Executor BACKGROUND = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            r.run();
+        }, "tvhome-colours");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static int vividColor(Drawable live) {
         if (live == null) return AmbientColor.FALLBACK;
         // Draw a private copy: changing the bounds of the drawable an ImageView shows would blank the tile.
-        Drawable d = live.getConstantState() != null ? live.getConstantState().newDrawable().mutate() : live;
+        return sample(live.getConstantState() != null ? live.getConstantState().newDrawable().mutate() : live);
+    }
+
+    /** Draws {@code d} small and picks its glow colour. Any thread, if no one else uses {@code d}. */
+    private static int sample(Drawable d) {
         Rect saved = new Rect(d.getBounds());
         // Banner aspect (16:9), fine enough that small logos and accents are sampled in proportion to their area.
         int w = 64, h = 36;

@@ -16,7 +16,15 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 shrinks and optimises the code and drops unused resources: a smaller APK that loads and runs
+            // faster. build-and-install.sh installs this build; a debuggable one runs much slower (docs/performance.md).
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            // Signed with the local debug key, like a debug build, so either installs over the other with
+            // `pm install -r`: an uninstall would also drop the Google TV Home-button service's settings.
+            // The launcher is sideloaded, never published.
+            signingConfig signingConfigs.debug
         }
     }
 

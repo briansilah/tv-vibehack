@@ -1,10 +1,13 @@
 package com.gathin.tvhome;
 
+import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -13,6 +16,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
+import android.net.Uri;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -22,6 +26,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
@@ -30,7 +35,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver;
-import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
 import android.widget.FrameLayout;
@@ -58,11 +64,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     static int COLUMNS = 4;
     private static final long MINUTE_MS = 60_000L;
     /**
-     * Like tvOS, the top shelf waits for focus to settle on a dock app before changing (about 200-350 ms on
-     * an Apple TV), so sweeping along the dock doesn't flash every app's colour, then cross-fades.
+     * The top shelf follows focus along the dock straight away: the name swaps with a quick fade and the
+     * glow glides to the new app's colour, carrying on from wherever it is if focus moves again. (tvOS
+     * waits for focus to settle first; the 280 ms wait plus a 320 ms cross-fade felt sluggish.) Sweeping
+     * along the dock keeps the name hidden until focus stops, so no app's name flashes by.
      */
-    private static final long SHELF_DELAY_MS = 280L;
-    private static final long SHELF_FADE_MS = 220L;
+    private static final long NAME_OUT_MS = 70L;
+    private static final long NAME_IN_MS = 150L;
+    private static final long GLOW_BLEND_MS = 200L;
+    /** Coming to the dock from elsewhere, and leaving it. */
+    private static final long SHELF_SHOW_NAME_MS = 150L;
+    private static final long SHELF_SHOW_GLOW_MS = 250L;
+    private static final long SHELF_HIDE_NAME_MS = 120L;
+    private static final long SHELF_HIDE_GLOW_MS = 200L;
+    private static final TimeInterpolator DECELERATE = new DecelerateInterpolator(1.5f);
+    private static final TimeInterpolator LINEAR = new LinearInterpolator();
     private String liveTvPkg;
 
     private AppAdapter adapter;
@@ -77,8 +93,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean heroShown;
     /** App the top shelf shows, or is changing to. */
     private String shelfKey;
-    private int shelfPending;
-    private float shelfPendingY;
     private boolean tilesEntered;
     private TextView greeting;
     private TopBarButton btnWifi;
@@ -91,6 +105,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** App of the last focused tile, so focus follows it when the app list changes. */
     private static String lastFocusedKey;
     private float density;
+    /** reportFullyDrawn() once per activity instance, after its first focus restore. */
+    private boolean reportedFullyDrawn;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
@@ -105,6 +121,40 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             handler.post(MainActivity.this::updateWifiLabel);
         }
     };
+    /**
+     * Set when a TV app was installed, updated, removed, enabled or disabled while Home was in the background:
+     * the next onResume reloads the app list. Otherwise Home comes back without reloading every banner.
+     */
+    private boolean appsChanged = true;
+    private boolean resumed;
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Uri data = intent.getData();
+            String pkg = data != null ? data.getSchemeSpecificPart() : null;
+            if (pkg != null && !adapter.contains(pkg)
+                    && getPackageManager().getLeanbackLaunchIntentForPackage(pkg) == null) {
+                return;   // not a TV app, and not one we show (e.g. a background service package changing)
+            }
+            appsChanged = true;
+            if (resumed) {
+                handler.removeCallbacks(reloadNow);   // an update sends several broadcasts
+                handler.post(reloadNow);
+            }
+        }
+    };
+    /** A TV app changed while Home is showing. Focus only goes back to a tile if it was on one. */
+    private final Runnable reloadNow = () -> {
+        final String returnKey = lastFocusedKey;
+        final int returnSlot = lastFocused;
+        final boolean onTiles = grid.hasFocus();
+        reloadApps();
+        if (!onTiles) return;   // on the top bar or in the Inputs menu: leave it there
+        grid.post(() -> {
+            int pos = adapter.positionOf(returnKey);
+            focusTile(pos >= 0 ? pos : returnSlot);
+        });
+    };
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -113,10 +163,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             handler.postDelayed(this, MINUTE_MS);
         }
     };
-    private final Runnable shelfSwap = this::swapShelf;
+    /** From a dock focus change until the top shelf shows that app (name and glow); tools/perf.py's dock scenario. */
+    private final Perf.Span shelfTiming = new Perf.Span("shelf", "text", "glow");
+    private static final int SHELF_TEXT = 0, SHELF_GLOW = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        long t0 = Perf.now();
+        Perf.begin("tvhome:onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
@@ -163,7 +217,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         TopBarButton btnInputs = topBar.findViewById(R.id.btnInputs);
         TopBarButton btnSettings = topBar.findViewById(R.id.btnSettings);
-        btnInputs.setOnClickListener(v -> showInputs());
+        btnInputs.setOnClickListener(v -> {
+            Perf.begin("tvhome:showInputs");
+            try {
+                showInputs();
+            } finally {
+                Perf.end();
+            }
+        });
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         btnSettings.setOnClickListener(v -> openSettings());
 
@@ -193,21 +254,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
+        IntentFilter packages = new IntentFilter();
+        packages.addAction(Intent.ACTION_PACKAGE_ADDED);
+        packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        packages.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        packages.addDataScheme("package");
+        registerReceiver(packageReceiver, packages);
+        IntentFilter storage = new IntentFilter(Intent.ACTION_EXTERNAL_APPLICATIONS_AVAILABLE);
+        storage.addAction(Intent.ACTION_EXTERNAL_APPLICATIONS_UNAVAILABLE);
+        registerReceiver(packageReceiver, storage);
+        Perf.end();
+        Perf.log("create", t0, null);
     }
 
     @Override
     protected void onResume() {
+        final long t0 = Perf.now();
+        Perf.begin("tvhome:onResume");
         super.onResume();
-        handler.removeCallbacks(shelfSwap);
-        heroShown = false;
-        heroName.animate().cancel();
-        heroName.setAlpha(0f);
-        ambient.animate().cancel();
-        ambient.setAlpha(0f);
+        resumed = true;
+        // The top shelf stays as it was when an app was opened, so Home comes back showing it at once
+        // instead of fading the name and glow in again; the focus restore below updates it if needed.
         // Read these before reload(): rebinding can move focus to the first tile and overwrite them.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
-        adapter.reload();
+        if (appsChanged) reloadApps();
         // The tiles fly in once, when the launcher starts. Like tvOS, Home afterwards just shows the
         // home screen with focus where you left it, instead of replaying the entrance every time.
         if (!tilesEntered) {
@@ -223,7 +295,28 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.post(() -> {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
+            Choreographer.getInstance().postFrameCallback(frameNanos -> onFocusRestored(t0));
         });
+        Perf.end();
+        Perf.log("resume", t0, null);
+    }
+
+    private void reloadApps() {
+        appsChanged = false;
+        adapter.reload();
+        // The app the top shelf shows may have a new name or banner: make the next focus on it swap it in again.
+        shelfKey = null;
+    }
+
+    /** The first frame after focus is back on a tile: Home is usable. Feeds tools/perf.py. */
+    private void onFocusRestored(long resumeStartNanos) {
+        Perf.log("focus_restored", resumeStartNanos, "first=" + (reportedFullyDrawn ? 0 : 1));
+        if (reportedFullyDrawn) return;
+        reportedFullyDrawn = true;
+        try {
+            reportFullyDrawn();   // "Fully drawn" in the system log, for cold-start measurements
+        } catch (RuntimeException ignored) {
+        }
     }
 
     @Override
@@ -236,8 +329,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         rearranger.end();
+        resumed = false;
+        handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
-        handler.removeCallbacks(shelfSwap);
+        shelfTiming.cancel();
     }
 
     @Override
@@ -245,6 +340,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onDestroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.unregisterNetworkCallback(networkCallback);
+        unregisterReceiver(packageReceiver);
     }
 
     @Override
@@ -257,6 +353,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onTileFocused(int position, View card) {
+        Perf.begin("tvhome:onTileFocused");
         rearranger.onTileFocused(position);
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
@@ -278,6 +375,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             Rect want = new Rect(0, -(int) (12 * density), item.getWidth(), item.getHeight() + (int) (8 * density));
             grid.requestChildRectangleOnScreen(item, want, false);
         }
+        Perf.end();
     }
 
     // ---- top shelf -------------------------------------------------------------------------------
@@ -285,51 +383,59 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void showHero(int position, float dockTopInRoot) {
         String key = adapter.keyAt(position);
         float y = dockTopInRoot - DockDecoration.PAD_V_DP * density - 26 * density - heroName.getHeight();
-        handler.removeCallbacks(shelfSwap);
 
         if (!heroShown) {
             // Coming (back) to the dock: show this app straight away.
             heroShown = true;
             shelfKey = key;
+            final int span = shelfTiming.start(Perf.enabled() ? "kind=show pkg=" + key : null);
             heroName.animate().cancel();
             heroName.setText(adapter.labelAt(position));
             heroName.setY(y);
             heroName.setTranslationX(0f);
-            heroName.animate().alpha(1f).setDuration(260).start();
+            heroName.animate().alpha(1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
+                    .withEndAction(() -> shelfTiming.part(SHELF_TEXT, span)).start();
             if (ambientFade != null) ambientFade.cancel();
             setAmbient(adapter.ambientColorAt(position));
-            ambient.animate().alpha(1f).setDuration(600).start();
+            ambient.animate().alpha(1f).setDuration(SHELF_SHOW_GLOW_MS).setInterpolator(DECELERATE)
+                    .withEndAction(() -> shelfTiming.part(SHELF_GLOW, span)).start();
         } else if (key != null && !key.equals(shelfKey)) {
-            shelfPending = position;
-            shelfPendingY = y;
-            handler.postDelayed(shelfSwap, SHELF_DELAY_MS);
+            swapShelf(position, y, shelfTiming.start(Perf.enabled() ? "kind=swap pkg=" + key : null));
         } else {
             heroName.setY(y);
         }
     }
 
-    /** Cross-fades the top shelf (name and ambient glow) to the dock app focus settled on. */
-    private void swapShelf() {
-        if (!heroShown) return;
-        final int position = shelfPending;
-        final float y = shelfPendingY;
+    /** Changes the top shelf (name and ambient glow) to the dock app that just got focus. */
+    private void swapShelf(int position, float y, int span) {
         final String label = adapter.labelAt(position);
         shelfKey = adapter.keyAt(position);
         heroName.animate().cancel();
-        heroName.animate().alpha(0f).translationX(-12 * density).setDuration(100).withEndAction(() -> {
-            heroName.setText(label);
-            heroName.setY(y);
-            heroName.setTranslationX(12 * density);
-            heroName.animate().alpha(1f).translationX(0f).setDuration(SHELF_FADE_MS).start();
-        }).start();
+        // Out from wherever the name is (a swap just before may still be fading it), then the new one in.
+        heroName.animate().alpha(0f).translationX(-8 * density)
+                .setDuration((long) (NAME_OUT_MS * heroName.getAlpha())).setInterpolator(LINEAR)
+                .withEndAction(() -> {
+                    heroName.setText(label);
+                    heroName.setY(y);
+                    heroName.setTranslationX(8 * density);
+                    heroName.animate().alpha(1f).translationX(0f).setDuration(NAME_IN_MS)
+                            .setInterpolator(DECELERATE).withEndAction(() -> shelfTiming.part(SHELF_TEXT, span))
+                            .start();
+                }).start();
         int color = adapter.ambientColorAt(position);
         if (ambientFade != null) ambientFade.cancel();
-        if (color == ambientColor) return;
+        if (color == ambientColor) {
+            shelfTiming.part(SHELF_GLOW, span);
+            return;
+        }
         // The glow's stops share their alpha, so blending the colour is a true cross-fade of the two glows.
         ambientFade = ValueAnimator.ofArgb(ambientColor, color);
-        ambientFade.setDuration(SHELF_FADE_MS);
-        ambientFade.setInterpolator(new AccelerateDecelerateInterpolator());
-        ambientFade.addUpdateListener(a -> setAmbient((int) a.getAnimatedValue()));
+        ambientFade.setDuration(GLOW_BLEND_MS);
+        ambientFade.setInterpolator(DECELERATE);
+        ambientFade.addUpdateListener(a -> {
+            setAmbient((int) a.getAnimatedValue());
+            if (a.getAnimatedFraction() >= 1f) shelfTiming.part(SHELF_GLOW, span);
+        });
         ambientFade.start();
     }
 
@@ -340,12 +446,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void hideHero() {
-        handler.removeCallbacks(shelfSwap);
+        shelfTiming.cancel();
         if (!heroShown) return;
         heroShown = false;
         heroName.animate().cancel();   // drops a pending name swap's end action, which would fade it back in
-        heroName.animate().alpha(0f).setDuration(160).start();
-        ambient.animate().alpha(0f).setDuration(300).start();
+        heroName.animate().alpha(0f).setDuration(SHELF_HIDE_NAME_MS).setInterpolator(DECELERATE).start();
+        ambient.animate().alpha(0f).setDuration(SHELF_HIDE_GLOW_MS).setInterpolator(DECELERATE).start();
     }
 
     // ---- navigation ------------------------------------------------------------------------------
@@ -418,6 +524,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Shows the Wi-Fi network name on the button (when open) if we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
+        Perf.begin("tvhome:updateWifiLabel");
         String text = getString(R.string.wifi);
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -442,6 +549,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String wifi = getString(R.string.wifi);
         btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
         if (btnWifi.showsCaption() && btnWifi.isFocused()) showCaption(btnWifi);
+        Perf.end();
     }
 
     /**

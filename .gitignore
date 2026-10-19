@@ -1,6 +1,10 @@
 tools/venv/
 tools/adbkey/
 tools/__pycache__/
+tools/tests/__pycache__/
+# perf.py results and traces are per-TV measurements
+tools/perf-results/
+*.perfetto-trace
 launcher/.gradle/
 launcher/build/
 launcher/app/build/

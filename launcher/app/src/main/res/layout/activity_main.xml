@@ -12,10 +12,11 @@
         android:layout_height="match_parent"
         android:alpha="0" />
 
-    <!-- Top shelf: the focused dock app's name, positioned above the dock in code. -->
+    <!-- Top shelf: the focused dock app's name, positioned above the dock in code. Full width, so changing
+         the name redraws it without laying out the screen again. -->
     <TextView
         android:id="@+id/heroName"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="68dp"
         android:alpha="0"
