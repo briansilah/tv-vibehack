@@ -119,6 +119,7 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 | `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
+| `tvhome:glass.record` | Liquid Glass (`LiquidGlass`): recording its copy of the top shelf behind the dock or the top right capsule, on frames where the shelf or the glass moved or changed; the GPU then blurs it during the RenderThread's `DrawFrame` |
 | `tvhome:dream.setGlow` | screensaver glow colour, per animation frame |
 
 RecyclerView adds its own (`RV OnLayout`, `RV OnBindView`, `RV CreateView`), and the system adds
@@ -143,6 +144,7 @@ not from our TVs.
 | 8 | **Colour sampling on the main thread** at the first focus of each dock app: a drawable copy drawn into a 64×36 bitmap, then a hue histogram over 2,304 pixels (since #1). | `AppAdapter.vividColor` | `tvhome:vividColor`, `ambient` log line | Gathin23/tv-vibehack#39 does it during loading |
 | 9 | **Allocation per focus/bind**: `Rect`s in `onTileFocused`, new click listeners per bind, `getItemId` builds a string per call, `positionOf` is O(n) with strings. | `AppAdapter`, `MainActivity` | GC slices in a `keys` trace; Java heap | Gathin23/tv-vibehack#39 |
 | 10 | **Screensaver redraws a full-screen gradient every frame** during the 8 s colour shift each minute: heat and power on an idle TV, not latency. | `ClockDream.shiftGlow` | `tvhome:dream.setGlow` count (`trace --action none` while dreaming) | Gathin23/tv-vibehack#39: 5 fps steps |
+| 12 | **Liquid Glass** on the dock and the top right capsule: each records the top shelf into a half-resolution RenderNode and blurs it (plus saturation, and an AGSL lens on Android 13+) whenever the shelf changes (every frame of a glow or art cross-fade) or the glass moves (every frame of a scroll). | `LiquidGlass`, `DockDecoration`, `ProfileCorner` | `tvhome:glass.record` count and length; RenderThread `DrawFrame` and jank while moving along the dock | – |
 | 11 | Small main-thread work: `DockDecoration.onDraw` calls `findViewById` per tile per frame; `updateWifiLabel` makes binder calls in `onResume`; the Inputs menu sorts with `loadLabel` in the comparator; the grid's padding is set from a layout listener (second layout at start). | `DockDecoration`, `MainActivity` | their `tvhome:*` sections; `RV OnLayout` count at cold start | – |
 
 Rough expectation: 1–4 decide how fast Home feels and how much memory the launcher takes; 5–7 decide
@@ -171,6 +173,7 @@ with the real remote.
 | 9 | `onTileFocused` takes 0.15 ms and a key 0.2 ms in all. | Nothing to fix. |
 | 10 | Not this TV's screensaver; not measured. | – |
 | – | Home's first frame after an app (about 35 ms) is mostly the system allocating the window's buffers (34 ms on the RenderThread); opening an app, the system's `startActivity` call takes 19 ms. Waking from standby, Google TV's home showed for about half a second before `HomeButtonService` covered it (seen once in the log, not traced; started by hand, the stock home is covered within 64 ms). | Outside the launcher, or not traced yet. |
+| 12 | **Liquid Glass** (the dock and the top right). The TV's GPU (Mali-G57) pays about 0.4 ms for each pass over a texture, whatever its size, and the first version took five per piece of glass (copy, colour, blur twice, lens) on every frame the top shelf changed (104 of a dock round's 144): RenderThread 3.5 → 6.9 ms a frame, frames 7 → 10 ms. Window blur isn't an option: this TV has cross-window blur off (`mBlurEnabled=false`). | Two passes per glass: the copy, then one AGSL shader that bends, blurs (9 filtered taps) and saturates; the copy at half resolution, a quarter for stronger looks. Frames 9 ms (main 7), 0 % janky over 9 rounds of D-pad moves, top shelf latency unchanged (257 ms), PSS +8 MB. Over a full-screen picture that cross-fades on every dock move (a bitmap stand-in for cover art, `GlassTestArt`), the same build with and without the blur: frames 12 vs 10 ms, GPU 90th percentile 8 vs 8 ms, D-pad moves 1.0 vs 0.7 % janky (full-screen pictures cross-fading jank a little on their own: worth watching when the top shelf shows art), top shelf 257 vs 259 ms. Pre-Android 12 and low-RAM TVs, or `liquid_glass_blur=false`, skip it. |
 
 [#9](https://github.com/briansilah/tv-vibehack/pull/9)'s fixes on this TV (its measurement commit 434d858
 as the baseline, and `main` at 49271fe, which also has #8 and #10):

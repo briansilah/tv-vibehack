@@ -36,4 +36,9 @@
     <string name="legend_done">Fertig</string>
     <string name="location_dock">Im Dock</string>
     <string name="location_row">Reihe %1$d</string>
+    <string name="liquid_glass">Liquid Glass</string>
+    <string name="glass_clear">Klar</string>
+    <string name="glass_tinted">Getönt</string>
+    <string name="glass_value">%1$d %%</string>
+    <string name="glass_hint">Links und rechts zum Einstellen · OK, wenn fertig</string>
 </resources>
