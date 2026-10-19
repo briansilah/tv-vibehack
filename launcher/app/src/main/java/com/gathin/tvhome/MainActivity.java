@@ -146,6 +146,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** An app opened but Home is still on screen this long after: it didn't cover Home, so bring Home back. */
     private static final long COME_BACK_MS = 3000L;
     private final Runnable comeBackIfShown = this::comeBack;
+    /** The tile focusTile was last asked for, and its listener while the grid scrolls to it. */
+    private int focusTarget = -1;
+    private RecyclerView.OnScrollListener deferredFocus;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -642,6 +645,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void focusTile(int position) {
         if (adapter.getItemCount() == 0) return;
         final int pos = Math.max(0, Math.min(position, adapter.getItemCount() - 1));
+        focusTarget = pos;
+        if (deferredFocus != null) {
+            grid.removeOnScrollListener(deferredFocus);
+            deferredFocus = null;
+        }
         RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(pos);
         if (vh != null) {
             View card = vh.itemView.findViewById(R.id.card);
@@ -650,17 +658,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             else card.requestFocus();
             return;
         }
-        // Not laid out yet: scroll there, then focus once the scroll settles.
-        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        // Not laid out yet (the grid lays out ahead of a running scroll, so this is rare): scroll there, then
+        // focus once the scroll settles, unless focus has been sent elsewhere since.
+        deferredFocus = new RecyclerView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
                 if (newState != RecyclerView.SCROLL_STATE_IDLE) return;
                 rv.removeOnScrollListener(this);
+                if (deferredFocus == this) deferredFocus = null;
+                if (focusTarget != pos) return;
                 RecyclerView.ViewHolder h = rv.findViewHolderForAdapterPosition(pos);
                 View target = h != null ? h.itemView.findViewById(R.id.card) : rv.getChildAt(0);
                 if (target != null) target.requestFocus();
             }
-        });
+        };
+        grid.addOnScrollListener(deferredFocus);
         scroller.stop();
         grid.smoothScrollToPosition(pos);
     }

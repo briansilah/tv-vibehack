@@ -72,8 +72,9 @@ reads the system's animations once, in the background, to decide.
 - `Transitions`: the launch and Home options, the see-through check, and reading the system's
   task animations.
 - `HomeMotion`: Home's push and fall on the root view.
-- `GridScroller`: the scroll spring, the row targets, and the layout manager (it lays out a row's
-  worth beyond each edge so the next row is always there to take focus).
+- `GridScroller`: the scroll spring, the row targets, and the layout manager. The layout manager lays
+  out a row's worth beyond each edge, plus however far a running scroll still has to go, so the next
+  row is there to take focus even while you hold the D-pad.
 - `MainActivity.onLaunchApp`, `comeBackFromApp`, `gridScroll` and `followPage`.
 - `AppAdapter.Holder.press`: the pressed tile.
 

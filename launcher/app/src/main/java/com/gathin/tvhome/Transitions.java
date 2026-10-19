@@ -72,9 +72,12 @@ final class Transitions {
         return ActivityOptions.makeScaleUpAnimation(source, r[0], r[1], r[2], r[3]);
     }
 
-    /** Opening an app: its window comes from behind Home, growing from {@link #APP_FROM} as it fades in. */
+    /**
+     * Opening an app: its window comes from behind Home, growing from {@link #APP_FROM} as it fades in. The rect is
+     * placed from the window's own root, which never scales: Home's root may still be landing.
+     */
     static Bundle launchOptions(View root) {
-        return scaleUp(root, root.getWidth(), root.getHeight(), APP_FROM).toBundle();
+        return scaleUp(root.getRootView(), root.getWidth(), root.getHeight(), APP_FROM).toBundle();
     }
 
     /** Showing Home from HomeButtonService: Home's window fades in over the app, which stays put underneath. */

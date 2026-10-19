@@ -35,6 +35,7 @@ final class GridScroller {
 
     GridScroller(RecyclerView grid) {
         this.grid = grid;
+        if (grid.getLayoutManager() instanceof Layout) ((Layout) grid.getLayoutManager()).scroller = this;
         spring = new SpringAnimation(position);
         spring.setSpring(new SpringForce().setStiffness(STIFFNESS).setDampingRatio(DAMPING));
         spring.setMinimumVisibleChange(DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS);
@@ -50,6 +51,7 @@ final class GridScroller {
      */
     void scrollBy(int dy) {
         if (dy == 0) return;
+        grid.stopScroll();   // RecyclerView's own smooth scroll (MainActivity.focusTile's fallback) would fight it
         if (!spring.isRunning()) {
             applied = 0;
             target = 0f;
@@ -98,11 +100,13 @@ final class GridScroller {
     }
 
     /**
-     * The grid's layout manager: lays out a row beyond each edge, so the row that focus moves to is always there
-     * to take focus and the page moves once, and leaves scrolling to focus to {@link GridScroller}.
+     * The grid's layout manager: lays out a row beyond each edge, and as far again as a running scroll still has to
+     * go, so the row that focus moves to is there to take focus even while you hold the D-pad. It leaves scrolling
+     * to focus to {@link GridScroller}.
      */
     static final class Layout extends GridLayoutManager {
         private final int extra;
+        private GridScroller scroller;
 
         Layout(Context ctx, int columns, int extraPx) {
             super(ctx, columns);
@@ -112,8 +116,9 @@ final class GridScroller {
         @Override
         protected void calculateExtraLayoutSpace(@NonNull RecyclerView.State state, @NonNull int[] extraLayoutSpace) {
             super.calculateExtraLayoutSpace(state, extraLayoutSpace);
-            extraLayoutSpace[0] = Math.max(extraLayoutSpace[0], extra);
-            extraLayoutSpace[1] = Math.max(extraLayoutSpace[1], extra);
+            int ahead = scroller != null ? scroller.pending() : 0;   // > 0: the tiles move up, rows come from below
+            extraLayoutSpace[0] = Math.max(extraLayoutSpace[0], extra + Math.max(0, -ahead));
+            extraLayoutSpace[1] = Math.max(extraLayoutSpace[1], extra + Math.max(0, ahead));
         }
 
         /** MainActivity scrolls on each focus change (onTileFocused); RecyclerView's own scroll would fight it. */
