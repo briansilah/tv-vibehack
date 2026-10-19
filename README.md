@@ -93,9 +93,10 @@ A home screen that is yours again:
   the dock too) and OK puts it down.
 - **The time and your profile picture in the top right**, in a small Liquid Glass capsule, as on Apple TV.
   Press Up from the dock and it opens like the header of Apple TV's Control Center: the time glides
-  left and three icon buttons slide in under the picture. Inputs (a dropdown of HDMI ports, AV and
-  Live TV), Wi-Fi (showing the network you're on) and Settings; on Google TV, Settings opens the TV's
-  quick settings panel, as the remote's Settings button does. The picture opens the TV's accounts.
+  left and three icon buttons come out from behind the picture, each with a caption saying what it
+  does. Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the network you're on) and
+  Settings; on Google TV, Settings opens the TV's quick settings panel, as the remote's Settings
+  button does. The picture opens the TV's Accounts & Profiles.
   Down or Back closes it. Measured from Apple TV recordings, down to the spring. Set your name in
   `config.xml` (`profile_name`) to show your initials instead of the silhouette, and pick the
   buttons' look (`top_bar_style`): Control Center's tabs (the default); grouped in one tray with the
