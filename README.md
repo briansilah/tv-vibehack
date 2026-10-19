@@ -176,6 +176,10 @@ Without Homebrew, the script also finds a JDK 17 known to `/usr/libexec/java_hom
 `~/Library/Android/sdk`, Android Studio's default. A release build (`./gradlew assembleRelease`)
 is smaller and faster on 1 GB sets; sign it yourself before installing.
 
+**Performance** is measured, not guessed: `tools/perf.py` times cold start and Home, counts janky
+frames and reads memory on your TV, and records Perfetto traces. See
+[docs/performance.md](docs/performance.md).
+
 **Navigation** is deliberate: Up and Down move exactly one row, Up from the dock goes to the top
 buttons, the ends of the button row don't fall through to tiles, and the last focused app is
 remembered when you come back, even after the app list changes.

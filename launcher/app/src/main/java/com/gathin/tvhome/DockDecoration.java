@@ -48,6 +48,15 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
 
     @Override
     public void onDraw(@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+        Perf.begin("tvhome:DockDecoration.onDraw");
+        try {
+            drawBand(c, parent);
+        } finally {
+            Perf.end();
+        }
+    }
+
+    private void drawBand(Canvas c, RecyclerView parent) {
         boolean any = false;
         float top = 0, bottom = 0;
         for (int i = 0; i < parent.getChildCount(); i++) {

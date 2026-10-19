@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.ContextThemeWrapper;
 import android.view.KeyEvent;
@@ -90,6 +91,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** App of the last focused tile, so focus follows it when the app list changes. */
     private static String lastFocusedKey;
     private float density;
+    /** reportFullyDrawn() once per activity instance, after its first focus restore. */
+    private boolean reportedFullyDrawn;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
@@ -116,6 +119,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        long t0 = Perf.now();
+        Perf.begin("tvhome:onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
@@ -161,7 +166,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         TopBarButton btnInputs = topBar.findViewById(R.id.btnInputs);
         TopBarButton btnSettings = topBar.findViewById(R.id.btnSettings);
-        btnInputs.setOnClickListener(v -> showInputs());
+        btnInputs.setOnClickListener(v -> {
+            Perf.begin("tvhome:showInputs");
+            try {
+                showInputs();
+            } finally {
+                Perf.end();
+            }
+        });
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         btnSettings.setOnClickListener(v -> openSettings());
 
@@ -191,10 +203,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
+        Perf.end();
+        Perf.log("create", t0, null);
     }
 
     @Override
     protected void onResume() {
+        final long t0 = Perf.now();
+        Perf.begin("tvhome:onResume");
         super.onResume();
         handler.removeCallbacks(shelfSwap);
         heroShown = false;
@@ -221,7 +237,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.post(() -> {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
+            Choreographer.getInstance().postFrameCallback(frameNanos -> onFocusRestored(t0));
         });
+        Perf.end();
+        Perf.log("resume", t0, null);
+    }
+
+    /** The first frame after focus is back on a tile: Home is usable. Feeds tools/perf.py. */
+    private void onFocusRestored(long resumeStartNanos) {
+        Perf.log("focus_restored", resumeStartNanos, "first=" + (reportedFullyDrawn ? 0 : 1));
+        if (reportedFullyDrawn) return;
+        reportedFullyDrawn = true;
+        try {
+            reportFullyDrawn();   // "Fully drawn" in the system log, for cold-start measurements
+        } catch (RuntimeException ignored) {
+        }
     }
 
     @Override
@@ -247,6 +277,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onTileFocused(int position, View card) {
+        Perf.begin("tvhome:onTileFocused");
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
         // Tile rect in root coordinates, using layout positions (ignores the scale animation).
@@ -265,6 +296,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             Rect want = new Rect(0, -(int) (12 * density), item.getWidth(), item.getHeight() + (int) (8 * density));
             grid.requestChildRectangleOnScreen(item, want, false);
         }
+        Perf.end();
     }
 
     // ---- top shelf -------------------------------------------------------------------------------
@@ -408,6 +440,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Shows the Wi-Fi network name on the button (when open) if we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
+        Perf.begin("tvhome:updateWifiLabel");
         String text = getString(R.string.wifi);
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -432,6 +465,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String wifi = getString(R.string.wifi);
         btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
         if (btnWifi.showsCaption() && btnWifi.isFocused()) showCaption(btnWifi);
+        Perf.end();
     }
 
     /**

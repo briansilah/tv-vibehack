@@ -111,8 +111,10 @@ public class ClockDream extends DreamService {
     }
 
     private void setGlow(int color) {
+        Perf.begin("tvhome:dream.setGlow");
         glowColor = color;
         int c = color & 0x00FFFFFF;
         glow.setColors(new int[]{0x40000000 | c, 0x14000000 | c, 0x00000000 | c});
+        Perf.end();
     }
 }
