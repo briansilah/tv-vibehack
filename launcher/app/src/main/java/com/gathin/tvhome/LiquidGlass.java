@@ -99,8 +99,14 @@ final class LiquidGlass {
         final float rimDp;
         /** Lens: the band along the edge that bends what's behind it, and how far out it reaches at the very edge. */
         final float bezelDp, refractDp;
+        /**
+         * Legibility: how much bright backdrop is dimmed behind glass with text on it, as Liquid Glass shifts its
+         * dynamic range to keep labels readable (Apple suggests a 35 % dimming layer over bright content).
+         */
+        final float dim;
 
-        Style(int fill, int rimTop, int rimShoulder, int rimBottom, float rimDp, float bezelDp, float refractDp) {
+        Style(int fill, int rimTop, int rimShoulder, int rimBottom, float rimDp, float bezelDp, float refractDp,
+              float dim) {
             this.fill = fill;
             this.rimTop = rimTop << 24 | 0xFFFFFF;
             this.rimShoulder = rimShoulder << 24 | 0xFFFFFF;
@@ -108,6 +114,7 @@ final class LiquidGlass {
             this.rimDp = rimDp;
             this.bezelDp = bezelDp;
             this.refractDp = refractDp;
+            this.dim = dim;
         }
     }
 
@@ -116,9 +123,12 @@ final class LiquidGlass {
      * top fading to 9 % down the sides and bottom, and a 12 px band along the edge that shows what's up to 20 px
      * beyond it.
      */
-    static final Style DOCK = new Style(0x17, 0x30, 0x17, 0x17, 1.5f, 6f, 10f);
-    /** The top right capsule: smaller, so thinner (a narrower lens); its tint and rim are the ones it had before. */
-    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 4f, 5f);
+    static final Style DOCK = new Style(0x17, 0x30, 0x17, 0x17, 1.5f, 6f, 10f, 0f);
+    /**
+     * The top right capsule: smaller, so thinner (a narrower lens); its tint and rim are the ones it had before. The
+     * time is white on it, so bright art behind it is dimmed.
+     */
+    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 4f, 5f, 0.35f);
 
     /** Which tier this TV gets. */
     static int tier(Context context) {
@@ -383,6 +393,7 @@ final class LiquidGlass {
         private final float density;
         private final float bezel;
         private final float refract;
+        private final float dim;
         @Nullable
         private final Optics optics;
         /** Around the shape, the copy also takes what the blur and the lens reach for, in px. */
@@ -400,6 +411,7 @@ final class LiquidGlass {
             optics = lens && Build.VERSION.SDK_INT >= 33 ? Optics.create() : null;
             bezel = style.bezelDp * density;
             refract = optics != null ? style.refractDp * density : 0f;
+            dim = style.dim;
             if (optics == null) node.setUseCompositingLayer(true, VIBRANCY);
         }
 
@@ -436,7 +448,7 @@ final class LiquidGlass {
             float s = scale;
             if (optics != null && Build.VERSION.SDK_INT >= 33) {
                 node.setRenderEffect(optics.effect(margin * s, margin * s, w * s, h * s, radius * s,
-                        Math.min(bezel, radius) * s, refract * s, sigma * s));
+                        Math.min(bezel, radius) * s, refract * s, sigma * s, dim));
             } else {
                 // RenderEffect takes a radius, which Skia turns into sigma = 0.57735 * radius + 0.5.
                 float blur = Math.max(0.01f, (sigma * s - 0.5f) / 0.57735f);
@@ -468,6 +480,7 @@ final class LiquidGlass {
      * <li>The blur, at the lens's point: a 5 by 5 binomial kernel (a Gaussian's sigma is its tap spacing) in 9 linearly
      * filtered taps, each standing for two of the kernel's.</li>
      * <li>Saturation, luminance kept, as {@link ColorMatrix#setSaturation}.</li>
+     * <li>For glass with text on it, bright backdrop dimmed by up to {@link Style#dim}.</li>
      * </ul>
      * Android 13+.
      */
@@ -482,6 +495,7 @@ final class LiquidGlass {
                 + "uniform float reach;\n"
                 + "uniform float spread;\n"
                 + "uniform float saturation;\n"
+                + "uniform float dim;\n"
                 + "half4 blurred(float2 c) {\n"
                 + "  float o = 1.2 * spread;\n"
                 + "  half4 s = content.eval(c) * 36.0;\n"
@@ -505,6 +519,7 @@ final class LiquidGlass {
                 + "  half4 c = blurred(at);\n"
                 + "  half l = dot(c.rgb, half3(0.213, 0.715, 0.072));\n"
                 + "  c.rgb = clamp(mix(half3(l), c.rgb, half(saturation)), 0.0, c.a);\n"
+                + "  c.rgb *= 1.0 - half(dim) * smoothstep(0.45, 0.9, l);\n"
                 + "  return c;\n"
                 + "}\n";
 
@@ -528,7 +543,8 @@ final class LiquidGlass {
          * The effect for a shape at {@code x, y}, {@code w} by {@code h}, and a blur of {@code sigma}, all in the
          * layer's pixels.
          */
-        RenderEffect effect(float x, float y, float w, float h, float radius, float bezel, float refract, float sigma) {
+        RenderEffect effect(float x, float y, float w, float h, float radius, float bezel, float refract, float sigma,
+                            float dim) {
             shader.setFloatUniform("origin", x, y);
             shader.setFloatUniform("size", w, h);
             shader.setFloatUniform("radius", radius);
@@ -536,6 +552,7 @@ final class LiquidGlass {
             shader.setFloatUniform("reach", refract);
             shader.setFloatUniform("spread", sigma);
             shader.setFloatUniform("saturation", SATURATION);
+            shader.setFloatUniform("dim", dim);
             return RenderEffect.createRuntimeShaderEffect(shader, "content");
         }
     }
