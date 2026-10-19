@@ -93,8 +93,8 @@
 
             <FrameLayout
                 android:id="@+id/avatar"
-                android:layout_width="31.2dp"
-                android:layout_height="31.2dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:background="@drawable/avatar_bg"
                 android:focusable="true"
                 android:clickable="true"

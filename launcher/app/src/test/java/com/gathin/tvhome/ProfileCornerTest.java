@@ -20,33 +20,31 @@ public class ProfileCornerTest {
     }
 
     @Test
-    public void leapStartsWhereTvosFirstMovingFrameIs() {
-        float[] rest = ProfileCorner.leap(0f);
-        assertEquals(0f, rest[0], 1e-6f);
-        assertEquals(0f, rest[1], 1e-6f);
-        // Measured: 47 % and 52 % of the way in the first frames that move when opening, 30 % when closing.
-        assertEquals(0.43f, ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S)[0], 0.03f);
-        assertEquals(0.30f, ProfileCorner.leap(ProfileCorner.CLOSE_LEAP_S)[0], 0.03f);
-        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S)[1] > 0f);
+    public void buttonsFadeInAsTheyClearThePicture() {
+        assertEquals(0f, ProfileCorner.tabAlpha(0f, 72f), 0f);
+        assertEquals(0.5f, ProfileCorner.tabAlpha(0.45f * 72f, 72f), 1e-6f);
+        assertEquals(1f, ProfileCorner.tabAlpha(72f, 72f), 0f);
+        assertEquals(1f, ProfileCorner.tabAlpha(300f, 72f), 0f);
     }
 
     @Test
-    public void leapSettlesWithoutVisibleOvershoot() {
+    public void capsuleFadesAsTheCornerOpens() {
+        assertEquals(1f, ProfileCorner.capsuleAlpha(0f), 0f);
+        assertEquals(1f, ProfileCorner.capsuleAlpha(-0.01f), 0f);
+        assertEquals(0.5f, ProfileCorner.capsuleAlpha(ProfileCorner.CAPSULE_FADE / 2f), 1e-6f);
+        assertEquals(0f, ProfileCorner.capsuleAlpha(ProfileCorner.CAPSULE_FADE), 0f);
+        assertEquals(0f, ProfileCorner.capsuleAlpha(1.002f), 0f);
+    }
+
+    @Test
+    public void springMovesAtOnceAndSettlesInAboutThreeHundredMs() {
+        assertEquals(0f, ProfileCorner.position(0f), 1e-6f);
+        assertTrue(ProfileCorner.position(1 / 60f) > 0.05f);   // the first frame already moves
+        assertTrue(ProfileCorner.position(0.27f) < 0.95f);
+        assertTrue(ProfileCorner.position(0.33f) > 0.95f);
         float max = 0f;
-        for (int ms = 0; ms <= 2000; ms += 4) max = Math.max(max, ProfileCorner.leap(ms / 1000f)[0]);
-        assertTrue(max < 1.002f);
-        // 95 % about 310 ms after tvOS's first moving frame.
-        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S + 0.28f)[0] < 0.95f);
-        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S + 0.34f)[0] > 0.95f);
-    }
-
-    @Test
-    public void pictureSizes() {
-        float full = ProfileCorner.AVATAR_FOCUSED_DP;
-        assertEquals(ProfileCorner.AVATAR_REST_DP / full, ProfileCorner.avatarScale(0f, 0f), 1e-6f);
-        assertEquals(ProfileCorner.AVATAR_REST_DP / full, ProfileCorner.avatarScale(0f, 1f), 1e-6f);
-        assertEquals(ProfileCorner.AVATAR_OPEN_DP / full, ProfileCorner.avatarScale(1f, 0f), 1e-6f);
-        assertEquals(1f, ProfileCorner.avatarScale(1f, 1f), 1e-6f);
+        for (int ms = 0; ms <= 2000; ms += 4) max = Math.max(max, ProfileCorner.position(ms / 1000f));
+        assertTrue(max < 1.003f);   // no visible overshoot
     }
 
     @Test
