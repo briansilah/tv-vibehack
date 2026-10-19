@@ -42,5 +42,5 @@
     <string name="glass_clear">Clear</string>
     <string name="glass_tinted">Tinted</string>
     <string name="glass_value">%1$d%%</string>
-    <string name="glass_hint">◀ ▶ to adjust · OK when done</string>
+    <string name="glass_hint">Left and right to adjust · OK when done</string>
 </resources>

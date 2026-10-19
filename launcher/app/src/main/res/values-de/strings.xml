@@ -40,5 +40,5 @@
     <string name="glass_clear">Klar</string>
     <string name="glass_tinted">Getönt</string>
     <string name="glass_value">%1$d %%</string>
-    <string name="glass_hint">◀ ▶ zum Einstellen · OK, wenn fertig</string>
+    <string name="glass_hint">Links und rechts zum Einstellen · OK, wenn fertig</string>
 </resources>
