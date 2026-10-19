@@ -15,6 +15,8 @@
     <string name="offline">Offline</string>
     <string name="profile">Profil</string>
     <string name="profile_named">Profil: %1$s</string>
+    <string name="quick_settings">Schnelleinstellungen</string>
+    <string name="accounts_profiles">Konten &amp; Profile</string>
     <string name="not_available">Auf diesem TV nicht verfügbar</string>
     <string name="cant_open">%1$s lässt sich nicht öffnen</string>
     <string name="home_button_description">Öffnet diesen Launcher, wenn du Home drückst, während der Launcher von Google TV für seine Schnelleinstellungen installiert bleibt. Home gedrückt halten öffnet diese.</string>

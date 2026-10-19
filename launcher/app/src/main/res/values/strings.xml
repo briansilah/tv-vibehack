@@ -15,6 +15,8 @@
     <string name="offline">Offline</string>
     <string name="profile">Profile</string>
     <string name="profile_named">Profile: %1$s</string>
+    <string name="quick_settings">Quick settings</string>
+    <string name="accounts_profiles">Accounts &amp; profiles</string>
     <string name="not_available">Not available on this TV</string>
     <string name="cant_open">Can\'t open %1$s</string>
     <string name="dream_name">Clock</string>

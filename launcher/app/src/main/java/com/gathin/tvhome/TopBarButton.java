@@ -116,7 +116,12 @@ public class TopBarButton extends ViewGroup {
 
     /** Whether MainActivity should show this button's label under the bar while it is focused. */
     boolean showsCaption() {
-        return mode == MODE_CAPTION;
+        return mode == MODE_CAPTION || mode == MODE_TAB;
+    }
+
+    /** Apple TV's Control Center tabs (the corner's default look): the caption fades in, in white. */
+    boolean isTab() {
+        return mode == MODE_TAB;
     }
 
     CharSequence getLabel() {

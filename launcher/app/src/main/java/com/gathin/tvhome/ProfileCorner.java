@@ -160,6 +160,11 @@ public class ProfileCorner extends ViewGroup {
         return avatar;
     }
 
+    /** Open, or nearly: past the point where the buttons have all but arrived. */
+    boolean isOpen() {
+        return open && openness > 0.9f;
+    }
+
     /**
      * The picture without a photo: the initials of {@code name} on Apple's grey circle, or the silhouette when it is
      * empty. Also names it for accessibility.

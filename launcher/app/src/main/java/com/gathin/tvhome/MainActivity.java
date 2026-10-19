@@ -81,6 +81,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The top bar is gone once the page has moved this far up from the dock's place. */
     private static final float TOP_BAR_FADE_DP = 110f;
     private static final TimeInterpolator LINEAR = new LinearInterpolator();
+    /** Apple TV look: the caption under the focused button fades in, after the corner has (nearly) opened. */
+    private static final long CAPTION_FADE_MS = 150L;
+    private static final long CAPTION_OPEN_DELAY_MS = 180L;
+    private static final int TAB_CAPTION_COLOR = 0xE6FFFFFF;
     /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
     private static final String USER_SETTINGS = "android.settings.USER_SETTINGS";
     private String liveTvPkg;
@@ -102,6 +106,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private ProfileCorner corner;
     private TopBarButton btnWifi;
     private TopBarButton btnSettings;
+    /** Whether the Settings button's label says it opens Google TV's quick settings yet (see captionFor). */
+    private boolean settingsLabelChecked;
     private View topBar;
     /** The top bar's container, over the grid: it scrolls away with the page (see {@link #followPage}). */
     private View topArea;
@@ -307,12 +313,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
         avatar.setOnKeyListener(pillKeys);
+        // What the focused button does, under it: Inputs, the network you're on, Quick settings, and the picture's
+        // Accounts & profiles.
         View.OnFocusChangeListener captionFollow = (v, focused) -> {
-            if (focused) showCaption((TopBarButton) v);
-            else topCaption.setAlpha(0f);
+            if (focused) showCaption(v);
+            else handler.post(hideCaptionUnlessInCorner);   // moving along the bar, the next button keeps it
         };
-        for (TopBarButton b : new TopBarButton[]{btnInputs, btnWifi, btnSettings}) {
-            if (b.showsCaption()) b.setOnFocusChangeListener(captionFollow);
+        if (btnSettings.showsCaption()) {
+            if (btnSettings.isTab()) topCaption.setTextColor(TAB_CAPTION_COLOR);
+            for (View b : new View[]{btnInputs, btnWifi, btnSettings, avatar}) b.setOnFocusChangeListener(captionFollow);
         }
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -733,12 +742,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Perf.end();
     }
 
+    private final Runnable hideCaptionUnlessInCorner = () -> {
+        if (corner.hasFocus()) return;
+        topCaption.animate().cancel();
+        topCaption.setAlpha(0f);
+    };
+
+    /** The caption under a top bar button or the profile picture: what it does. */
+    private CharSequence captionFor(View v) {
+        if (v == btnSettings && !settingsLabelChecked) {
+            // On Google TV, Settings opens the quick settings panel (openSettings): say so. Checked the first time it
+            // is needed, not at start-up: it asks the package manager twice.
+            settingsLabelChecked = true;
+            if (QuickSettings.available(this)) {
+                btnSettings.setLabel(getString(R.string.quick_settings));
+                btnSettings.setContentDescription(getString(R.string.quick_settings));
+            }
+        }
+        return v instanceof TopBarButton ? ((TopBarButton) v).getLabel() : getString(R.string.accounts_profiles);
+    }
+
     /**
-     * Google TV look: the focused button's name, centred under it just below the bar. Like the stock
-     * launcher, it moves with focus at once instead of animating.
+     * The focused button's caption, centred under it just below the bar. Like Google TV's launcher, it moves with
+     * focus at once. With Apple TV's tabs it fades in, once the corner has opened.
      */
-    private void showCaption(TopBarButton b) {
-        topCaption.setText(b.getLabel());
+    private void showCaption(View b) {
+        topCaption.setText(captionFor(b));
         int unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         topCaption.measure(unspecified, unspecified);
         Rect button = new Rect(0, 0, b.getWidth(), b.getHeight());
@@ -749,7 +778,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         float x = Math.min(button.exactCenterX() - w / 2f, root.getWidth() - w - 24 * density);
         topCaption.setX(Math.max(0f, x));
         topCaption.setY(bar.bottom + 4 * density);
-        topCaption.setAlpha(1f);
+        if (!btnSettings.isTab()) {
+            topCaption.setAlpha(1f);
+        } else if (topCaption.getAlpha() == 0f) {
+            // Opening: wait until the button has nearly arrived. Along the open corner: at once.
+            topCaption.animate().alpha(1f).setStartDelay(corner.isOpen() ? 0 : CAPTION_OPEN_DELAY_MS)
+                    .setDuration(CAPTION_FADE_MS).setInterpolator(DECELERATE).start();
+        }
     }
 
     /** Google TV's quick settings panel, like the remote's Settings button; the full Settings app elsewhere. */
