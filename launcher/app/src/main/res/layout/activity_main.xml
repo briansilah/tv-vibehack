@@ -21,9 +21,7 @@
         android:layout_marginStart="68dp"
         android:alpha="0"
         android:textColor="#FFFFFFFF"
-        android:textSize="48sp"
-        style="@style/Outfit.Light"
-        android:letterSpacing="-0.02"
+        style="@style/Text.LargeTitle"
         android:includeFontPadding="false"
         android:singleLine="true" />
 
@@ -79,11 +77,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:textColor="#8CFFFFFF"
-                    android:textSize="12sp"
-                    style="@style/Outfit.Medium"
-                    android:letterSpacing="0.22"
-                    android:textAllCaps="true" />
+                    style="@style/Text.Overline" />
 
+                <!-- The time, AM or PM and the date share the clock's baseline. -->
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -97,9 +93,7 @@
                         android:format12Hour="h:mm"
                         android:format24Hour="HH:mm"
                         android:textColor="#FFFFFFFF"
-                        android:textSize="52sp"
-                        style="@style/Outfit.Light"
-                        android:letterSpacing="-0.04"
+                        style="@style/Text.Clock"
                         android:includeFontPadding="false" />
 
                     <TextClock
@@ -107,38 +101,29 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="6dp"
-                        android:layout_gravity="bottom"
-                        android:layout_marginBottom="8dp"
                         android:format12Hour="a"
                         android:format24Hour=""
                         android:textColor="#B3FFFFFF"
-                        android:textSize="15sp"
-                        style="@style/Outfit.Medium"
-                        android:letterSpacing="0.08"
-                        android:textAllCaps="true" />
+                        style="@style/Text.Clock.Period" />
 
+                    <!-- Centred on the date's capitals. -->
                     <View
                         android:layout_width="1dp"
                         android:layout_height="26dp"
                         android:layout_gravity="bottom"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:layout_marginBottom="8dp"
+                        android:layout_marginBottom="4dp"
                         android:background="#33FFFFFF" />
 
                     <TextClock
                         android:id="@+id/date"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_gravity="bottom"
-                        android:layout_marginBottom="9dp"
                         android:format12Hour="@string/date_format"
                         android:format24Hour="@string/date_format"
                         android:textColor="#A6FFFFFF"
-                        android:textSize="14sp"
-                        style="@style/Outfit.Regular"
-                        android:letterSpacing="0.14"
-                        android:textAllCaps="true" />
+                        style="@style/Text.Clock.Date" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -167,7 +152,5 @@
         android:includeFontPadding="false"
         android:importantForAccessibility="no"
         android:textColor="#FFE4F3FF"
-        android:textSize="13sp"
-        style="@style/Outfit.Medium"
-        android:letterSpacing="0.01" />
+        style="@style/Text.Caption1" />
 </FrameLayout>

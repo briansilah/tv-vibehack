@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Outfit at weight 200, loaded once per process and shared by every view that uses it (see values/styles.xml). -->
-<font-family xmlns:android="http://schemas.android.com/apk/res/android">
-    <font
-        android:font="@font/outfit"
-        android:fontStyle="normal"
-        android:fontWeight="200"
-        android:fontVariationSettings="'wght' 200" />
-</font-family>

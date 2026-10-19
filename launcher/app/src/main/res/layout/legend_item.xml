@@ -30,9 +30,7 @@
             android:layout_gravity="center"
             android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
-            android:textSize="11sp"
-            style="@style/Outfit.Bold"
-            android:letterSpacing="0.06"
+            style="@style/Text.KeyCap"
             android:visibility="gone" />
     </FrameLayout>
 
@@ -42,6 +40,5 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="9dp"
         android:textColor="#E6FFFFFF"
-        android:textSize="16sp"
-        style="@style/Outfit.Medium" />
+        style="@style/Text.Callout" />
 </LinearLayout>

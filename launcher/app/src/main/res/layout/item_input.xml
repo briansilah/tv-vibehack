@@ -27,8 +27,7 @@
         android:layout_marginEnd="12dp"
         android:textColor="@drawable/pill_text"
         android:duplicateParentState="true"
-        android:textSize="15sp"
-        style="@style/Outfit.Medium"
+        style="@style/Text.Callout"
         android:singleLine="true" />
 
     <View
@@ -44,7 +43,5 @@
         android:layout_height="wrap_content"
         android:textColor="@drawable/pill_text_dim"
         android:duplicateParentState="true"
-        android:textSize="11sp"
-        android:fontFamily="@font/outfit"
-        android:letterSpacing="0.04" />
+        style="@style/Text.Caption2" />
 </LinearLayout>
