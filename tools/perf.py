@@ -13,22 +13,23 @@ See docs/performance.md for the method and what each number means.
     perf.py trace --action dock                 ... while it moves between the first two dock apps
     perf.py summarize trace.perfetto-trace      slowest launcher trace sections (pip install perfetto)
 
-Connection: with TV_HOST set it connects like tools/tv.py (adb_shell, no adb binary). Otherwise, or with
---adb, it uses the adb binary (--serial or ANDROID_SERIAL picks the device), e.g. for Android 11+
-wireless debugging. The launcher must already be installed (launcher/build-and-install.sh).
+Connection: the same as tools/tv.py. With TV_HOST set it uses adb_shell (no adb binary); otherwise, or with
+--adb, the adb binary (--serial or ANDROID_SERIAL picks the device, else the only one attached), e.g. for
+Android 11+ wireless debugging. The launcher must already be installed (launcher/build-and-install.sh).
 """
 import argparse
 import datetime
 import json
 import os
 import re
-import shutil
 import statistics
-import subprocess
 import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import tv  # noqa: E402
+
 RESULTS_DIR = os.path.join(HERE, "perf-results")
 
 PKG = "com.gathin.tvhome"
@@ -54,56 +55,9 @@ TRACE_CONFIG_REMOTE = "/data/local/tmp/tvhome-perfetto.pbtx"
 
 # ---- connection --------------------------------------------------------------------------------
 
-def find_adb():
-    candidates = [shutil.which("adb")]
-    for home in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT"),
-                 os.path.expanduser("~/Library/Android/sdk"),
-                 os.path.join(os.environ.get("LOCALAPPDATA", ""), "Android", "Sdk")):
-        if home:
-            candidates.append(os.path.join(home, "platform-tools", "adb.exe" if os.name == "nt" else "adb"))
-    for c in candidates:
-        if c and os.path.isfile(c):
-            return c
-    sys.exit("adb not found: install Android platform-tools, or set TV_HOST to use tools/tv.py instead")
-
-
-class AdbBinary:
-    def __init__(self, serial=None):
-        self.base = [find_adb()] + (["-s", serial] if serial else [])
-
-    def shell(self, cmd, timeout=120):
-        r = subprocess.run(self.base + ["shell", cmd], capture_output=True, text=True, timeout=timeout)
-        return r.stdout + r.stderr
-
-    def pull(self, remote, local):
-        subprocess.run(self.base + ["pull", remote, local], check=True, capture_output=True, timeout=300)
-
-    def close(self):
-        pass
-
-
-class TvPy:
-    """Same connection as tools/tv.py (adb_shell over TCP, TV_HOST / TV_PORT)."""
-
-    def __init__(self):
-        sys.path.insert(0, HERE)
-        import tv  # noqa: E402  (exits with a hint when TV_HOST is unset)
-        self.dev = tv.connect()
-
-    def shell(self, cmd, timeout=120):
-        return self.dev.shell(cmd, read_timeout_s=float(timeout))
-
-    def pull(self, remote, local):
-        self.dev.pull(remote, local, transport_timeout_s=300.0, read_timeout_s=300.0)
-
-    def close(self):
-        self.dev.close()
-
-
 def connect(args):
-    if args.adb or args.serial or not os.environ.get("TV_HOST"):
-        return AdbBinary(args.serial or os.environ.get("ANDROID_SERIAL"))
-    return TvPy()
+    """tools/tv.py's connection; --serial or --adb picks the adb binary even when TV_HOST is set."""
+    return tv.connect(adb=args.adb, serial=args.serial)
 
 
 # ---- parsers (pure functions, tested in tools/tests/test_perf.py) ------------------------------
@@ -782,7 +736,10 @@ def build_parser():
 def main(argv=None, shell=None, log=None):
     args = build_parser().parse_args(argv)
     args.shell, args.log = shell, log
-    return args.func(args)
+    try:
+        return args.func(args)
+    except tv.TvError as e:
+        sys.exit("perf.py: %s" % e)
 
 
 if __name__ == "__main__":

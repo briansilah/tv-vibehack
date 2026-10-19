@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Build the launcher APK and install it on the TV as the default home screen.
 #
+# Usage: launcher/build-and-install.sh                          # adb binary: the device `adb devices` lists
+#        ANDROID_SERIAL='<serial>' launcher/build-and-install.sh # adb binary: one of several devices
+#        TV_HOST=192.168.1.50 launcher/build-and-install.sh      # network ADB on port 5555 through adb_shell
+# tools/tv.py explains how it picks the connection.
+#
 # It builds a release APK (R8, not debuggable, signed with your local debug key) and compiles it ahead of time on
 # the TV, which makes it much faster than a debug build. BUILD_TYPE=debug builds and installs a debuggable one.
 #
@@ -10,7 +15,6 @@
 # service, keeps Home on this launcher instead.
 set -euo pipefail
 cd "$(dirname "$0")"
-: "${TV_HOST:?set TV_HOST to the TV IP address, e.g. TV_HOST=192.168.1.50 $0}"
 STOCK_LAUNCHER="${STOCK_LAUNCHER:-com.google.android.tvlauncher}"
 BUILD_TYPE="${BUILD_TYPE:-release}"
 case "$BUILD_TYPE" in
@@ -22,11 +26,16 @@ export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 17 2>/dev/null || ech
 export ANDROID_HOME="${ANDROID_HOME:-$([ -d ~/Library/Android/sdk ] && echo ~/Library/Android/sdk || echo /opt/homebrew/share/android-commandlinetools)}"
 export PATH="$JAVA_HOME/bin:$PATH"
 [ -f local.properties ] || echo "sdk.dir=$ANDROID_HOME" > local.properties
-if [ "$BUILD_TYPE" = release ]; then ./gradlew assembleRelease -q --console=plain; else ./gradlew assembleDebug -q --console=plain; fi
 PY=../tools/venv/bin/python
 [ -x "$PY" ] || PY=../tools/venv/Scripts/python.exe
 export MSYS_NO_PATHCONV=1
+[ -x "$PY" ] || { echo "run: python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt" >&2; exit 1; }
+# Check the connection before the build; tv.py says what's missing.
+TV=$("$PY" -I ../tools/tv.py 'echo "$(getprop ro.product.manufacturer) $(getprop ro.product.model), Android $(getprop ro.build.version.release)"')
+echo "TV: $TV"
+if [ "$BUILD_TYPE" = release ]; then ./gradlew assembleRelease -q --console=plain; else ./gradlew assembleDebug -q --console=plain; fi
 APK=app/build/outputs/apk/$BUILD_TYPE/app-$BUILD_TYPE.apk
+# adb push with the adb binary, base64 chunks with adb_shell; both check the md5.
 "$PY" -I ../tools/b64push.py "$APK" /data/local/tmp/tvhome.apk
 GOOGLE_TV=0
 case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *package:*) GOOGLE_TV=1 ;; esac
