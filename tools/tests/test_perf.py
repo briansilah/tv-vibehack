@@ -198,8 +198,10 @@ class ParserTests(unittest.TestCase):
 
     def test_to_first_dock_app_keys(self):
         keys = perf.TO_FIRST_DOCK_APP.split()
-        self.assertEqual(keys.count("DOWN"), 1)
-        self.assertLess(keys.index("UP"), keys.index("DOWN"))
+        # Back, not Down, from the top bar: Down stops at the top shelf's button when it shows one.
+        self.assertEqual(keys.count("BACK"), 1)
+        self.assertNotIn("DOWN", keys)
+        self.assertLess(keys.index("UP"), keys.index("BACK"))
         self.assertGreaterEqual(keys.count("LEFT"), 3)   # four dock apps
 
     def test_components(self):

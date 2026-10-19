@@ -299,6 +299,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** Saves the current order as the user's arrangement; from now on it replaces the configured dock. */
     void saveOrder() {
         prefs.edit().putString(PREF_ORDER, AppOrder.encode(keys())).apply();
+        if (orderSaved != null) orderSaved.run();
+    }
+
+    /** Runs when an arrangement is saved: the dock's apps may have changed. */
+    private Runnable orderSaved;
+
+    void setOnOrderSaved(Runnable r) {
+        orderSaved = r;
     }
 
     /** The number of apps, without the action tile after them. */

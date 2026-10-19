@@ -140,7 +140,11 @@ final class ShelfSource {
     private final Map<String, Long> fetchedAt = new HashMap<>();
     private final Map<String, String> fetchedFor = new HashMap<>();
     private final Map<String, Cover> covers = new HashMap<>();
-    private final Set<String> coversLoading = new HashSet<>();
+    /** Covers being made, and who's waiting for each. */
+    private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
+    /** The dock apps' current titles' pictures: kept out of the cache's turnover, so a dock move finds them. */
+    private final Map<String, Bitmap> pinned = new HashMap<>();
+    private final Set<String> pins = new HashSet<>();
     private final Map<String, List<Done<Bitmap>>> loading = new HashMap<>();
     /** URLs that failed, and when: not retried for {@link #RETRY_MS}. */
     private final Map<String, Long> failed = new HashMap<>();
@@ -171,9 +175,9 @@ final class ShelfSource {
         hd = am != null && !am.isLowRamDevice() && mi.totalMem >= 1536L << 20;
         BACKDROP_W = hd ? 1920 : 1280;
         BACKDROP_H = hd ? 1080 : 720;
-        // Decoded pictures: the dock apps' first backdrops and logos and the next one along. Hardware bitmaps
-        // aren't on the Java heap, but they are memory all the same.
-        int budget = hd ? 44 << 20 : 18 << 20;
+        // Decoded pictures beyond the dock apps' current titles (pinned, see pin): the next ones along. Hardware
+        // bitmaps aren't on the Java heap, but they are memory all the same.
+        int budget = hd ? 26 << 20 : 10 << 20;
         bitmaps = new LruCache<String, Bitmap>(budget) {
             @Override
             protected int sizeOf(String key, Bitmap b) {
@@ -524,7 +528,29 @@ final class ShelfSource {
 
     /** A picture already decoded, or null. */
     Bitmap cached(String url) {
-        return url == null ? null : bitmaps.get(url);
+        if (url == null) return null;
+        Bitmap b = pinned.get(url);
+        return b != null ? b : bitmaps.get(url);
+    }
+
+    /**
+     * The pictures to keep decoded whatever else loads (the dock apps' current titles); others drop back into the
+     * cache.
+     */
+    void pin(Collection<String> urls) {
+        pins.clear();
+        pins.addAll(urls);
+        java.util.Iterator<Map.Entry<String, Bitmap>> it = pinned.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Bitmap> e = it.next();
+            if (pins.contains(e.getKey())) continue;
+            bitmaps.put(e.getKey(), e.getValue());
+            it.remove();
+        }
+        for (String u : pins) {
+            Bitmap b = bitmaps.remove(u);
+            if (b != null) pinned.put(u, b);
+        }
     }
 
     /** Whether loading {@code url} failed lately (and won't be tried again for a while). */
@@ -591,8 +617,12 @@ final class ShelfSource {
     }
 
     private void finished(String url, Bitmap b) {
-        if (b != null) bitmaps.put(url, b);
-        else failed.put(url, System.currentTimeMillis());
+        if (b != null) {
+            if (pins.contains(url)) pinned.put(url, b);
+            else bitmaps.put(url, b);
+        } else {
+            failed.put(url, System.currentTimeMillis());
+        }
         List<Done<Bitmap>> waiting = loading.remove(url);
         if (waiting == null) return;
         for (Done<Bitmap> d : waiting) d.done(b);
@@ -747,10 +777,18 @@ final class ShelfSource {
     /** Makes the app's cover art in the background, unless it has it; {@code done} gets it (null on failure). */
     void makeCover(final App app, final Done<Cover> done) {
         Cover c = covers.get(app.key);
-        if (c != null || !coversLoading.add(app.key)) {
-            if (c != null && done != null) done.done(c);
+        if (c != null) {
+            if (done != null) done.done(c);
             return;
         }
+        List<Done<Cover>> waiting = coversLoading.get(app.key);
+        if (waiting != null) {
+            if (done != null) waiting.add(done);
+            return;
+        }
+        waiting = new ArrayList<>();
+        if (done != null) waiting.add(done);
+        coversLoading.put(app.key, waiting);
         WORK.execute(() -> {
             Cover made = null;
             try {
@@ -760,9 +798,11 @@ final class ShelfSource {
             }
             final Cover result = made;
             main.post(() -> {
-                coversLoading.remove(app.key);
+                List<Done<Cover>> waiters = coversLoading.remove(app.key);
                 if (result != null) covers.put(app.key, result);
-                if (done != null) done.done(result);
+                if (waiters != null) {
+                    for (Done<Cover> d : waiters) d.done(result);
+                }
             });
         });
     }
@@ -866,6 +906,7 @@ final class ShelfSource {
         for (Map.Entry<String, Bitmap> e : snapshot.entrySet()) {
             if (!keep.contains(e.getValue())) bitmaps.remove(e.getKey());
         }
+        pinned.values().removeIf(b -> !keep.contains(b));
     }
 
     // ---- files ---------------------------------------------------------------------------------------------

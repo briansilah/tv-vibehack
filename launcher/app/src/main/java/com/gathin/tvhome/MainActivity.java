@@ -266,6 +266,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         grid.setLayoutAnimation(new LayoutAnimationController(
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
         grid.setAdapter(adapter);
+        // Apps moved into or out of the dock: the top shelf fetches and prepares art for the new dock.
+        adapter.setOnOrderSaved(() -> topShelf.setDock(adapter.dockApps()));
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
@@ -307,6 +309,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if ((keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_BACK)
                     && adapter.getItemCount() > 0) {
+                // Down passes the top shelf's button on the way, when it has one: it sits between here and the dock.
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !rearranger.isActive() && topShelf.enterActions()) {
+                    return true;
+                }
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
@@ -383,6 +389,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private void reloadApps() {
         appsChanged = false;
         adapter.reload();
+        topShelf.appsChanged();
         topShelf.setDock(adapter.dockApps());
         // The app the top shelf shows may have a new name or banner: make the next focus on it swap it in again.
         shelfKey = null;

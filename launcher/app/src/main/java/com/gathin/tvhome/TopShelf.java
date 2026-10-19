@@ -109,6 +109,9 @@ final class TopShelf implements ShelfSource.Listener {
         // Grows from its left edge, which stays in line with the title above it.
         action.setPivotX(0f);
         action.setOnFocusChangeListener((v, focused) -> {
+            // Not focusable once left, but only after focus has gone: dropping it while focused would hand focus
+            // to the first tile on the screen.
+            if (!focused && !acting) v.setFocusable(false);
             v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
                     .translationZ(focused ? 10 * density() : 0f).setDuration(focused ? 150 : 120)
                     .setInterpolator(DECELERATE).start();
@@ -142,12 +145,16 @@ final class TopShelf implements ShelfSource.Listener {
         handler.removeCallbacks(preloadDock);
     }
 
-    /** The dock's apps, after the app list (re)loaded. */
+    /** The apps changed (installed, updated): their banners, so their covers, may have too. */
+    void appsChanged() {
+        if (source != null) source.forgetCovers();
+    }
+
+    /** The dock's apps: after the app list (re)loaded, or apps moved in or out of the dock. */
     void setDock(List<ShelfSource.App> apps) {
         dock.clear();
         dock.addAll(apps);
         if (source == null) return;
-        source.forgetCovers();
         List<String> pkgs = new ArrayList<>();
         for (ShelfSource.App a : apps) pkgs.add(a.pkg);
         source.setWanted(pkgs);
@@ -176,6 +183,8 @@ final class TopShelf implements ShelfSource.Listener {
      * hide). {@code artDone} runs once the art has faded in, or now if there is none to show yet.
      */
     boolean show(ShelfSource.App app, boolean appearing, Runnable artDone) {
+        // Focus coming to an app starts at the top of its list: what you were watching most recently.
+        if (app != null && (current == null || !current.key.equals(app.key))) carousel.remove(app.pkg);
         current = app;
         handler.removeCallbacks(advance);
         if (source == null || app == null) {
@@ -242,7 +251,7 @@ final class TopShelf implements ShelfSource.Listener {
     void leaveActions() {
         if (!acting) return;
         acting = false;
-        action.setFocusable(false);
+        if (!action.isFocused()) action.setFocusable(false);
         action.animate().cancel();
         action.animate().alpha(0f).setDuration(HIDE_MS).setInterpolator(DECELERATE)
                 .withEndAction(() -> {
@@ -293,8 +302,9 @@ final class TopShelf implements ShelfSource.Listener {
                 host.onShelfExit(false);
                 return true;
             case KeyEvent.KEYCODE_DPAD_UP:
-                leaveActions();
+                // Focus moves first, then the button goes.
                 host.onShelfExit(true);
+                leaveActions();
                 return true;
             case KeyEvent.KEYCODE_DPAD_LEFT:
                 step(-1);
@@ -389,7 +399,10 @@ final class TopShelf implements ShelfSource.Listener {
     public void onItems(String pkg) {
         if (current != null && current.pkg.equals(pkg)) want(current);
         for (ShelfSource.App a : dock) {
-            if (a.pkg.equals(pkg)) preload(a);
+            if (a.pkg.equals(pkg)) {
+                preloadDock();
+                break;
+            }
         }
     }
 
@@ -425,11 +438,15 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return null;
         List<ShelfFeeds.Item> items = source.items(app.pkg);
         if (items != null) {
+            // The title the list is at, in its order (what you were watching, then saved, then popular): if it's
+            // still loading the cover art shows meanwhile, rather than a later title jumping the queue. Only a
+            // title whose picture failed is skipped.
             int start = index(app.pkg, items.size());
             for (int k = 0; k < items.size(); k++) {
                 ShelfFeeds.Item it = items.get((start + k) % items.size());
                 Choice c = content(app, it);
                 if (c != null) return c;
+                if (!source.failedLately(it.backdrop)) break;
             }
         }
         ShelfSource.Cover cover = source.cover(app.key);
@@ -481,9 +498,18 @@ final class TopShelf implements ShelfSource.Listener {
         display(c, ARRIVE_MS, null, true);
     }
 
-    /** Decodes each dock app's first title (or cover art), so moving along the dock shows it at once. */
+    /** Decodes each dock app's current title (or cover art), so moving along the dock shows it at once. */
     private void preloadDock() {
         if (source == null || !started) return;
+        List<String> keep = new ArrayList<>();
+        for (ShelfSource.App a : dock) {
+            List<ShelfFeeds.Item> items = source.items(a.pkg);
+            if (items == null) continue;
+            ShelfFeeds.Item it = items.get(index(a.pkg, items.size()));
+            keep.add(it.backdrop);
+            if (it.logo != null) keep.add(it.logo);
+        }
+        source.pin(keep);
         for (ShelfSource.App a : dock) preload(a);
     }
 
@@ -596,6 +622,7 @@ final class TopShelf implements ShelfSource.Listener {
             int i = (at + k) % items.size();
             Choice c = content(app, items.get(i));
             if (c == null) {
+                if (source.failedLately(items.get(i).backdrop)) continue;   // no picture: on to the next
                 // Not decoded yet: load it, and look again in a moment.
                 loadItem(items.get(i), null);
                 if (k == 1) {
