@@ -410,8 +410,7 @@ final class Rearranger {
             legend.addView(keys[i]);
         }
         root.addView(header);
-        View left = root.findViewById(R.id.leftBlock);
-        topBar = left != null ? (View) left.getParent() : null;
+        topBar = root.findViewById(R.id.topRow);
     }
 
     private void showHeader(boolean show) {

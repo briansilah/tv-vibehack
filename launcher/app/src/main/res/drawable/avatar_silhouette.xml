@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generic person, as Apple TV shows for a profile without a photo: a head and shoulders, cut off by the
+     circle that clips it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="26dp" android:height="26dp"
+    android:viewportWidth="100" android:viewportHeight="100">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M50,21 a17.5,17.5 0 1,1 0,35 a17.5,17.5 0 1,1 0,-35 z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M14,100 C14,79 30,65 50,65 C70,65 86,79 86,100 Z" />
+</vector>

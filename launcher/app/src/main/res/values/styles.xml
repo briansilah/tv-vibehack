@@ -36,8 +36,14 @@
         <item name="android:fontVariationSettings">"'wght' 700"</item>
     </style>
 
-    <!-- Top bar (layout/top_bar.xml), in three looks picked by config.xml's top_bar_style. Each look is a
-         theme overlay that sets the bar's and its buttons' styles. -->
+    <!-- Top bar (layout/top_bar.xml), in four looks picked by config.xml's top_bar_style. Each look is a
+         theme overlay that sets the bar's and its buttons' styles. The bar sits in the top right corner
+         (ProfileCorner) and comes out when focus moves up there. -->
+    <style name="ThemeOverlay.TopBar.Tvos" parent="">
+        <item name="topBarStyle">@style/TopBar</item>
+        <item name="topButtonStyle">@style/TopButton.Tvos</item>
+    </style>
+
     <style name="ThemeOverlay.TopBar.Pills" parent="">
         <item name="topBarStyle">@style/TopBar</item>
         <item name="topButtonStyle">@style/TopButton</item>
@@ -96,5 +102,16 @@
         <item name="topBarMode">caption</item>
         <item name="topBarIconSize">18dp</item>
         <item name="topBarIconTint">@drawable/gtv_icon</item>
+    </style>
+
+    <!-- Apple TV (tvOS 26), the tabs of Control Center's header: a grey glyph, in a white circle when focused.
+         Measured on tvOS at 1080p: 60 px circles side by side, glyphs about 28 px. -->
+    <style name="TopButton.Tvos">
+        <item name="android:layout_height">30dp</item>
+        <item name="android:layout_marginStart">0dp</item>
+        <item name="android:background">@drawable/tab_bg</item>
+        <item name="topBarMode">tab</item>
+        <item name="topBarIconSize">16dp</item>
+        <item name="topBarIconTint">@drawable/tab_icon</item>
     </style>
 </resources>

@@ -34,7 +34,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
-import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.view.animation.AnimationUtils;
@@ -51,7 +50,6 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 
@@ -94,8 +92,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** App the top shelf shows, or is changing to. */
     private String shelfKey;
     private boolean tilesEntered;
-    private TextView greeting;
+    /** Top right: the time and profile picture, which opens into the top bar's buttons. */
+    private ProfileCorner corner;
     private TopBarButton btnWifi;
+    private TopBarButton btnSettings;
     private View topBar;
     /** Google TV look: the focused top bar button's name, under the bar. */
     private TextView topCaption;
@@ -159,7 +159,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
-            updateGreeting();
             updateWifiLabel();
             handler.postDelayed(this, MINUTE_MS);
         }
@@ -202,13 +201,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.setBackground(ambientGlow);
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
-        greeting = findViewById(R.id.greeting);
+        corner = findViewById(R.id.corner);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
         topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
                 TopBarButton.themeFor(getString(R.string.top_bar_style)))));
         topBar = topBarStub.inflate();
+        corner.setBar(topBar);
+        corner.setProfileName(getString(R.string.profile_name));
         topCaption = findViewById(R.id.topCaption);
         btnWifi = topBar.findViewById(R.id.btnWifi);
+        btnSettings = topBar.findViewById(R.id.btnSettings);
 
         grid = findViewById(R.id.grid);
         grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
@@ -231,7 +233,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
 
         TopBarButton btnInputs = topBar.findViewById(R.id.btnInputs);
-        TopBarButton btnSettings = topBar.findViewById(R.id.btnSettings);
+        View avatar = corner.getAvatar();
         btnInputs.setOnClickListener(v -> {
             Perf.begin("tvhome:showInputs");
             try {
@@ -242,23 +244,34 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         btnSettings.setOnClickListener(v -> openSettings());
+        avatar.setOnClickListener(v -> openProfile());
 
-        // Keep focus on the top bar at its ends and at the top: Android's focus finder would otherwise
-        // jump to a tile far below when there is nothing in that direction. Down goes back to the dock app
-        // you came up from, as on tvOS, instead of always the first one.
+        // Keep focus in the top right corner at its ends and at the top: Android's focus finder would otherwise
+        // jump to a tile far below when there is nothing in that direction. Down (and Back, which closes Control
+        // Center on tvOS) goes back to the dock app you came up from, as on tvOS, instead of always the first one.
         View.OnKeyListener pillKeys = (v, keyCode, event) -> {
             if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && adapter.getItemCount() > 0) {
+            if ((keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_BACK)
+                    && adapter.getItemCount() > 0) {
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && v.getId() == R.id.btnInputs) return true;
-            return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == R.id.btnSettings;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == R.id.btnSettings) {
+                avatar.requestFocus();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && v == avatar) {
+                btnSettings.requestFocus();
+                return true;
+            }
+            return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v == avatar;
         };
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
+        avatar.setOnKeyListener(pillKeys);
         View.OnFocusChangeListener captionFollow = (v, focused) -> {
             if (focused) showCaption((TopBarButton) v);
             else topCaption.setAlpha(0f);
@@ -291,7 +304,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             tilesEntered = true;
             grid.scheduleLayoutAnimation();
         }
-        updateGreeting();
         handler.postDelayed(minuteTick, MINUTE_MS);
 
         // Return to the app we left from, or the same slot if that app is gone. Always refocus: after
@@ -342,6 +354,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
         shelfTiming.cancel();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
+        // Center, instead of showing it close. onResume moves focus back to the dock.
+        if (corner.hasFocus()) corner.snapClosed();
     }
 
     @Override
@@ -472,7 +492,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public boolean onTileDpadKey(int position, int keyCode) {
         int target = AppOrder.step(position, adapter.getItemCount(), COLUMNS, keyCode);
-        if (target < 0) return false;                      // Up from the dock: let focus move to the top bar
+        if (target < 0) {
+            // Up from the dock opens the top right corner on Settings, next to the profile picture, as tvOS opens
+            // Control Center on its settings tab.
+            btnSettings.requestFocus();
+            return true;
+        }
         if (target != position) focusTile(target);         // otherwise stay put at the row ends and last row
         return true;
     }
@@ -519,17 +544,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     // ---- top bar ---------------------------------------------------------------------------------
-
-    private void updateGreeting() {
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        int res;
-        if (hour < 5) res = R.string.good_night;
-        else if (hour < 12) res = R.string.good_morning;
-        else if (hour < 17) res = R.string.good_afternoon;
-        else if (hour < 22) res = R.string.good_evening;
-        else res = R.string.good_night;
-        greeting.setText(res);
-    }
 
     /** Shows the Wi-Fi network name on the button (when open) if we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
@@ -585,6 +599,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!QuickSettings.open(this)) open(new Intent(Settings.ACTION_SETTINGS));
     }
 
+    /** The profile picture: the TV's accounts and profiles in Settings, or Settings if it has no such page. */
+    private void openProfile() {
+        Intent accounts = new Intent(Settings.ACTION_SYNC_SETTINGS);
+        if (accounts.resolveActivity(getPackageManager()) == null) accounts = new Intent(Settings.ACTION_SETTINGS);
+        open(accounts);
+    }
+
     private void open(Intent i) {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
@@ -596,13 +617,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Dropdown menu under the Inputs button: HDMI ports (with connection state), AV and Live TV. */
     private void showInputs() {
-        TopBarButton anchor = topBar.findViewById(R.id.btnInputs);
+        TopBarButton inputsButton = topBar.findViewById(R.id.btnInputs);
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
 
-        // Compact: as wide as the open Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
-        // The open width, not the current one: a click can land while the button is still opening.
-        int width = Math.max(anchor.getExpandedWidth(), (int) (150 * density));
+        // Compact: as wide as the open Inputs pill (a touch wider so "HDMI 1" fits). It hangs from the top right
+        // corner, right-aligned like Control Center's panel on tvOS. The open width, not the current one: a click
+        // can land while the button is still opening.
+        int width = Math.max(inputsButton.getExpandedWidth(), (int) (150 * density));
         final PopupWindow popup = new PopupWindow(panel, width, ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));   // needed for Back to dismiss
         popup.setOutsideTouchable(true);
@@ -675,17 +697,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.setScaleY(0.92f);
         panel.setTranslationY(-8 * density);
         final int yOff = (int) (10 * density);
-        popup.showAsDropDown(anchor, 0, yOff, Gravity.START);
-        // Stay under the button while it finishes opening (the right-aligned row moves as it widens).
-        ViewTreeObserver.OnGlobalLayoutListener follow = () -> {
-            if (popup.isShowing()) popup.update(anchor, 0, yOff, -1, -1);
-        };
-        anchor.getViewTreeObserver().addOnGlobalLayoutListener(follow);
+        popup.showAsDropDown(corner, 0, yOff, Gravity.END);
         // The Google TV caption would sit under the dropdown.
         topCaption.setAlpha(0f);
         popup.setOnDismissListener(() -> {
-            anchor.getViewTreeObserver().removeOnGlobalLayoutListener(follow);
-            if (anchor.showsCaption() && anchor.isFocused()) showCaption(anchor);
+            if (inputsButton.showsCaption() && inputsButton.isFocused()) showCaption(inputsButton);
         });
         panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();

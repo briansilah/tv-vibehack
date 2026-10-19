@@ -20,9 +20,10 @@ import androidx.dynamicanimation.animation.FloatPropertyCompat;
 import androidx.dynamicanimation.animation.SpringAnimation;
 
 /**
- * A top bar button: an icon and a label, in one of three looks (attribute topBarMode, set by the theme
+ * A top bar button: an icon and a label, in one of four looks (attribute topBarMode, set by the theme
  * overlay for config.xml's top_bar_style):
  * <ul>
+ * <li>{@link #MODE_TAB}, Apple TV's Control Center: a round icon button; its background alone shows focus.</li>
  * <li>{@link #MODE_PILL}: a pill with icon and label, always.</li>
  * <li>{@link #MODE_EXPAND}, Apple TV: a round icon button that, when focused, widens into the pill and
  * closes back to the icon when focus leaves. The width follows a spring on an expansion fraction
@@ -31,12 +32,14 @@ import androidx.dynamicanimation.animation.SpringAnimation;
  * <li>{@link #MODE_CAPTION}, Google TV: a round icon button that grows a little and lifts when focused;
  * MainActivity shows its label under the bar.</li>
  * </ul>
+ * The bar sits in {@link ProfileCorner}, which brings it out when focus moves up there.
  */
 public class TopBarButton extends ViewGroup {
 
     static final int MODE_PILL = 0;
     static final int MODE_EXPAND = 1;
     static final int MODE_CAPTION = 2;
+    static final int MODE_TAB = 3;
 
     /** Focused size in caption mode, as on the Google TV home screen (about 64 to 70 px). */
     static final float CAPTION_FOCUS_SCALE = 1.1f;
@@ -140,7 +143,7 @@ public class TopBarButton extends ViewGroup {
         } else if (mode == MODE_CAPTION) {
             lift(gainFocus);
         }
-        // MODE_PILL: the background alone shows focus.
+        // MODE_PILL and MODE_TAB: the background alone shows focus.
     }
 
     /** Caption mode: grow and lift onto a shadow with the tile focus springs (AppAdapter). */
@@ -229,15 +232,17 @@ public class TopBarButton extends ViewGroup {
         return Math.round(centred + (paddingStart - centred) * f);
     }
 
-    /** The theme overlay for config.xml's top_bar_style; Google TV for anything unknown. */
+    /** The theme overlay for config.xml's top_bar_style; Apple TV's Control Center (tvos) for anything unknown. */
     static int themeFor(String style) {
         switch (style == null ? "" : style.trim()) {
             case "pills":
                 return R.style.ThemeOverlay_TopBar_Pills;
             case "apple":
                 return R.style.ThemeOverlay_TopBar_Apple;
-            default:
+            case "google":
                 return R.style.ThemeOverlay_TopBar_Google;
+            default:
+                return R.style.ThemeOverlay_TopBar_Tvos;
         }
     }
 
