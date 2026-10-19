@@ -66,6 +66,9 @@ final class ShelfSource {
     interface Listener {
         /** An app's suggested titles changed (arrived, or were refreshed). */
         void onItems(String pkg);
+
+        /** An app's cover art changed (its crisp logo arrived). */
+        void onCover(String key);
     }
 
     /** An app as the top shelf needs it, for its cover art. */
@@ -117,6 +120,11 @@ final class ShelfSource {
      */
     private static int BACKDROP_W = 1920, BACKDROP_H = 1080;
     private static final int LOGO_W = 800, LOGO_H = 300;
+    /**
+     * The least a backdrop may be (after any black bars are cut off): about 720p. A smaller picture (a 640 x 480
+     * thumbnail, a 240-pixel poster) would show blurred across the screen, so its title is skipped.
+     */
+    static final int MIN_BACKDROP_W = 1200, MIN_BACKDROP_H = 500;
     private static final int COVER_W = 480, COVER_H = 270;
 
     private static final ExecutorService NET = worker("tvhome-shelf-net");
@@ -129,6 +137,9 @@ final class ShelfSource {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Map<String, ShelfFeeds.Feed> feeds;
     private final Map<String, String> links;
+    private final Map<String, ShelfFeeds.LogoSpec> logos;
+    /** Simple Icons' vector logos (CC0), pinned to a major version: fetched once per app, kept on the TV. */
+    private static final String ICON_URL = "https://cdn.jsdelivr.net/npm/simple-icons@16/icons/%s.svg";
     private final String country;
     private final String countryName;
     private final File dir;
@@ -155,11 +166,12 @@ final class ShelfSource {
     private long lastFetch;
     private int fetching;
 
-    ShelfSource(Context ctx, String[] feedLines, String[] linkLines, Listener listener) {
+    ShelfSource(Context ctx, String[] feedLines, String[] linkLines, String[] logoLines, Listener listener) {
         this.ctx = ctx.getApplicationContext();
         this.listener = listener;
         this.feeds = ShelfFeeds.parse(feedLines);
         this.links = ShelfFeeds.parseLinks(linkLines);
+        this.logos = ShelfFeeds.parseLogos(logoLines);
         this.country = ShelfFeeds.country(timeZoneRegion(), Locale.getDefault().getCountry());
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? ""
                 : new Locale("", country.toUpperCase(Locale.ROOT)).getDisplayCountry();
@@ -706,6 +718,9 @@ final class ShelfSource {
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(f.getPath(), o);
+        if (backdrop && (o.outWidth < MIN_BACKDROP_W || o.outHeight < MIN_BACKDROP_H)) {
+            throw new IOException("too small for the screen");
+        }
         int sample = 1;
         int tw = backdrop ? BACKDROP_W : LOGO_W, th = backdrop ? BACKDROP_H : LOGO_H;
         while (o.outWidth / (sample * 2) >= tw && o.outHeight / (sample * 2) >= th) sample *= 2;
@@ -714,7 +729,7 @@ final class ShelfSource {
         if (backdrop) o.inPreferredConfig = Bitmap.Config.RGB_565;
         Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
         if (b == null) throw new IOException("undecodable");
-        return backdrop ? finishBackdrop(b, true) : b;
+        return backdrop ? finishBackdrop(b, true, sample) : b;
     }
 
     private static Bitmap decodeLocal(ContentResolver cr, Uri uri, final boolean backdrop) throws IOException {
@@ -724,7 +739,11 @@ final class ShelfSource {
             if (backdrop) o.inPreferredConfig = Bitmap.Config.RGB_565;
             Bitmap b = BitmapFactory.decodeStream(in, null, o);
             if (b == null) throw new IOException("undecodable");
-            return backdrop ? finishBackdrop(b, true) : b;
+            if (backdrop && (b.getWidth() < MIN_BACKDROP_W || b.getHeight() < MIN_BACKDROP_H)) {
+                b.recycle();
+                throw new IOException("too small for the screen");
+            }
+            return backdrop ? finishBackdrop(b, true, 1f) : b;
         }
     }
 
@@ -734,14 +753,21 @@ final class ShelfSource {
      */
     @android.annotation.TargetApi(28)
     private static Bitmap decode(ImageDecoder.Source source, final boolean backdrop) throws IOException {
+        final int[] size = new int[2];
         Bitmap b = ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
             int w = info.getSize().getWidth(), h = info.getSize().getHeight();
+            size[0] = w;
+            size[1] = h;
             float s = backdrop ? Math.max(BACKDROP_W / (float) w, BACKDROP_H / (float) h)
                     : Math.min(LOGO_W / (float) w, LOGO_H / (float) h);
             if (s < 1f) decoder.setTargetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
             decoder.setAllocator(backdrop ? ImageDecoder.ALLOCATOR_SOFTWARE : ImageDecoder.ALLOCATOR_HARDWARE);
         });
-        return backdrop ? hardware(finishBackdrop(b, true)) : b;
+        if (backdrop && (size[0] < MIN_BACKDROP_W || size[1] < MIN_BACKDROP_H)) {
+            b.recycle();
+            throw new IOException("too small for the screen: " + size[0] + "x" + size[1]);
+        }
+        return backdrop ? hardware(finishBackdrop(b, true, size[1] / (float) b.getHeight())) : b;
     }
 
     /**
@@ -749,10 +775,16 @@ final class ShelfSource {
      * bottom, under the dock and the title; for a title, darker on the left too) drawn into it here, once, rather
      * than over it in every frame: on a TV's GPU each full-screen layer costs a few milliseconds a frame.
      */
-    static Bitmap finishBackdrop(Bitmap src, boolean content) {
+    static Bitmap finishBackdrop(Bitmap src, boolean content, float sourceScale) throws IOException {
         int w = src.getWidth(), h = src.getHeight();
         int[] bars = bars(src);
         int ch = h - bars[0] - bars[1];
+        // With its bars cut off, the picture must still be big enough for the screen, in the source's own pixels
+        // ({@code sourceScale}: source pixels per decoded pixel).
+        if (content && ch * sourceScale < MIN_BACKDROP_H) {
+            src.recycle();
+            throw new IOException("too small once its bars are cut off");
+        }
         Bitmap out = Bitmap.createBitmap(w, ch, src.getConfig() == Bitmap.Config.RGB_565
                 ? Bitmap.Config.RGB_565 : Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
@@ -829,10 +861,14 @@ final class ShelfSource {
         waiting = new ArrayList<>();
         if (done != null) waiting.add(done);
         coversLoading.put(app.key, waiting);
+        final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
+        final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         WORK.execute(() -> {
             Cover made = null;
             try {
                 made = renderCover(ctx, app);
+                // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
+                if (made != null && svgFile != null && svgFile.exists()) made = withLogo(ctx, made, app, spec, svgFile);
             } catch (RuntimeException | OutOfMemoryError e) {
                 // A banner that can't be drawn: the glow it is.
             }
@@ -843,8 +879,102 @@ final class ShelfSource {
                 if (waiters != null) {
                     for (Done<Cover> d : waiters) d.done(result);
                 }
+                if (result != null && svgFile != null && !svgFile.exists()) fetchLogo(app, spec, svgFile);
             });
         });
+    }
+
+    /** Fetches an app's vector logo once, then redraws its cover with it. */
+    private void fetchLogo(final App app, final ShelfFeeds.LogoSpec spec, final File svgFile) {
+        if (failedLately("logo:" + spec.slug)) return;
+        NET.execute(() -> {
+            boolean ok = false;
+            try {
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+                ok = download(String.format(Locale.ROOT, ICON_URL, spec.slug), svgFile)
+                        && ShelfFeeds.iconPath(readText(svgFile)) != null;
+                if (!ok) svgFile.delete();
+            } catch (RuntimeException e) {
+                svgFile.delete();
+            }
+            if (!ok) {
+                main.post(() -> failed.put("logo:" + spec.slug, System.currentTimeMillis()));
+                return;
+            }
+            WORK.execute(() -> {
+                Cover old = null;
+                try {
+                    Cover base = renderCover(ctx, app);
+                    old = base == null ? null : withLogo(ctx, base, app, spec, svgFile);
+                } catch (RuntimeException | OutOfMemoryError ignored) {
+                }
+                final Cover result = old;
+                if (result == null) return;
+                main.post(() -> {
+                    if (!covers.containsKey(app.key)) return;   // apps changed meanwhile
+                    covers.put(app.key, result);
+                    listener.onCover(app.key);
+                });
+            });
+        });
+    }
+
+    /**
+     * The cover with the app's vector logo in place of the one cut from its banner: the mark in the brand's colour
+     * (white where that's too dark for the cover), and the app's name beside it unless the mark is a wordmark,
+     * drawn at the size it shows, so it's sharp.
+     */
+    private static Cover withLogo(Context ctx, Cover cover, App app, ShelfFeeds.LogoSpec spec, File svgFile) {
+        String d = ShelfFeeds.iconPath(readText(svgFile));
+        if (d == null) return cover;
+        android.graphics.Path path;
+        try {
+            path = androidx.core.graphics.PathParser.createPathFromPathData(d);
+        } catch (RuntimeException e) {
+            return cover;
+        }
+        if (path == null) return cover;
+        float markH = 150f;
+        android.graphics.RectF bounds = new android.graphics.RectF();
+        path.computeBounds(bounds, true);
+        float s = markH / 24f;
+        float markW = Math.max(1f, bounds.width() * s);
+        int color = spec.color;
+        float[] hsv = new float[3];
+        AmbientColor.rgbToHsv((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, hsv);
+        if (hsv[2] < 0.35f) color = 0xFFF2F2F2;
+        android.text.TextPaint text = null;
+        float textW = 0f, gap = 0f;
+        String label = app.label;
+        if (!spec.wordmark && label != null && !label.isEmpty()) {
+            text = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+            try {
+                text.setTypeface(ctx.getResources().getFont(R.font.display_medium));
+            } catch (RuntimeException ignored) {
+            }
+            text.setColor(0xFFFFFFFF);
+            text.setTextSize(markH * 0.66f);
+            text.setLetterSpacing(-0.01f);
+            textW = text.measureText(label);
+            gap = markH * 0.24f;
+        }
+        int w = Math.round(markW + gap + textW) + 4, h = Math.round(markH) + 4;
+        Bitmap lockup = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(lockup);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(color);
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        m.setScale(s, s);
+        m.postTranslate(2 - bounds.left * s, 2 - bounds.top * s + (markH - bounds.height() * s) / 2f);
+        path.transform(m);
+        c.drawPath(path, p);
+        if (text != null) {
+            Paint.FontMetrics fm = text.getFontMetrics();
+            float baseline = 2 + markH / 2f - (fm.ascent + fm.descent) / 2f;
+            c.drawText(label, 2 + markW + gap, baseline, text);
+        }
+        return new Cover(cover.backdrop, hardware(lockup));
     }
 
     /** Apps changed: their banners may have too. */

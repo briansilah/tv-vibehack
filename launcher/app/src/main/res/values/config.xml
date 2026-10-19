@@ -67,6 +67,20 @@
     <!-- What the top shelf's button opens for a feed's title (Up from the dock, then OK): "package | link", with
          {id} (its IMDb id), {type} (movie or series) and {title} (its name). Titles an app publishes itself open
          with the app's own link. Without a line here, the button opens the app. -->
+    <!-- Cover art's logo, sharp at any size: a vector logo from Simple Icons (simpleicons.org, CC0), fetched once
+         and kept on the TV: "package | icon | brand colour (RRGGBB) [| wordmark]", the icon's name as on
+         simpleicons.org; wordmark: the icon is the app's name, so it isn't written beside it. Apps not listed (or
+         offline) get the logo cut out of their banner, never shown larger than it is. -->
+    <string-array name="top_shelf_logos" translatable="false">
+        <item>com.google.android.youtube.tv | youtube | FF0000</item>
+        <item>com.netflix.ninja | netflix | E50914</item>
+        <item>com.apple.atve.androidtv.appletv | appletv | FFFFFF | wordmark</item>
+        <item>com.stremio.one | stremio | 7B5BF5</item>
+        <item>com.google.android.youtube.tvmusic | youtubemusic | FF0000</item>
+        <item>com.plexapp.android | plex | EBAF00</item>
+        <item>com.wbd.stream | hbomax | FFFFFF | wordmark</item>
+    </string-array>
+
     <string-array name="top_shelf_links" translatable="false">
         <item>com.stremio.one | stremio:///detail/{type}/{id}</item>
         <item>com.netflix.ninja | https://www.netflix.com/search?q={title}</item>

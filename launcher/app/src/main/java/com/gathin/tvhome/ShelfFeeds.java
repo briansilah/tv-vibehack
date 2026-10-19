@@ -108,6 +108,49 @@ final class ShelfFeeds {
         return links;
     }
 
+    /** A crisp vector logo for an app's cover art: a Simple Icons slug, its brand colour, and whether it's a wordmark. */
+    static final class LogoSpec {
+        final String slug;
+        final int color;
+        /** The icon is the app's name itself (Apple TV's): no name beside it. */
+        final boolean wordmark;
+
+        LogoSpec(String slug, int color, boolean wordmark) {
+            this.slug = slug;
+            this.color = color;
+            this.wordmark = wordmark;
+        }
+    }
+
+    /** Logos by package from config lines "package | slug | RRGGBB [| wordmark]". */
+    static Map<String, LogoSpec> parseLogos(String[] lines) {
+        Map<String, LogoSpec> out = new LinkedHashMap<>();
+        if (lines == null) return out;
+        for (String line : lines) {
+            if (line == null) continue;
+            String[] f = line.split("\\|");
+            if (f.length < 3) continue;
+            String pkg = f[0].trim(), slug = f[1].trim(), hex = f[2].trim();
+            if (pkg.isEmpty() || !slug.matches("[a-z0-9]+") || !hex.matches("[0-9A-Fa-f]{6}")) continue;
+            boolean wordmark = f.length > 3 && f[3].trim().equalsIgnoreCase("wordmark");
+            out.put(pkg, new LogoSpec(slug, 0xFF000000 | Integer.parseInt(hex, 16), wordmark));
+        }
+        return out;
+    }
+
+    /**
+     * The path data of a single-path SVG icon in a 0 0 24 24 view box (Simple Icons'), or null if it isn't one:
+     * anything else isn't drawn.
+     */
+    static String iconPath(String svg) {
+        if (svg == null || svg.length() > 64_000 || !svg.contains("viewBox=\"0 0 24 24\"")) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("<path[^>]*\\sd=\"([^\"]+)\"").matcher(svg);
+        if (!m.find()) return null;
+        String d = m.group(1).trim();
+        if (m.find() || d.isEmpty() || !d.matches("[MmLlHhVvCcSsQqTtAaZz0-9eE.,\\s+-]+")) return null;
+        return d;
+    }
+
     /** A feed title's link from its app's template, or null if the template needs something the title lacks. */
     static String link(String template, Item it) {
         if (template == null) return null;
@@ -157,14 +200,21 @@ final class ShelfFeeds {
 
     /**
      * Where to fetch an image from, best first. YouTube's thumbnails come in several sizes and the apps publish a
-     * small one (sddefault, 640 x 480 with bars), so its largest, 1280 x 720, is tried first. With {@code hd} (a TV
+     * small one (sddefault, 640 x 480 with bars), too small to show (ShelfSource.MIN_BACKDROP_W): only its
+     * 1280 x 720 versions are fetched, and without them the title is skipped. With {@code hd} (a TV
      * that shows art at 1920 x 1080), metahub's 3840 x 2160 backdrop comes before the 1280 x 720 one the feeds name:
      * scaled down to the screen it's as sharp as the screen can show.
      */
     static List<String> candidates(String url, boolean hd) {
         List<String> out = new ArrayList<>();
         java.util.regex.Matcher m = YT_THUMB.matcher(url);
-        if (m.matches()) out.add(m.group(1) + "maxresdefault.jpg");
+        if (m.matches()) {
+            // Its 1280 x 720 versions only (hq720 exists for nearly every HD video, also without a maxres one): the
+            // one the app named is too small to show anyway.
+            out.add(m.group(1) + "maxresdefault.jpg");
+            out.add(m.group(1) + "hq720.jpg");
+            return out;
+        }
         if (hd && url.contains(METAHUB_MEDIUM)) out.add(url.replace(METAHUB_MEDIUM, "/background/large/"));
         out.add(url);
         return out;

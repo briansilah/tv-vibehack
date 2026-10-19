@@ -96,12 +96,12 @@ final class TopShelf implements ShelfSource.Listener {
 
     /** {@code enabled}: config.xml's top_shelf_art; {@code feeds}: its top_shelf_feeds. */
     TopShelf(android.content.Context ctx, TopShelfView art, ShelfInfoView info, TextView action, Host host,
-             boolean enabled, String[] feeds, String[] links) {
+             boolean enabled, String[] feeds, String[] links, String[] logos) {
         this.art = art;
         this.info = info;
         this.action = action;
         this.host = host;
-        this.source = enabled ? new ShelfSource(ctx, feeds, links, this) : null;
+        this.source = enabled ? new ShelfSource(ctx, feeds, links, logos, this) : null;
         action.setOnClickListener(v -> act());
         action.setOnKeyListener(this::onActionKey);
         // Grows from its left edge, which stays in line with the title above it.
@@ -404,6 +404,15 @@ final class TopShelf implements ShelfSource.Listener {
         }
     }
 
+    @Override
+    public void onCover(String key) {
+        // Its sharp logo arrived: if the app is showing its cover, the logo changes in place.
+        if (shown && current != null && current.key.equals(key) && tier == COVER) {
+            Choice c = choose(current);
+            if (c != null && c.tier == COVER) display(c, ARRIVE_MS, null, true);
+        }
+    }
+
     // ---- choosing ------------------------------------------------------------------------------------------
 
     private float coverBottom, contentBottom, contentLeft;
@@ -471,12 +480,25 @@ final class TopShelf implements ShelfSource.Listener {
     private void want(final ShelfSource.App app) {
         if (source == null || !started) return;
         source.makeCover(app, c -> arrived(app));
+        loadNext(app);
+    }
+
+    /**
+     * Loads the app's title to show: the one its list is at, or the next whose picture hasn't failed (one that's
+     * too small, or wouldn't download, is passed over), and the one after it for the carousel. When it arrives
+     * and focus is still there, it shows.
+     */
+    private void loadNext(final ShelfSource.App app) {
         List<ShelfFeeds.Item> items = source.items(app.pkg);
         if (items == null) return;
         int i = index(app.pkg, items.size());
-        loadItem(items.get(i), () -> arrived(app));
-        // And the next one along, for the carousel.
-        if (items.size() > 1) loadItem(items.get((i + 1) % items.size()), null);
+        for (int k = 0; k < items.size(); k++) {
+            ShelfFeeds.Item it = items.get((i + k) % items.size());
+            if (source.failedLately(it.backdrop)) continue;
+            loadItem(it, () -> arrived(app));
+            if (items.size() > 1) loadItem(items.get((i + k + 1) % items.size()), null);
+            return;
+        }
     }
 
     private void loadItem(ShelfFeeds.Item it, final Runnable done) {
@@ -492,6 +514,8 @@ final class TopShelf implements ShelfSource.Listener {
     private void arrived(ShelfSource.App app) {
         if (!shown || current == null || !current.key.equals(app.key)) return;
         Choice c = choose(app);
+        // A title's picture failed (too small, or no download): on to the next one.
+        if ((c == null || c.tier != CONTENT) && source.items(app.pkg) != null) loadNext(app);
         if (c == null || c.tier < tier || (c.tier == tier && app.key.equals(showingKey))) return;
         display(c, ARRIVE_MS, null, true);
     }

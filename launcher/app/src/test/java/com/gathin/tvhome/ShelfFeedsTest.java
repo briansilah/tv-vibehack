@@ -113,6 +113,27 @@ public class ShelfFeedsTest {
     }
 
     @Test
+    public void logosFromConfigAndSvg() {
+        Map<String, ShelfFeeds.LogoSpec> logos = ShelfFeeds.parseLogos(new String[]{
+                "com.netflix.ninja | netflix | E50914",
+                "com.apple.atve.androidtv.appletv | appletv | FFFFFF | wordmark",
+                "bad | Not-A-Slug | E50914",
+                "bad2 | slug | red",
+        });
+        assertEquals(2, logos.size());
+        assertEquals(0xFFE50914, logos.get("com.netflix.ninja").color);
+        assertFalse(logos.get("com.netflix.ninja").wordmark);
+        assertTrue(logos.get("com.apple.atve.androidtv.appletv").wordmark);
+        String svg = "<svg role=\"img\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\"><title>Netflix</title>"
+                + "<path d=\"m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398z\"/></svg>";
+        assertEquals("m5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398z", ShelfFeeds.iconPath(svg));
+        assertNull(ShelfFeeds.iconPath(svg.replace("0 0 24 24", "0 0 48 48")));
+        assertNull(ShelfFeeds.iconPath(svg.replace("</svg>", "<path d=\"M0 0h1v1z\"/></svg>")));
+        assertNull(ShelfFeeds.iconPath(svg.replace("H5.398z", "H5.398z<script>")));
+        assertNull(ShelfFeeds.iconPath(null));
+    }
+
+    @Test
     public void picksALandscapePicture() {
         // TvContract aspect ratios: 0 16:9, 1 3:2, 2 4:3, 3 1:1, 4 2:3, 5 movie poster.
         assertEquals("https://thumb", ShelfFeeds.backdrop("https://thumb", 0, "https://poster", 5));
@@ -126,7 +147,7 @@ public class ShelfFeedsTest {
     @Test
     public void triesYouTubesLargestThumbnailFirst() {
         assertEquals(Arrays.asList("https://i.ytimg.com/vi/MxKFv4QrcWQ/maxresdefault.jpg",
-                        "https://i.ytimg.com/vi/MxKFv4QrcWQ/sddefault.jpg"),
+                        "https://i.ytimg.com/vi/MxKFv4QrcWQ/hq720.jpg"),
                 ShelfFeeds.candidates("https://i.ytimg.com/vi/MxKFv4QrcWQ/sddefault.jpg", true));
         assertEquals(2, ShelfFeeds.candidates("https://i3.ytimg.com/vi/a-b_c/hqdefault.jpg", false).size());
         assertEquals(Collections.singletonList("https://images.metahub.space/background/medium/tt1/img"),

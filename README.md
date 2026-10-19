@@ -236,9 +236,16 @@ Apple TV's Top Shelf does:
      which need no account or key: Stremio's Cinemeta, and the open-source
      [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
      come from Stremio's image service (metahub).
-2. **Cover art**: the app's logo, cut out of its banner, on soft shapes in its colours, like an app's
-   static Top Shelf image on tvOS.
+2. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
+   on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
+   in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
+   or offline, the logo cut out of the app's banner, never shown larger than it is.
 3. Otherwise the app's name over the ambient glow, as before.
+
+**Only sharp pictures show.** A title's backdrop must be at least about 720p once any black bars are
+cut off (YouTube's thumbnails are fetched at 1280 x 720; the small ones the apps publish are never
+used), or the title is passed over for the next. A title logo too small to read well gives way to
+the title in text.
 
 **Up** from a dock app showing a title moves to a button under it: **Resume** or **Play** opens it in
 the app (with the link the app published), **Open in …** opens a catalogue title in its app (a

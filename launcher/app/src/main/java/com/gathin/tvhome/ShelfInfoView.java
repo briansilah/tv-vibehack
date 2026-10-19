@@ -20,6 +20,8 @@ import android.view.View;
 public class ShelfInfoView extends View {
 
     static final int CONTENT = 0;
+    /** Narrower title logos (in their own pixels) are too small to read well: the title shows as text. */
+    private static final int MIN_LOGO_W = 240;
     static final int COVER = 1;
 
     private final TextPaint captionPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -98,11 +100,14 @@ public class ShelfInfoView extends View {
     private void drawContent(Canvas canvas, int w) {
         float y = bottom;
         float maxW = Math.min(w * 0.36f, w - left - 48 * density);
-        if (logo != null) {
+        // A logo is never shown larger than it is (it would blur); one too small to read well gives way to the
+        // title, in sharp text.
+        boolean useLogo = logo != null && (logo.getWidth() >= MIN_LOGO_W || title == null || title.isEmpty());
+        if (useLogo) {
             // Title logos are mostly wide wordmarks: as wide as a third of the screen, at most about as tall as two
             // lines of the name, so square ones don't tower.
             float maxH = 92 * density;
-            float s = Math.min(maxW / logo.getWidth(), maxH / logo.getHeight());
+            float s = Math.min(1f, Math.min(maxW / logo.getWidth(), maxH / logo.getHeight()));
             float lw = logo.getWidth() * s, lh = logo.getHeight() * s;
             dst.set(left, y - lh, left + lw, y);
             canvas.drawBitmap(logo, null, dst, logoPaint);
@@ -127,7 +132,8 @@ public class ShelfInfoView extends View {
         if (logo == null) return;
         // Centred in the space above the dock, a little above its middle, as tvOS places YouTube's.
         float maxW = w * 0.3f, maxH = Math.max(1f, bottom * 0.3f);
-        float s = Math.min(Math.min(maxW / logo.getWidth(), maxH / logo.getHeight()), 2.2f * density / 2f);
+        // Never larger than the banner had it, so it stays sharp.
+        float s = Math.min(1f, Math.min(maxW / logo.getWidth(), maxH / logo.getHeight()));
         float lw = logo.getWidth() * s, lh = logo.getHeight() * s;
         float cy = bottom * 0.46f;
         dst.set((w - lw) / 2f, cy - lh / 2f, (w + lw) / 2f, cy + lh / 2f);

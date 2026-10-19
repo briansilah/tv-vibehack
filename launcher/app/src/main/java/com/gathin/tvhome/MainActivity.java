@@ -243,7 +243,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         shelfInfo = findViewById(R.id.shelfInfo);
         topShelf = new TopShelf(this, findViewById(R.id.shelfArt), shelfInfo, findViewById(R.id.shelfAction), this,
                 getResources().getBoolean(R.bool.top_shelf_art), getResources().getStringArray(R.array.top_shelf_feeds),
-                getResources().getStringArray(R.array.top_shelf_links));
+                getResources().getStringArray(R.array.top_shelf_links),
+                getResources().getStringArray(R.array.top_shelf_logos));
         corner = findViewById(R.id.corner);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
         topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
