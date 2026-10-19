@@ -74,6 +74,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
         /** The tile after the last app was selected: Arrange apps, or Done while arranging. */
         void onActionTile();
+
+        /** Opens the app; Home animates out of the way. Throws if it can't be opened. */
+        void onLaunchApp(Intent intent);
     }
 
     static final class Entry {
@@ -98,6 +101,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     /** Focused tile size relative to the others, as measured on an Apple TV 4K (about 152 vs 124 px). */
     static final float FOCUS_SCALE = 1.22f;
+    /**
+     * Select pressed on a focused tile: it sinks to this much of its focused size, as tvOS's does when you click
+     * (1.20x to 1.11x of the tiles around it in about 100 ms, while Home moves away).
+     */
+    static final float PRESS_SCALE = 0.92f;
     /** The app being moved is picked up: larger than a focused tile, on a deeper shadow. */
     static final float LIFT_SCALE = 1.27f;
     private static final float LIFT_DP = 28f;
@@ -129,6 +137,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private boolean arranging;
     /** The app picked up to move, lifted while the others dim; null when none is. */
     private String movingKey;
+    /** The tile whose app was just opened, held pressed until Home is back. */
+    private Holder pressed;
     /** The app list loading in the background since {@link #preload}, until the next reload takes it. */
     private Future<Loaded> preloaded;
 
@@ -375,7 +385,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             h.label.setText(e.label);
             h.label.setVisibility(View.VISIBLE);
         }
-        h.card.setOnClickListener(v -> launch(e));
+        h.card.setOnClickListener(v -> launch(h, e));
     }
 
     @Override
@@ -412,16 +422,32 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
     }
 
-    private void launch(Entry e) {
+    private void launch(Holder h, Entry e) {
         Intent i = new Intent(Intent.ACTION_MAIN)
                 .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
                 .setComponent(e.component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        // The tile stays pressed in while Home moves away, as on tvOS. Select's key down has mostly pressed it in
+        // already; finish now, so Home moves away as one still picture that the GPU draws only once.
+        releasePress(true);
+        h.press(true);
+        h.finishScale();
+        pressed = h;
         try {
-            ctx.startActivity(i);
+            listener.onLaunchApp(i);
         } catch (Exception ex) {
+            releasePress(true);
             Toast.makeText(ctx, ctx.getString(R.string.cant_open, e.label), Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /** Lets the tile of the app just opened back out: at once while Home is hidden, or animated as it returns. */
+    void releasePress(boolean animate) {
+        Holder h = pressed;
+        pressed = null;
+        if (h == null) return;
+        if (animate) h.press(false);
+        else h.settle(h.card.isFocused());
     }
 
     @Override
@@ -582,6 +608,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         private ObjectAnimator dim;
         /** The current Select press has already long-pressed, so its release must not open the app. */
         private boolean longPressed;
+        /** Select is down on it, or its app is opening. */
+        private boolean pressedIn;
 
         Holder(View v, TileListener listener) {
             super(v);
@@ -642,6 +670,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
          * the motion continuous when focus moves again mid-animation (holding the D-pad).
          */
         private void animateFocus(boolean focused) {
+            if (!focused) pressedIn = false;
             // Fitted to an Apple TV 4K screen recording (frame-by-frame tile widths).
             float stiffness = focused ? 1100f : 500f;
             float damping = focused ? 0.68f : 1f;
@@ -673,18 +702,40 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 if (event.getRepeatCount() == 0) {
                     longPressed = false;
+                    press(true);
                 } else if (event.isLongPress() && !longPressed) {
                     view.cancelLongPress();
                     view.performLongClick();
                 }
                 return false;
             }
-            if (event.getAction() == KeyEvent.ACTION_UP && longPressed) {
-                longPressed = false;
-                view.setPressed(false);
-                return true;
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                // Back out; opening its app (the click that follows) presses it in again before the next frame.
+                press(false);
+                if (longPressed) {
+                    longPressed = false;
+                    view.setPressed(false);
+                    return true;
+                }
             }
             return false;
+        }
+
+        /** Jumps to the end of a running grow, shrink or press. */
+        void finishScale() {
+            for (SpringAnimation a : new SpringAnimation[]{scaleX, scaleY}) {
+                if (a.isRunning()) a.skipToEnd();
+            }
+        }
+
+        /** Sinks in while Select is down (quickly, without bounce) and springs back out when it lets go. */
+        void press(boolean in) {
+            if (pressedIn == in) return;
+            pressedIn = in && card.isFocused() && !lifted;
+            for (SpringAnimation a : new SpringAnimation[]{scaleX, scaleY}) {
+                a.getSpring().setStiffness(in ? 1500f : 1100f).setDampingRatio(in ? 1f : 0.68f);
+                a.animateToFinalPosition(scaleFor(card.isFocused()));
+            }
         }
 
         /** Picks the tile up to move it, or puts it down; it settles to its focused or resting size. */
@@ -718,6 +769,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
         /** Jumps to the resting focused or unfocused state, without animation. */
         void settle(boolean focused) {
+            pressedIn = false;
             scaleX.cancel();
             scaleY.cancel();
             card.animate().cancel();
@@ -733,7 +785,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
 
         private float scaleFor(boolean focused) {
-            return lifted ? LIFT_SCALE : focused ? FOCUS_SCALE : 1f;
+            return lifted ? LIFT_SCALE : focused ? FOCUS_SCALE * (pressedIn ? PRESS_SCALE : 1f) : 1f;
         }
 
         private float zFor(boolean focused) {

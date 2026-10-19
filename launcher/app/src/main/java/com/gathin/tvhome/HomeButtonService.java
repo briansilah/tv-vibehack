@@ -180,13 +180,18 @@ public class HomeButtonService extends AccessibilityService {
         return activity;
     }
 
+    /**
+     * Brings this launcher to the front. On a Home press its window falls back into place over the app as it fades in,
+     * as tvOS's Home does (see {@link Transitions#homeOptions}); covering the stock home is instant.
+     */
     private void showLauncher(boolean instant) {
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                 .setClass(this, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                .putExtra(Transitions.EXTRA_SHOW, instant ? Transitions.SHOW_INSTANT : Transitions.SHOW_FADE);
         if (instant) home.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
         try {
-            startActivity(home);
+            startActivity(home, instant ? null : Transitions.homeOptions(this));
         } catch (RuntimeException e) {
             Log.w(TAG, "could not open the launcher", e);
         }

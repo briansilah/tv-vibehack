@@ -75,7 +75,13 @@ A home screen that is yours again:
 - **A top shelf** showing the focused app's name in large type, with an ambient glow in a colour
   taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
   sweeping along the dock doesn't flash every colour.
-- **The rest of your apps in a grid** that slides up when you press Down.
+- **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
+  the dock row moves to the top, the clock and buttons scroll away with the page, and the rows get
+  the whole screen. Back on the dock, they come back.
+- **Apple TV-style transitions**: opening an app presses its tile in while Home grows toward you and
+  fades, and the app comes from behind it; pressing Home or Back, Home falls back into place as it
+  fades in, with focus still on the app you opened. Measured from Apple TV recordings; see
+  [docs/transitions.md](docs/transitions.md).
 - **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
 - **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange apps tile at the
