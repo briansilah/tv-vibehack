@@ -6,34 +6,117 @@
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
-    <!-- Text in Outfit (a variable font) at one weight: use style="@style/Outfit.Medium" instead of fontFamily plus
-         fontVariationSettings on the view. A view with its own android:fontVariationSettings builds a new typeface
-         as it inflates, about 10 ms per view on a TCL Google TV (docs/performance.md). On Android 9+ values-v28 loads
-         each weight once, from res/font-v28, and every view shares it. Android 8 can't set a weight in font XML,
-         so there these styles set it per view as before. -->
-    <style name="Outfit.ExtraLight" parent="">
-        <item name="android:fontFamily">@font/outfit</item>
-        <item name="android:fontVariationSettings">"'wght' 200"</item>
+    <!-- Type. Every piece of text takes one of these styles (style="@style/Text.Body") and sets only its colour,
+         never its own font, size or spacing. The scale follows tvOS's text styles (Apple's Human Interface
+         Guidelines) at half their point size: tvOS sizes are pixels on a 1080p screen, and the TV draws 2 px per
+         sp. As on tvOS, text is Medium, which reads at a distance where light weights break up; only the small
+         capitalised labels are Semibold.
+
+         The typeface is Inter (SIL Open Font License, launcher/FONT-LICENSE-OFL.txt), the open typeface closest to
+         Apple's SF Pro. Its three fonts in res/font are named for their role: text_medium and text_semibold, in
+         the optical size for small text, and display_medium, finer and tighter, for titles and clocks (Title 3
+         and up). tools/fonts.py builds them, and can rebuild them in another typeface in one step. Each is a
+         small static font: it needs no variation instance, so every view with a style shares the one typeface
+         Android loads for it (a view with its own android:fontVariationSettings cost 10 ms to inflate,
+         docs/performance.md). -->
+    <style name="Text" parent="">
+        <item name="android:fontFamily">@font/text_medium</item>
+        <item name="android:textSize">14.5sp</item>
+        <item name="android:letterSpacing">0</item>
     </style>
 
-    <style name="Outfit.Light" parent="">
-        <item name="android:fontFamily">@font/outfit</item>
-        <item name="android:fontVariationSettings">"'wght' 300"</item>
+    <!-- The top shelf: the focused dock app's name, larger than any tvOS style. -->
+    <style name="Text.LargeTitle">
+        <item name="android:fontFamily">@font/display_medium</item>
+        <item name="android:textSize">44sp</item>
+        <item name="android:letterSpacing">-0.01</item>
     </style>
 
-    <style name="Outfit.Regular" parent="">
-        <item name="android:fontFamily">@font/outfit</item>
-        <item name="android:fontVariationSettings">"'wght' 400"</item>
+    <!-- tvOS Title 1, 76 pt: a screen's title (arranging apps). -->
+    <style name="Text.Title1">
+        <item name="android:fontFamily">@font/display_medium</item>
+        <item name="android:textSize">38sp</item>
     </style>
 
-    <style name="Outfit.Medium" parent="">
-        <item name="android:fontFamily">@font/outfit</item>
-        <item name="android:fontVariationSettings">"'wght' 500"</item>
+    <!-- tvOS Title 3, 48 pt. -->
+    <style name="Text.Title3">
+        <item name="android:fontFamily">@font/display_medium</item>
+        <item name="android:textSize">24sp</item>
     </style>
 
-    <style name="Outfit.Bold" parent="">
-        <item name="android:fontFamily">@font/outfit</item>
-        <item name="android:fontVariationSettings">"'wght' 700"</item>
+    <!-- tvOS Headline, 38 pt: menu rows. -->
+    <style name="Text.Headline">
+        <item name="android:textSize">19sp</item>
+    </style>
+
+    <!-- tvOS Callout, 31 pt: buttons and list rows. -->
+    <style name="Text.Callout">
+        <item name="android:textSize">15.5sp</item>
+    </style>
+
+    <!-- tvOS Body, 29 pt: tile names. -->
+    <style name="Text.Body" />
+
+    <!-- tvOS Caption 1, 25 pt. -->
+    <style name="Text.Caption1">
+        <item name="android:textSize">12.5sp</item>
+    </style>
+
+    <!-- tvOS Caption 2, 23 pt. -->
+    <style name="Text.Caption2">
+        <item name="android:textSize">11.5sp</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <!-- A small capitalised label over a title: "Home screen". -->
+    <style name="Text.Overline">
+        <item name="android:fontFamily">@font/text_semibold</item>
+        <item name="android:textSize">12.5sp</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <!-- A remote key's name on a key cap: OK. -->
+    <style name="Text.KeyCap">
+        <item name="android:fontFamily">@font/text_semibold</item>
+        <item name="android:textSize">11.5sp</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <!-- A large clock (the Clock screensaver's, below). Proportional figures, as tvOS's clocks: tabular ones leave
+         gaps around a 1. Inter raises the colon between digits to the middle of the figures, as SF Pro does in
+         times. -->
+    <style name="Text.Clock">
+        <item name="android:fontFamily">@font/display_medium</item>
+        <item name="android:textSize">48sp</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <!-- The time in the top right corner (ProfileCorner). On tvOS its digits are 18 px tall at 1080p, about Caption 1
+         (25 pt); here a fifth larger, like the rest of the corner (ProfileCorner.SIZE), which is Callout's size.
+         Tabular figures, so it keeps its width as it changes and the capsule around it stays put. -->
+    <style name="Text.Time" parent="Text.Callout">
+        <item name="android:fontFeatureSettings">"tnum"</item>
+    </style>
+
+    <!-- The Clock screensaver (ClockDream). -->
+    <style name="Text.Clock.Screensaver">
+        <item name="android:textSize">120sp</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="Text.Clock.Screensaver.Period">
+        <item name="android:fontFamily">@font/text_semibold</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="Text.Clock.Screensaver.Date">
+        <item name="android:fontFamily">@font/text_medium</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:textAllCaps">true</item>
     </style>
 
     <!-- Top bar (layout/top_bar.xml), in four looks picked by config.xml's top_bar_style. Each look is a

@@ -96,8 +96,9 @@ A home screen that is yours again:
   `config.xml` (`profile_name`) to show your initials instead of the silhouette, and pick the
   buttons' look (`top_bar_style`): Control Center's tabs (the default); grouped in one tray with the
   focused button's name underneath, as on Google TV; round icons that open into labelled pills; or
-  frosted pills that always show their names. Text is set in
-  [Outfit](https://fonts.google.com/specimen/Outfit).
+  frosted pills that always show their names.
+- **All text is set in [Inter](https://rsms.me/inter/)**, the open typeface closest to Apple TV's
+  SF Pro, on a type scale taken from tvOS's text styles (`values/styles.xml`).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
 
 And a TV that stops working against you: no sponsored rows, no "Discover" nags, no analytics
@@ -276,7 +277,7 @@ To go back to the stock home, run `tools/restore.sh` with
 <details>
 <summary><strong>Optional: the Clock screensaver</strong></summary>
 
-A large thin clock and the date over an ambient glow, in the launcher's style. Every minute the
+A large clock and the date over an ambient glow, in the launcher's style. Every minute the
 clock drifts to a new spot and the glow shifts colour. The system runs it only while the TV is
 idle. Turn it on over ADB, or pick "Clock" in the TV's screensaver settings:
 
@@ -367,5 +368,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the format and the testing we ask for
 
 ## Licence
 
-MIT, see [`LICENSE`](LICENSE). The Outfit typeface is under the SIL Open Font License, see
-`launcher/FONT-LICENSE-OFL.txt`.
+MIT, see [`LICENSE`](LICENSE). The Inter typeface (© The Inter Project Authors) is under the SIL Open
+Font License 1.1, see `launcher/FONT-LICENSE-OFL.txt`; the launcher ships a subset of it, built by
+`tools/fonts.py`.

@@ -21,9 +21,7 @@
         android:layout_marginStart="68dp"
         android:alpha="0"
         android:textColor="#FFFFFFFF"
-        android:textSize="48sp"
-        style="@style/Outfit.Light"
-        android:letterSpacing="-0.02"
+        style="@style/Text.LargeTitle"
         android:includeFontPadding="false"
         android:singleLine="true" />
 
@@ -81,8 +79,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#B8FFFFFF"
-                android:textSize="15.6sp"
-                style="@style/Outfit.Medium"
+                style="@style/Text.Time"
                 android:includeFontPadding="false"
                 android:singleLine="true" />
 
@@ -119,8 +116,7 @@
                     android:gravity="center"
                     android:visibility="gone"
                     android:textColor="#FFFFFFFF"
-                    android:textSize="13sp"
-                    style="@style/Outfit.Medium"
+                    style="@style/Text.Caption1"
                     android:includeFontPadding="false"
                     android:importantForAccessibility="no" />
             </FrameLayout>
@@ -139,7 +135,5 @@
         android:includeFontPadding="false"
         android:importantForAccessibility="no"
         android:textColor="#FFE4F3FF"
-        android:textSize="13sp"
-        style="@style/Outfit.Medium"
-        android:letterSpacing="0.01" />
+        style="@style/Text.Caption1" />
 </FrameLayout>

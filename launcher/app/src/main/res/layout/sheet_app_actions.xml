@@ -53,8 +53,7 @@
                 android:singleLine="true"
                 android:ellipsize="end"
                 android:textColor="#FFFFFFFF"
-                android:textSize="24sp"
-                style="@style/Outfit.Regular" />
+                style="@style/Text.Title3" />
         </LinearLayout>
 
         <LinearLayout

@@ -24,10 +24,7 @@
             android:layout_marginStart="4dp"
             android:text="@string/home_screen"
             android:textColor="#8CFFFFFF"
-            android:textSize="12sp"
-            style="@style/Outfit.Medium"
-            android:letterSpacing="0.22"
-            android:textAllCaps="true" />
+            style="@style/Text.Overline" />
 
         <TextView
             android:id="@+id/arrangeTitle"
@@ -38,9 +35,7 @@
             android:ellipsize="end"
             android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
-            android:textSize="40sp"
-            style="@style/Outfit.Light"
-            android:letterSpacing="-0.02" />
+            style="@style/Text.Title1" />
     </LinearLayout>
 
     <LinearLayout

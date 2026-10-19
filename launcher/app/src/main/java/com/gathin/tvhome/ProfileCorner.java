@@ -45,7 +45,7 @@ import java.util.Locale;
 public class ProfileCorner extends ViewGroup {
 
     /** Everything a fifth larger than on tvOS, which looked small on a TV across the room. layout/activity_main.xml
-     *  and the TopButton.Tvos style use the same factor. */
+     *  and the TopButton.Tvos and Text.Time styles use the same factor. */
     static final float SIZE = 1.2f;
 
     // ---- at rest: the capsule ------------------------------------------------------------------------------
