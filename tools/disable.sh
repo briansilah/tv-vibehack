@@ -13,6 +13,6 @@ PY=tools/venv/bin/python
 export MSYS_NO_PATHCONV=1
 [ -x "$PY" ] || { echo "run: python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt"; exit 1; }
 {
-  grep -vE '^\s*(#|$)' "$LIST" | sed -E 's/\s+#.*$//' | awk '{print "pm disable-user --user 0 " $1}'
+  { grep -vE '^\s*(#|$)' "$LIST" || [ $? = 1 ]; } | sed -E 's/\s+#.*$//' | awk '{print "pm disable-user --user 0 " $1}'
   echo "pm list packages -d"
 } | "$PY" -I tools/tv.py --batch

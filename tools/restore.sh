@@ -13,7 +13,7 @@ PY=tools/venv/bin/python
 [ -x "$PY" ] || PY=tools/venv/Scripts/python.exe
 export MSYS_NO_PATHCONV=1
 {
-  grep -vE '^\s*(#|$)' "$LIST" | sed -E 's/\s+#.*$//' | awk '{print "pm enable " $1}'
+  { grep -vE '^\s*(#|$)' "$LIST" || [ $? = 1 ]; } | sed -E 's/\s+#.*$//' | awk '{print "pm enable " $1}'
   echo "pm enable $STOCK"
   # Turn off the launcher's Home-button service (Google TV), keeping any other accessibility services.
   cat <<'SH'

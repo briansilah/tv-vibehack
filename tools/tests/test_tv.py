@@ -592,6 +592,27 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(len(cmds), 9)
         self.assertFalse(any("force-stop" in c for c in cmds))
 
+    def test_restore_sh_with_an_empty_list(self):
+        # Nothing to re-enable, but the stock launcher, the service and the animations are still restored.
+        lst = self.write_list("# nothing disabled on this TV\n\n")
+        code, out, err = self.run_tool(["bash", os.path.join(self.repo, "tools", "restore.sh"), lst])
+        self.assertEqual(code, 0, err)
+        cmds = self.shell_commands()
+        self.assertEqual(cmds[0], "pm enable com.google.android.tvlauncher")
+        self.assertEqual((len(cmds), cmds[-1]), (8, "pm list packages -d"))
+
+    def test_disable_sh_with_an_empty_list(self):
+        code, out, err = self.run_tool(["bash", os.path.join(self.repo, "tools", "disable.sh"),
+                                        self.write_list("# nothing yet\n")])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.shell_commands(), ["pm list packages -d"])
+
+    def test_missing_list_still_fails(self):
+        code, _, _ = self.run_tool(["bash", os.path.join(self.repo, "tools", "restore.sh"),
+                                    os.path.join(self.tmp, "missing.txt")])
+        self.assertNotEqual(code, 0)
+        self.assertFalse(os.path.exists(self.log) and self.shell_commands())
+
     def test_scripts_parse(self):
         for path in ("tools/disable.sh", "tools/restore.sh", "launcher/build-and-install.sh"):
             self.assertEqual(subprocess.run(["bash", "-n", os.path.join(REPO, path)]).returncode, 0, path)
