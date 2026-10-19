@@ -778,20 +778,20 @@ final class ShelfSource {
     static Bitmap finishBackdrop(Bitmap src, boolean content, float sourceScale) throws IOException {
         int w = src.getWidth(), h = src.getHeight();
         int[] bars = bars(src);
-        int ch = h - bars[0] - bars[1];
-        // With its bars cut off, the picture must still be big enough for the screen, in the source's own pixels
-        // ({@code sourceScale}: source pixels per decoded pixel).
-        if (content && ch * sourceScale < MIN_BACKDROP_H) {
+        int cw = w - bars[2] - bars[3], ch = h - bars[0] - bars[1];
+        // With its bars cut off (a widescreen film's top and bottom, an old 4:3 video's sides), the picture must still
+        // be big enough for the screen, in the source's own pixels ({@code sourceScale}: per decoded pixel).
+        if (content && (cw * sourceScale < MIN_BACKDROP_W || ch * sourceScale < MIN_BACKDROP_H)) {
             src.recycle();
             throw new IOException("too small once its bars are cut off");
         }
-        Bitmap out = Bitmap.createBitmap(w, ch, src.getConfig() == Bitmap.Config.RGB_565
+        Bitmap out = Bitmap.createBitmap(cw, ch, src.getConfig() == Bitmap.Config.RGB_565
                 ? Bitmap.Config.RGB_565 : Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
-        c.drawBitmap(src, new android.graphics.Rect(0, bars[0], w, h - bars[1]),
-                new android.graphics.Rect(0, 0, w, ch), new Paint(Paint.FILTER_BITMAP_FLAG));
+        c.drawBitmap(src, new android.graphics.Rect(bars[2], bars[0], w - bars[3], h - bars[1]),
+                new android.graphics.Rect(0, 0, cw, ch), new Paint(Paint.FILTER_BITMAP_FLAG));
         src.recycle();
-        scrim(c, w, ch, content ? 1f : 0.55f, content);
+        scrim(c, cw, ch, content ? 1f : 0.55f, content);
         return out;
     }
 
@@ -818,16 +818,28 @@ final class ShelfSource {
         return Math.round(a * strength) << 24;
     }
 
-    /** Black bars across the picture's top and bottom (pixel rows {top, bottom}), if it has them. */
+    /** Black bars around the picture ({top, bottom, left, right}, in pixels), if it has them. */
     static int[] bars(Bitmap b) {
         int w = b.getWidth(), h = b.getHeight();
-        int[] row = new int[w];
-        int top = 0, bottom = 0;
+        int[] row = new int[w], col = new int[h];
+        int top = 0, bottom = 0, left = 0, right = 0;
         while (top < h / 3 && blackRow(b, top, row)) top++;
         while (bottom < h / 3 && blackRow(b, h - 1 - bottom, row)) bottom++;
         // A sliver isn't a bar; and leave a picture that's mostly black (a night scene) alone.
-        if (top + bottom < h / 25 || top + bottom > h / 2) return new int[]{0, 0};
-        return new int[]{top, bottom};
+        if (top + bottom < h / 25 || top + bottom > h / 2) top = bottom = 0;
+        while (left < w / 3 && blackColumn(b, left, col)) left++;
+        while (right < w / 3 && blackColumn(b, w - 1 - right, col)) right++;
+        if (left + right < w / 25 || left + right > w / 2) left = right = 0;
+        return new int[]{top, bottom, left, right};
+    }
+
+    private static boolean blackColumn(Bitmap b, int x, int[] col) {
+        b.getPixels(col, 0, 1, x, 0, 1, col.length);
+        for (int y = 0; y < col.length; y += 4) {
+            int p = col[y];
+            if (((p >> 16) & 0xFF) > 24 || ((p >> 8) & 0xFF) > 24 || (p & 0xFF) > 24) return false;
+        }
+        return true;
     }
 
     private static boolean blackRow(Bitmap b, int y, int[] row) {
