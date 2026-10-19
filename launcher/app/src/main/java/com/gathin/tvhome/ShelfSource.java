@@ -135,7 +135,7 @@ final class ShelfSource {
     /** Titles from the feeds, and those the apps published on the TV, by package. */
     private final Map<String, List<ShelfFeeds.Item>> feedItems = new HashMap<>();
     private final Map<String, List<ShelfFeeds.Item>> ownItems = new HashMap<>();
-    private final String continueWatching;
+    private final String continueWatching, upNext, newEpisodes, watchlist;
     private long lastOwnRead;
     private final Map<String, Long> fetchedAt = new HashMap<>();
     private final Map<String, String> fetchedFor = new HashMap<>();
@@ -161,6 +161,9 @@ final class ShelfSource {
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? "" : locale.getDisplayCountry();
         this.dir = new File(this.ctx.getCacheDir(), "shelf");
         this.continueWatching = ctx.getString(R.string.continue_watching);
+        this.upNext = ctx.getString(R.string.up_next);
+        this.newEpisodes = ctx.getString(R.string.new_episodes);
+        this.watchlist = ctx.getString(R.string.watchlist);
         // Full-screen art at 1080p takes 8 MB a picture: on a TV with little memory, 720p and fewer of them.
         android.app.ActivityManager am = ctx.getSystemService(android.app.ActivityManager.class);
         android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
@@ -303,25 +306,34 @@ final class ShelfSource {
             final Map<String, List<ShelfFeeds.Item>> got = new HashMap<>();
             try {
                 Map<Long, String> channels = new HashMap<>();
-                Set<Long> continuing = new HashSet<>();
+                Set<Long> continuing = new HashSet<>(), saving = new HashSet<>();
                 try (Cursor c = cr.query(Uri.parse("content://android.media.tv/channel"),
                         new String[]{"_id", "display_name", "internal_provider_id"}, null, null, null)) {
                     while (c != null && c.moveToNext()) {
                         channels.put(c.getLong(0), c.getString(1));
-                        // A channel of what you were watching (Stremio's "Continue Watching").
                         String id = c.getString(2), name = c.getString(1);
-                        if ((id != null && id.toLowerCase(Locale.ROOT).contains("continue"))
-                                || (name != null && name.toLowerCase(Locale.ROOT).startsWith("continue"))) {
+                        String both = ((id == null ? "" : id) + " " + (name == null ? "" : name)).toLowerCase(Locale.ROOT);
+                        if (both.contains("continue")) {
+                            // A channel of what you were watching (Stremio's "Continue Watching").
                             continuing.add(c.getLong(0));
+                        } else if (both.contains("watchlist") || both.contains("watch list") || both.contains("library")
+                                || both.contains("my list") || both.contains("watch later")) {
+                            // One of what you saved: a watchlist, Stremio's "Library - Movies", Netflix's "My List".
+                            saving.add(c.getLong(0));
                         }
                     }
                 }
-                // Watch Next, most recently watched first.
+                // Watch Next, most recently watched first: carrying on (continue, the next episode) is something you
+                // were watching; new episodes and watchlist entries are things you saved.
                 List<Row> watchNext = readPrograms(cr, "watch_next_program");
                 watchNext.sort((a, b) -> Long.compare(b.engaged, a.engaged));
                 for (Row r : watchNext) {
-                    own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, continueWatching,
-                            null, r.link, true));
+                    boolean carryOn = r.watchNextType == WATCH_NEXT_CONTINUE || r.watchNextType == WATCH_NEXT_NEXT;
+                    String caption = r.watchNextType == WATCH_NEXT_NEXT ? upNext
+                            : r.watchNextType == WATCH_NEXT_NEW ? newEpisodes
+                            : r.watchNextType == WATCH_NEXT_WATCHLIST ? watchlist : continueWatching;
+                    own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, caption, null, r.link,
+                            carryOn, !carryOn));
                 }
                 // Then the preview channels, in the order the app made them, a title from each in turn.
                 Map<String, Map<Long, List<ShelfFeeds.Item>>> preview = new HashMap<>();
@@ -331,9 +343,9 @@ final class ShelfSource {
                 previews.sort((a, b) -> Long.compare(b.position > 0 ? 1 : 0, a.position > 0 ? 1 : 0));
                 for (Row r : previews) {
                     boolean resume = r.position > 0 || continuing.contains(r.channel);
-                    if (resume) {
-                        own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, continueWatching,
-                                null, r.link, true));
+                    if (resume || saving.contains(r.channel)) {
+                        own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo,
+                                resume ? continueWatching : channels.get(r.channel), null, r.link, resume, !resume));
                         continue;
                     }
                     Map<Long, List<ShelfFeeds.Item>> byChannel = preview.get(r.pkg);
@@ -381,7 +393,12 @@ final class ShelfSource {
         long channel;
         long engaged;
         long position;
+        int watchNextType;
     }
+
+    /** TvContract.WatchNextPrograms' watch_next_type values. */
+    private static final int WATCH_NEXT_CONTINUE = 0, WATCH_NEXT_NEXT = 1, WATCH_NEXT_NEW = 2,
+            WATCH_NEXT_WATCHLIST = 3;
 
     /** A programme table's rows with a picture fit for a backdrop. All of them: filtered here, not by a selection. */
     private static List<Row> readPrograms(ContentResolver cr, String table) {
@@ -396,7 +413,8 @@ final class ShelfSource {
                     logoCol = c.getColumnIndex("logo_uri"), channelCol = c.getColumnIndex("channel_id"),
                     engagedCol = c.getColumnIndex("last_engagement_time_utc_millis"),
                     linkCol = c.getColumnIndex("intent_uri"),
-                    positionCol = c.getColumnIndex("last_playback_position_millis");
+                    positionCol = c.getColumnIndex("last_playback_position_millis"),
+                    typeCol = c.getColumnIndex("watch_next_type");
             if (pkgCol < 0) return rows;
             while (c.moveToNext()) {
                 Row r = new Row();
@@ -406,6 +424,7 @@ final class ShelfSource {
                 r.title = str(c, titleCol);
                 r.link = str(c, linkCol);
                 r.position = positionCol >= 0 && !c.isNull(positionCol) ? c.getLong(positionCol) : 0L;
+                r.watchNextType = typeCol >= 0 && !c.isNull(typeCol) ? c.getInt(typeCol) : WATCH_NEXT_CONTINUE;
                 r.logo = str(c, logoCol);
                 if (r.logo != null && !r.logo.startsWith("https://")) r.logo = null;
                 r.channel = channelCol >= 0 && !c.isNull(channelCol) ? c.getLong(channelCol) : 0L;

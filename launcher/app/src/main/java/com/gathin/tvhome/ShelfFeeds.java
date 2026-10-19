@@ -59,19 +59,26 @@ final class ShelfFeeds {
         final String type;
         /** What the app published to open it (an intent: or app URI), or null. */
         final String link;
-        /** From Watch Next: something you were watching. */
+        /** Something you were watching: it comes first, with Resume. */
         final boolean resume;
+        /** Something you saved (a watchlist, a library): it comes next. */
+        final boolean saved;
 
         Item(String id, String title, String backdrop, String logo) {
-            this(id, title, backdrop, logo, null, null, null, false);
+            this(id, title, backdrop, logo, null, null, null, false, false);
         }
 
         Item(String id, String title, String backdrop, String logo, String caption) {
-            this(id, title, backdrop, logo, caption, null, null, false);
+            this(id, title, backdrop, logo, caption, null, null, false, false);
         }
 
         Item(String id, String title, String backdrop, String logo, String caption, String type, String link,
              boolean resume) {
+            this(id, title, backdrop, logo, caption, type, link, resume, false);
+        }
+
+        Item(String id, String title, String backdrop, String logo, String caption, String type, String link,
+             boolean resume, boolean saved) {
             this.id = id == null ? "" : id;
             this.title = title == null ? "" : title;
             this.backdrop = backdrop;
@@ -80,6 +87,7 @@ final class ShelfFeeds {
             this.type = type == null || type.isEmpty() ? null : type;
             this.link = link == null || link.isEmpty() ? null : link;
             this.resume = resume;
+            this.saved = saved && !resume;
         }
     }
 
@@ -168,19 +176,21 @@ final class ShelfFeeds {
             "(https://i\\d?\\.ytimg\\.com/vi/[\\w-]+/)(?:sd|hq|mq)?default\\.jpg(?:\\?.*)?");
 
     /**
-     * An app's suggestions in the order they're shown, at most {@code max}: what you were watching first (its own
-     * titles marked {@link Item#resume}), so it's a press away; then its other suggestions and its feed's
-     * trending and popular titles, one of each in turn.
+     * An app's suggestions in the order they're shown, at most {@code max}: what you were watching first
+     * ({@link Item#resume}), so it's a press away; then what you saved ({@link Item#saved}: a watchlist, a
+     * library); then its other suggestions and its feed's trending and popular titles, one of each in turn.
      */
     static List<Item> combine(List<Item> own, List<Item> feed, int max) {
-        List<Item> resume = new ArrayList<>(), others = new ArrayList<>();
+        List<Item> resume = new ArrayList<>(), saved = new ArrayList<>(), others = new ArrayList<>();
         if (own != null) {
-            for (Item it : own) (it.resume ? resume : others).add(it);
+            for (Item it : own) (it.resume ? resume : it.saved ? saved : others).add(it);
         }
         List<Item> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (Item it : resume) {
-            if (out.size() < max && seen.add(it.id.isEmpty() ? it.backdrop : it.id)) out.add(it);
+        for (List<Item> first : java.util.Arrays.asList(resume, saved)) {
+            for (Item it : first) {
+                if (out.size() < max && seen.add(it.id.isEmpty() ? it.backdrop : it.id)) out.add(it);
+            }
         }
         List<Item> rest = feed == null ? new ArrayList<>() : feed;
         for (int i = 0; out.size() < max && (i < others.size() || i < rest.size()); i++) {

@@ -69,20 +69,25 @@ public class ShelfFeedsTest {
     }
 
     @Test
-    public void inProgressFirstThenOwnAndFeedInTurn() {
+    public void watchingThenSavedThenOwnAndFeedInTurn() {
         ShelfFeeds.Item watching = new ShelfFeeds.Item(null, "Watching", "https://bg/w", null, "Continue watching",
                 null, "app://w", true);
+        ShelfFeeds.Item saved = new ShelfFeeds.Item("s1", "Saved", "https://bg/s", null, "Library", null, "app://s",
+                false, true);
         ShelfFeeds.Item rec1 = new ShelfFeeds.Item("r1", "Rec 1", "https://bg/r1", null, "For you");
         ShelfFeeds.Item rec2 = new ShelfFeeds.Item("r2", "Rec 2", "https://bg/r2", null, "For you");
-        List<ShelfFeeds.Item> own = Arrays.asList(rec1, watching, rec2);
+        List<ShelfFeeds.Item> own = Arrays.asList(rec1, saved, watching, rec2);
         List<ShelfFeeds.Item> feed = Arrays.asList(item("a", "https://bg/a"), item("b", "https://bg/b"),
                 item("c", "https://bg/c"));
         List<ShelfFeeds.Item> out = ShelfFeeds.combine(own, feed, 10);
-        assertEquals(Arrays.asList("", "r1", "a", "r2", "b", "c"), ids(out));
+        assertEquals(Arrays.asList("", "s1", "r1", "a", "r2", "b", "c"), ids(out));
         assertTrue(out.get(0).resume);
+        assertTrue(out.get(1).saved);
         assertEquals(3, ShelfFeeds.combine(own, feed, 3).size());
         assertEquals(3, ShelfFeeds.combine(null, feed, 10).size());
         assertTrue(ShelfFeeds.combine(null, null, 10).isEmpty());
+        // Something you're watching isn't also "saved".
+        assertFalse(new ShelfFeeds.Item(null, "x", "https://bg", null, null, null, null, true, true).saved);
     }
 
     @Test

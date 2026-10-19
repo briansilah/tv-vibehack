@@ -73,8 +73,8 @@ A home screen that is yours again:
 - **Pitch-black background** and a dock of your four favourite apps at the bottom, in a translucent
   full-width rounded panel, exactly where Apple TV puts it.
 - **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows what
-  it suggests: what you were watching first (with **Resume** a press of Up away), then the app's own
-  recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
+  it suggests: what you were watching first (with **Resume** a press of Up away), then your watchlist,
+  then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
   Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
   in every 10 seconds. An app without suggestions shows cover art: its logo on shapes in its own
   colours. Otherwise, its name over an ambient glow in its colour. See [The top shelf](#the-top-shelf).
@@ -223,8 +223,9 @@ Apple TV's Top Shelf does:
 
 1. **Suggested titles**, full screen with the title's logo (or name) and what it is ("Continue
    watching", "Recommended for you", "Top 10 on Netflix · Kenya"). The next one pushes in from the
-   right every 10 seconds. First what you were watching, then the app's other suggestions and its
-   feed's titles, one of each in turn:
+   right every 10 seconds. First what you were watching, then what you saved (a watchlist, a library),
+   then what's popular and trending: the app's other suggestions and its feed's titles, one of each
+   in turn:
    - **What the app publishes on the TV for the home screen**: Android TV's Watch Next and preview
      channels (on our TV: YouTube's recommendations, Netflix's and Stremio's continue watching,
      Stremio's library). Android only lets an app read other apps' rows with `READ_TV_LISTINGS`, which

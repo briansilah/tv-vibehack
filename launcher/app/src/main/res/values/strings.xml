@@ -39,6 +39,10 @@
     <string name="location_dock">In the Dock</string>
     <string name="location_row">Row %1$d</string>
     <!-- Top shelf: a title you were watching, which the app put in Android TV's Watch Next. -->
+    <!-- Top shelf: titles from Android TV's Watch Next: the next episode, new episodes, a saved title. -->
+    <string name="up_next">Up next</string>
+    <string name="new_episodes">New episodes</string>
+    <string name="watchlist">Your watchlist</string>
     <string name="continue_watching">Continue watching</string>
     <!-- Top shelf: the button under a suggested title (Up from the dock). -->
     <string name="shelf_play">Play</string>
