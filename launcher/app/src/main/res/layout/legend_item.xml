@@ -31,8 +31,7 @@
             android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
             android:textSize="11sp"
-            android:fontFamily="@font/outfit"
-            android:fontVariationSettings="'wght' 700"
+            style="@style/Outfit.Bold"
             android:letterSpacing="0.06"
             android:visibility="gone" />
     </FrameLayout>
@@ -44,6 +43,5 @@
         android:layout_marginStart="9dp"
         android:textColor="#E6FFFFFF"
         android:textSize="16sp"
-        android:fontFamily="@font/outfit"
-        android:fontVariationSettings="'wght' 500" />
+        style="@style/Outfit.Medium" />
 </LinearLayout>

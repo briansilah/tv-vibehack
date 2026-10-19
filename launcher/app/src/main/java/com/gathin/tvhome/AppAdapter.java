@@ -14,6 +14,7 @@ import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
@@ -255,7 +256,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             h.icon.setVisibility(View.VISIBLE);
             h.label.setVisibility(View.VISIBLE);
             h.label.setTextSize(14f);
-            h.label.setFontVariationSettings("'wght' 500");
+            // The shared Outfit Medium (see values/styles.xml); Android 8 can only set the weight per view.
+            if (Build.VERSION.SDK_INT >= 28) h.label.setTypeface(ctx.getResources().getFont(R.font.outfit_medium));
+            else h.label.setFontVariationSettings("'wght' 500");
             h.card.setOnClickListener(view -> listener.onActionTile());
         }
         return h;

@@ -54,8 +54,7 @@
                 android:ellipsize="end"
                 android:textColor="#FFFFFFFF"
                 android:textSize="24sp"
-                android:fontFamily="@font/outfit"
-                android:fontVariationSettings="'wght' 400" />
+                style="@style/Outfit.Regular" />
         </LinearLayout>
 
         <LinearLayout

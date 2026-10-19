@@ -11,7 +11,6 @@
     android:background="@drawable/sheet_action_bg"
     android:textColor="@drawable/pill_text"
     android:textSize="19sp"
-    android:fontFamily="@font/outfit"
-    android:fontVariationSettings="'wght' 500"
+    style="@style/Outfit.Medium"
     android:focusable="true"
     android:clickable="true" />

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 9+: each Outfit weight is a font family in res/font-v28, loaded once and shared by every view
+         (see values/styles.xml). -->
+    <style name="Outfit.ExtraLight" parent="">
+        <item name="android:fontFamily">@font/outfit_extralight</item>
+    </style>
+
+    <style name="Outfit.Light" parent="">
+        <item name="android:fontFamily">@font/outfit_light</item>
+    </style>
+
+    <style name="Outfit.Regular" parent="">
+        <item name="android:fontFamily">@font/outfit_regular</item>
+    </style>
+
+    <style name="Outfit.Medium" parent="">
+        <item name="android:fontFamily">@font/outfit_medium</item>
+    </style>
+
+    <style name="Outfit.Bold" parent="">
+        <item name="android:fontFamily">@font/outfit_bold</item>
+    </style>
+</resources>

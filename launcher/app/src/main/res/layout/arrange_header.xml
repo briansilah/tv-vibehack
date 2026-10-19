@@ -25,8 +25,7 @@
             android:text="@string/home_screen"
             android:textColor="#8CFFFFFF"
             android:textSize="12sp"
-            android:fontFamily="@font/outfit"
-            android:fontVariationSettings="'wght' 500"
+            style="@style/Outfit.Medium"
             android:letterSpacing="0.22"
             android:textAllCaps="true" />
 
@@ -40,8 +39,7 @@
             android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
             android:textSize="40sp"
-            android:fontFamily="@font/outfit"
-            android:fontVariationSettings="'wght' 300"
+            style="@style/Outfit.Light"
             android:letterSpacing="-0.02" />
     </LinearLayout>
 
