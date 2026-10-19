@@ -19,6 +19,13 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:alpha="0" />
+
+        <!-- Last, over the top shelf's pictures: a soft shade in the top right corner, behind the time and the
+             picture, so they stay legible over bright art. -->
+        <com.gathin.tvhome.CornerShade
+            android:id="@+id/cornerShade"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
     </FrameLayout>
 
     <!-- Top shelf: the focused dock app's name, positioned above the dock in code. Full width, so changing
@@ -83,10 +90,14 @@
 
             <!-- No format: TextClock then uses the locale's own, "8:52 PM" or "20:52" with the TV's 24-hour
                  setting. -->
+            <!-- A faint shadow under the digits keeps them apart from bright art; over dark art it doesn't show. -->
             <TextClock
                 android:id="@+id/time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:shadowColor="#59000000"
+                android:shadowRadius="6"
+                android:shadowDy="1"
                 android:textColor="#B8FFFFFF"
                 style="@style/Text.Time"
                 android:includeFontPadding="false"

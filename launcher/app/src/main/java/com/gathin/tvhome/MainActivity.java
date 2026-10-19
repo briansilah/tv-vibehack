@@ -128,6 +128,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View topBar;
     /** The top bar's container, over the grid: it scrolls away with the page (see {@link #followPage}). */
     private View topArea;
+    /** The shade behind the top right, in the top shelf: it fades with the top right. */
+    private View cornerShade;
     /** How far the page has scrolled from the dock's parked place, in pixels; 0 there. */
     private float pageTravel;
     /** Where the top shelf's name sits with the page at rest; it moves with the page. */
@@ -261,6 +263,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         corner.setBar(topBar);
         corner.setProfileName(getString(R.string.profile_name));
         topArea = findViewById(R.id.topArea);
+        cornerShade = findViewById(R.id.cornerShade);
         topCaption = findViewById(R.id.topCaption);
         btnWifi = topBar.findViewById(R.id.btnWifi);
         btnSettings = topBar.findViewById(R.id.btnSettings);
@@ -581,6 +584,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         pageTravel = dock == null ? grid.getHeight() : Math.max(0, grid.getPaddingTop() - lm.getDecoratedTop(dock));
         topArea.setTranslationY(-Math.min(pageTravel, topArea.getBottom()));
         topArea.setAlpha(1f - Math.min(1f, pageTravel / (TOP_BAR_FADE_DP * density)));
+        cornerShade.setAlpha(topArea.getAlpha());
         heroName.setY(heroBaseY - pageTravel);
     }
 

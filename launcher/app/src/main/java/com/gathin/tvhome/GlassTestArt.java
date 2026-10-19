@@ -27,7 +27,7 @@ final class GlassTestArt extends FrameLayout {
     private static final int[][] PALETTES = {
             {0xFFE50914, 0xFF2B0A3D, 0xFFFFB000},
             {0xFF00A8E1, 0xFF0B1F3A, 0xFF7CFFCB},
-            {0xFFFF2D55, 0xFF1A1A1A, 0xFFFFFFFF},
+            {0xFFF6F7F8, 0xFFC9D3DC, 0xFFFFFFFF},   // near white, as snowy or bright-room art
             {0xFF34C759, 0xFF0E2F1F, 0xFFFFE066},
             {0xFFAF52DE, 0xFF0A0A2A, 0xFF5AC8FA},
     };

@@ -126,9 +126,10 @@ final class LiquidGlass {
     static final Style DOCK = new Style(0x17, 0x30, 0x17, 0x17, 1.5f, 6f, 10f, 0f);
     /**
      * The top right capsule: smaller, so thinner (a narrower lens); its tint and rim are the ones it had before. The
-     * time is white on it, so bright art behind it is dimmed.
+     * time is white on it, so the glass dims bright art behind it, by up to 60 %, as Liquid Glass shifts its range to
+     * keep labels legible; within the capsule, so it reads as the glass (with {@link CornerShade} around it).
      */
-    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 4f, 5f, 0.35f);
+    static final Style CAPSULE = new Style(0x14, 0x33, 0x00, 0x0A, 0.75f, 4f, 5f, 0.6f);
 
     /** Which tier this TV gets. */
     static int tier(Context context) {
@@ -519,7 +520,7 @@ final class LiquidGlass {
                 + "  half4 c = blurred(at);\n"
                 + "  half l = dot(c.rgb, half3(0.213, 0.715, 0.072));\n"
                 + "  c.rgb = clamp(mix(half3(l), c.rgb, half(saturation)), 0.0, c.a);\n"
-                + "  c.rgb *= 1.0 - half(dim) * smoothstep(0.45, 0.9, l);\n"
+                + "  c.rgb *= 1.0 - half(dim) * smoothstep(0.35, 0.95, l);\n"
                 + "  return c;\n"
                 + "}\n";
 
