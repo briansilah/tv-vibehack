@@ -90,7 +90,7 @@ for A and B.
 | Scenario | How | Numbers |
 |---|---|---|
 | cold | Open another TV app, `am kill` the launcher, `am start -W` it | `TotalTime` (system: until the first frame); fully drawn (until focus is on a tile, via `reportFullyDrawn`); app-side `create`, `resume`, `reload` |
-| warm | Open another TV app, start the launcher again (or the HOME intent) | `TotalTime`; `focus_restored` = from `onResume` until the first frame with focus back on a tile, i.e. when Home is usable; `resume`; `reload` split into the package query and loading banners/icons/labels; frames drawn until Home settles (animations replayed on return) |
+| warm | Open another TV app, start the launcher again (or the HOME intent) | `TotalTime`; `focus_restored` = from `onResume` until the first frame with focus back on a tile, i.e. when Home is usable; `resume`; `reload` split into the package query and loading banners/icons/labels; frames drawn until Home settles (animations replayed on return; where the system fades Home in, as on Google TV, Home's 900 ms fall back into place draws about 55, see [transitions.md](transitions.md)) |
 | jank | `dumpsys gfxinfo reset`, 16 D-pad moves 0.35 s apart, `dumpsys gfxinfo` | janky frames %, frame-time percentiles, slow UI thread and high input latency counts |
 | dock | Focus on the first dock app, then Right/Left between the first two dock apps, one press every 1.2 s, 8 per round | `shelf`: from the focus change until the top shelf shows the new app, split into the name (`text`) and the glow colour (`glow`); janky frames and frame percentiles of those moves |
 | mem | `dumpsys meminfo` on Home after the other scenarios | PSS total, Java heap, native heap (bitmaps live here), graphics, view count |
@@ -115,6 +115,7 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 | `tvhome:reload.query`, `tvhome:loadApp <package>` | loading the app list: the package query and each app's banner, icon and label, on the `tvhome-preload` and `tvhome-apps` threads (at start, while `onCreate` inflates the screen) |
 | `tvhome:vividColor` | ambient colour sampling for a dock app, on its first focus |
 | `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
+| `tvhome:launch` | opening an app from a tile: starting it, then Home's push away; the `launch` log line splits it (`start_ms`, `check_ms`) |
 | `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
