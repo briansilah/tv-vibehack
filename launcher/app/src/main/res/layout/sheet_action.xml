@@ -10,7 +10,6 @@
     android:ellipsize="end"
     android:background="@drawable/sheet_action_bg"
     android:textColor="@drawable/pill_text"
-    android:textSize="19sp"
-    style="@style/Outfit.Medium"
+    style="@style/Text.Headline"
     android:focusable="true"
     android:clickable="true" />
