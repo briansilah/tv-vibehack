@@ -4,10 +4,8 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -15,8 +13,8 @@ import android.view.animation.PathInterpolator;
 
 /**
  * The top shelf's picture, full screen behind the dock as on tvOS: suggested content's backdrop or an app's cover
- * art, cross-faded when it changes, under a scrim that darkens the bottom (where the dock and the title sit) and,
- * for content, the left (where the title's logo is). Draws its two pictures itself, scaled to fill: changing
+ * art, cross-faded when it changes. The pictures come with their scrim drawn in (ShelfSource.finishBackdrop), so
+ * a frame costs one full-screen layer, as the glow did. Draws its two pictures itself, scaled to fill: changing
  * picture only redraws this view, it never lays out the screen. It sits in the backdrop the dock's glass shows.
  */
 public class TopShelfView extends View {
@@ -24,12 +22,7 @@ public class TopShelfView extends View {
     private final Layer[] layers = {new Layer(), new Layer()};
     /** The layer drawn on top, fading in; -1 before the first picture. */
     private int front = -1;
-    private final Paint scrimBottom = new Paint();
-    private final Paint scrimLeft = new Paint();
     private final Matrix matrix = new Matrix();
-    private float scrim;
-    private float scrimFrom;
-    private float scrimTo;
     private ValueAnimator fade;
     private Runnable fadeEnd;
     private final DecelerateInterpolator decelerate = new DecelerateInterpolator(1.5f);
@@ -62,11 +55,11 @@ public class TopShelfView extends View {
     }
 
     /**
-     * Cross-fades to {@code bitmap} (null: fades the picture out, so whatever is behind shows) over {@code ms},
-     * the scrim to {@code scrimAlpha} (0..1). {@code end} runs once it has finished, or straight away if it already
-     * shows that; a later call drops an earlier call's {@code end} without running it.
+     * Cross-fades to {@code bitmap} (null: fades the picture out, so whatever is behind shows) over {@code ms}.
+     * {@code end} runs once it has finished, or straight away if it already shows that; a later call drops an
+     * earlier call's {@code end} without running it.
      */
-    void show(Bitmap bitmap, Object tag, float scrimAlpha, long ms, Runnable end) {
+    void show(Bitmap bitmap, Object tag, long ms, Runnable end) {
         if (fade != null) {
             fadeEnd = null;
             fade.cancel();
@@ -74,7 +67,7 @@ public class TopShelfView extends View {
         settleOffsets();
         Layer top = front >= 0 ? layers[front] : null;
         if (bitmap != null && top != null && top.bitmap == bitmap) {
-            if (top.alpha >= 1f && scrim == scrimAlpha) {
+            if (top.alpha >= 1f) {
                 if (end != null) end.run();
                 return;
             }
@@ -95,8 +88,6 @@ public class TopShelfView extends View {
             next.alpha = 0f;
         }
         for (Layer l : layers) l.from = l.alpha;
-        scrimFrom = scrim;
-        scrimTo = scrimAlpha;
         fadeEnd = end;
         final boolean out = bitmap == null;
         fade = ValueAnimator.ofFloat(0f, 1f);
@@ -109,7 +100,6 @@ public class TopShelfView extends View {
                 float target = out ? 0f : i == front ? 1f : l.from;
                 l.alpha = l.from + (target - l.from) * t;
             }
-            scrim = scrimFrom + (scrimTo - scrimFrom) * t;
             if (t >= 1f) settle(out);
             invalidate();
         });
@@ -123,7 +113,7 @@ public class TopShelfView extends View {
      */
     void slide(Bitmap bitmap, Object tag, int dir, long ms, Runnable end) {
         if (front < 0 || layers[front].bitmap == null || bitmap == null) {
-            show(bitmap, tag, scrim, ms, end);
+            show(bitmap, tag, ms, end);
             return;
         }
         if (fade != null) {
@@ -199,26 +189,13 @@ public class TopShelfView extends View {
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int ow, int oh) {
-        super.onSizeChanged(w, h, ow, oh);
-        // Darker towards the bottom, where the dock and the title are; on tvOS the art fades into the dock too.
-        scrimBottom.setShader(new LinearGradient(0, h * 0.35f, 0, h,
-                new int[]{0x00000000, 0x8C000000, 0xD9000000}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        // Behind the title, on the left: enough that a title stays readable over a thumbnail's own lettering.
-        scrimLeft.setShader(new LinearGradient(0, 0, w * 0.7f, 0,
-                new int[]{0xC2000000, 0x80000000, 0x00000000}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-    }
-
-    @Override
     protected void onDraw(Canvas canvas) {
         int w = getWidth(), h = getHeight();
-        boolean any = false;
         for (int pass = 0; pass < 2; pass++) {
             // The one underneath first.
             int i = front < 0 ? pass : pass == 0 ? 1 - front : front;
             Layer l = layers[i];
             if (l.bitmap == null || l.alpha <= 0f) continue;
-            any = true;
             float s = Math.max(w / (float) l.bitmap.getWidth(), h / (float) l.bitmap.getHeight());
             if (l.offset <= -1f || l.offset >= 1f) continue;
             matrix.setScale(s, s);
@@ -227,17 +204,9 @@ public class TopShelfView extends View {
             l.paint.setAlpha(Math.round(255 * l.alpha));
             canvas.drawBitmap(l.bitmap, matrix, l.paint);
         }
-        if (!any || scrim <= 0f) return;
-        float a = scrim * Math.max(layers[0].alpha, layers[1].alpha);
-        scrimBottom.setAlpha(Math.round(255 * a));
-        canvas.drawRect(0, 0, w, h, scrimBottom);
-        if (front >= 0 && layers[front].tag instanceof Content) {
-            scrimLeft.setAlpha(Math.round(255 * a));
-            canvas.drawRect(0, 0, w, h, scrimLeft);
-        }
     }
 
-    /** Tag for a suggested title's backdrop, which also gets the left scrim for its title logo. */
+    /** Tag for a suggested title's backdrop. */
     static final class Content {
         final String url;
 

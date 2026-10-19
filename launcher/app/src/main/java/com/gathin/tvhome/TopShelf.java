@@ -62,8 +62,6 @@ final class TopShelf implements ShelfSource.Listener {
     private static final long CAROUSEL_SLIDE_MS = 1400L;
     private static final long INFO_OUT_MS = 70L;
     private static final long INFO_IN_MS = 150L;
-    private static final float SCRIM_CONTENT = 1f;
-    private static final float SCRIM_COVER = 0.55f;
     private static final DecelerateInterpolator DECELERATE = new DecelerateInterpolator(1.5f);
     /** Where each app's carousel is, so coming back to it shows the next title. Survives the activity. */
     private static final Map<String, Integer> carousel = new HashMap<>();
@@ -533,8 +531,7 @@ final class TopShelf implements ShelfSource.Listener {
         showingItem = c == null ? null : c.item;
         showingOwnTitle = c != null && c.ownTitle();
         if (c == null) host.onShelfCovered(false);
-        art.show(c == null ? null : c.backdrop, c == null ? null : c.tag,
-                c == null ? 0f : c.tier == CONTENT ? SCRIM_CONTENT : SCRIM_COVER, ms, () -> {
+        art.show(c == null ? null : c.backdrop, c == null ? null : c.tag, ms, () -> {
                     host.onShelfCovered(art.covered());
                     if (artDone != null) artDone.run();
                 });

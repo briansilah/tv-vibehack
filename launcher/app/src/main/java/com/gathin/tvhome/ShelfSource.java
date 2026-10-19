@@ -714,7 +714,7 @@ final class ShelfSource {
         if (backdrop) o.inPreferredConfig = Bitmap.Config.RGB_565;
         Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
         if (b == null) throw new IOException("undecodable");
-        return b;
+        return backdrop ? finishBackdrop(b, true) : b;
     }
 
     private static Bitmap decodeLocal(ContentResolver cr, Uri uri, final boolean backdrop) throws IOException {
@@ -724,7 +724,7 @@ final class ShelfSource {
             if (backdrop) o.inPreferredConfig = Bitmap.Config.RGB_565;
             Bitmap b = BitmapFactory.decodeStream(in, null, o);
             if (b == null) throw new IOException("undecodable");
-            return b;
+            return backdrop ? finishBackdrop(b, true) : b;
         }
     }
 
@@ -741,21 +741,61 @@ final class ShelfSource {
             if (s < 1f) decoder.setTargetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
             decoder.setAllocator(backdrop ? ImageDecoder.ALLOCATOR_SOFTWARE : ImageDecoder.ALLOCATOR_HARDWARE);
         });
-        return backdrop ? hardware(trimBars(b)) : b;
+        return backdrop ? hardware(finishBackdrop(b, true)) : b;
     }
 
-    /** The picture without black bars across its top and bottom, if it has them. */
-    static Bitmap trimBars(Bitmap b) {
+    /**
+     * A decoded backdrop as the screen shows it: without black bars, and with the shelf's scrim (darker at the
+     * bottom, under the dock and the title; for a title, darker on the left too) drawn into it here, once, rather
+     * than over it in every frame: on a TV's GPU each full-screen layer costs a few milliseconds a frame.
+     */
+    static Bitmap finishBackdrop(Bitmap src, boolean content) {
+        int w = src.getWidth(), h = src.getHeight();
+        int[] bars = bars(src);
+        int ch = h - bars[0] - bars[1];
+        Bitmap out = Bitmap.createBitmap(w, ch, src.getConfig() == Bitmap.Config.RGB_565
+                ? Bitmap.Config.RGB_565 : Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        c.drawBitmap(src, new android.graphics.Rect(0, bars[0], w, h - bars[1]),
+                new android.graphics.Rect(0, 0, w, ch), new Paint(Paint.FILTER_BITMAP_FLAG));
+        src.recycle();
+        scrim(c, w, ch, content ? 1f : 0.55f, content);
+        return out;
+    }
+
+    /**
+     * The shelf's scrim over a w x h picture, placed for the part a 16:9 screen shows of it (scaled to fill and
+     * centred): the bottom from a third of the way down, the left over 70 % of the width.
+     */
+    static void scrim(Canvas c, int w, int h, float strength, boolean left) {
+        float vw = Math.min(w, h * 16f / 9f), vh = Math.min(h, w * 9f / 16f);
+        float vx = (w - vw) / 2f, vy = (h - vh) / 2f;
+        Paint p = new Paint();
+        p.setShader(new android.graphics.LinearGradient(0, vy + vh * 0.35f, 0, vy + vh,
+                new int[]{0x00000000, alpha(0x8C, strength), alpha(0xD9, strength)}, new float[]{0f, 0.55f, 1f},
+                Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, w, h, p);
+        if (!left) return;
+        p.setShader(new android.graphics.LinearGradient(vx, 0, vx + vw * 0.7f, 0,
+                new int[]{alpha(0xC2, strength), alpha(0x80, strength), 0x00000000}, new float[]{0f, 0.45f, 1f},
+                Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, w, h, p);
+    }
+
+    private static int alpha(int a, float strength) {
+        return Math.round(a * strength) << 24;
+    }
+
+    /** Black bars across the picture's top and bottom (pixel rows {top, bottom}), if it has them. */
+    static int[] bars(Bitmap b) {
         int w = b.getWidth(), h = b.getHeight();
         int[] row = new int[w];
         int top = 0, bottom = 0;
         while (top < h / 3 && blackRow(b, top, row)) top++;
         while (bottom < h / 3 && blackRow(b, h - 1 - bottom, row)) bottom++;
         // A sliver isn't a bar; and leave a picture that's mostly black (a night scene) alone.
-        if (top + bottom < h / 25 || top + bottom > h / 2) return b;
-        Bitmap cut = Bitmap.createBitmap(b, 0, top, w, h - top - bottom);
-        if (cut != b) b.recycle();
-        return cut;
+        if (top + bottom < h / 25 || top + bottom > h / 2) return new int[]{0, 0};
+        return new int[]{top, bottom};
     }
 
     private static boolean blackRow(Bitmap b, int y, int[] row) {
@@ -869,6 +909,7 @@ final class ShelfSource {
                     new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
             c.drawCircle(cx, cy, r, p);
         }
+        scrim(c, COVER_W, COVER_H, 0.55f, false);
         return new Cover(hardware(back), logo == null ? null : hardware(logo));
     }
 
