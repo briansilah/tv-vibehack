@@ -43,8 +43,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * App tiles. The first {@link MainActivity#COLUMNS} positions are the dock. Until the user rearranges, the dock
@@ -121,6 +129,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private boolean arranging;
     /** The app picked up to move, lifted while the others dim; null when none is. */
     private String movingKey;
+    /** The app list loading in the background since {@link #preload}, until the next reload takes it. */
+    private Future<Loaded> preloaded;
 
     AppAdapter(Context ctx, TileListener listener, int dockSize) {
         this.ctx = ctx;
@@ -134,17 +144,68 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         setHasStableIds(true);
     }
 
+    /** Shows the installed TV apps; main thread. Takes the list {@link #preload} started, if any. */
     void reload() {
         long t0 = Perf.now();
         Perf.begin("tvhome:reload");
         try {
-            reloadTraced(t0);
+            Future<Loaded> early = preloaded;
+            preloaded = null;
+            Loaded apps = null;
+            long waitNanos = 0;
+            if (early != null) {
+                try {
+                    apps = early.get();
+                } catch (ExecutionException e) {
+                    // Load it again below, so a failure surfaces as it would have without the preload.
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                waitNanos = Perf.now() - t0;
+            }
+            if (apps == null) apps = load();
+            show(apps, t0, early != null ? waitNanos : -1);
         } finally {
             Perf.end();
         }
     }
 
-    private void reloadTraced(long t0) {
+    /**
+     * Starts loading the app list in the background for the next {@link #reload}: at a cold start it then loads
+     * while the screen inflates, instead of after it on the main thread.
+     */
+    void preload() {
+        FutureTask<Loaded> task = new FutureTask<>(this::load);
+        new Thread(task, "tvhome-preload").start();
+        preloaded = task;
+    }
+
+    /** A TV app changed: the next reload loads the list again rather than use one preloaded before the change. */
+    void dropPreload() {
+        if (preloaded != null) preloaded.cancel(false);
+        preloaded = null;
+    }
+
+    /** The TV apps with their banners, icons and labels, and how long the query and the loading took. */
+    private static final class Loaded {
+        final List<Entry> apps;
+        final long queryNanos;
+        final long loadNanos;
+
+        Loaded(List<Entry> apps, long queryNanos, long loadNanos) {
+            this.apps = apps;
+            this.queryNanos = queryNanos;
+            this.loadNanos = loadNanos;
+        }
+    }
+
+    /**
+     * Queries the TV apps and loads each one's banner, icon and label: the slow part of a reload, mostly reading other
+     * apps' resources from storage. The apps load in parallel on {@link #LOADERS}. Any thread; it doesn't touch the
+     * adapter's state.
+     */
+    private Loaded load() {
+        long t0 = Perf.now();
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         Perf.begin("tvhome:reload.query");
@@ -155,23 +216,43 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Perf.end();
         }
         long tQuery = Perf.now();
-        List<Entry> fresh = new ArrayList<>();
+        List<Callable<Entry>> tasks = new ArrayList<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(ctx.getPackageName()) || hidden.contains(pkg)) continue;
-            Perf.begin("tvhome:loadApp " + pkg);
-            try {
-                Drawable banner = ri.activityInfo.loadBanner(pm);
-                if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
-                Drawable icon = ri.loadIcon(pm);
-                String label = String.valueOf(ri.loadLabel(pm));
-                fresh.add(new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon));
-            } finally {
-                Perf.end();
-            }
+            tasks.add(() -> loadApp(pm, ri));
         }
-        long tLoad = Perf.now();
+        List<Entry> apps = new ArrayList<>(tasks.size());
+        try {
+            for (Future<Entry> f : LOADERS.invokeAll(tasks)) apps.add(f.get());
+        } catch (ExecutionException e) {
+            throw e.getCause() instanceof RuntimeException ? (RuntimeException) e.getCause()
+                    : new RuntimeException(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+        return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
+    }
+
+    private static Entry loadApp(PackageManager pm, ResolveInfo ri) {
+        String pkg = ri.activityInfo.packageName;
+        Perf.begin("tvhome:loadApp " + pkg);
+        try {
+            Drawable banner = ri.activityInfo.loadBanner(pm);
+            if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+            Drawable icon = ri.loadIcon(pm);
+            String label = String.valueOf(ri.loadLabel(pm));
+            return new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon);
+        } finally {
+            Perf.end();
+        }
+    }
+
+    /** Shows a loaded list in the user's order; main thread. waitNanos: time spent waiting for a preload, or -1. */
+    private void show(Loaded loaded, long t0, long waitNanos) {
+        List<Entry> fresh = new ArrayList<>(loaded.apps);
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());
@@ -184,8 +265,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         notifyDataSetChanged();
         sampleDockColours();
         if (Perf.enabled()) {
-            Perf.log("reload", t0, String.format(Locale.US, "apps=%d query_ms=%.1f load_ms=%.1f",
-                    fresh.size(), Perf.ms(t0, tQuery), Perf.ms(tQuery, tLoad)));
+            Perf.log("reload", t0, String.format(Locale.US, "apps=%d query_ms=%.1f load_ms=%.1f%s",
+                    fresh.size(), loaded.queryNanos / 1e6, loaded.loadNanos / 1e6,
+                    waitNanos >= 0 ? String.format(Locale.US, " wait_ms=%.1f", waitNanos / 1e6) : ""));
         }
     }
 
@@ -436,6 +518,23 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    /**
+     * Loads apps for {@link #load} in parallel: each one mostly waits on storage, and TVs have several cores.
+     * The threads end when idle.
+     */
+    private static final ExecutorService LOADERS;
+
+    static {
+        int threads = Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() - 1));
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(threads, threads, 2, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(), r -> {
+                    Thread t = new Thread(r, "tvhome-apps");
+                    t.setDaemon(true);
+                    return t;
+                });
+        pool.allowCoreThreadTimeOut(true);
+        LOADERS = pool;
+    }
     private static final Executor BACKGROUND = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(() -> {
             Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
