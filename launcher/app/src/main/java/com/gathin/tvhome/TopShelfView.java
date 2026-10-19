@@ -34,7 +34,7 @@ public class TopShelfView extends View {
     private Runnable fadeEnd;
     private final DecelerateInterpolator decelerate = new DecelerateInterpolator(1.5f);
     /** The carousel's push: eases in and out, like tvOS's paging. */
-    private final PathInterpolator push = new PathInterpolator(0.45f, 0f, 0.15f, 1f);
+    private final PathInterpolator push = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
 
     private static final class Layer {
         Bitmap bitmap;
@@ -117,10 +117,11 @@ public class TopShelfView extends View {
     }
 
     /**
-     * The carousel's next title: it pushes in from the right while the one showing goes out to the left, as tvOS
-     * pages through its Top Shelf. Falls back to a cross-fade if nothing is showing.
+     * The carousel's next title: it pushes in from the right ({@code dir} 1; the previous one, -1, from the left)
+     * while the one showing goes out the other side, as tvOS pages through its Top Shelf. Falls back to a
+     * cross-fade if nothing is showing.
      */
-    void slide(Bitmap bitmap, Object tag, long ms, Runnable end) {
+    void slide(Bitmap bitmap, Object tag, int dir, long ms, Runnable end) {
         if (front < 0 || layers[front].bitmap == null || bitmap == null) {
             show(bitmap, tag, scrim, ms, end);
             return;
@@ -137,7 +138,8 @@ public class TopShelfView extends View {
         next.bitmap = bitmap;
         next.tag = tag;
         next.alpha = 1f;
-        next.offset = 1f;
+        final float from = dir < 0 ? -1f : 1f;
+        next.offset = from;
         final Layer gone = old;
         fadeEnd = end;
         fade = ValueAnimator.ofFloat(0f, 1f);
@@ -145,8 +147,8 @@ public class TopShelfView extends View {
         fade.setInterpolator(push);
         fade.addUpdateListener(a -> {
             float t = (float) a.getAnimatedValue();
-            next.offset = 1f - t;
-            gone.offset = -t;
+            next.offset = from * (1f - t);
+            gone.offset = -from * t;
             if (a.getAnimatedFraction() >= 1f) {
                 next.offset = 0f;
                 gone.offset = 0f;

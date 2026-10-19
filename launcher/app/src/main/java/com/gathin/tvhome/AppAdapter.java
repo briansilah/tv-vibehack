@@ -492,7 +492,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         if (position < 0 || position >= items.size()) return null;
         Entry e = items.get(position);
         if (e.shelfApp == null) {
-            e.shelfApp = new ShelfSource.App(e.key, e.pkg, e.appInfo, e.bannerRes,
+            e.shelfApp = new ShelfSource.App(e.key, e.pkg, e.label, e.appInfo, e.bannerRes,
                     copy(e.banner != null ? e.banner : e.icon));
         }
         return e.shelfApp;

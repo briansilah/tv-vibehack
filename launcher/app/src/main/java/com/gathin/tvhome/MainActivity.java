@@ -241,8 +241,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         shelfInfo = findViewById(R.id.shelfInfo);
-        topShelf = new TopShelf(this, findViewById(R.id.shelfArt), shelfInfo, this,
-                getResources().getBoolean(R.bool.top_shelf_art), getResources().getStringArray(R.array.top_shelf_feeds));
+        topShelf = new TopShelf(this, findViewById(R.id.shelfArt), shelfInfo, findViewById(R.id.shelfAction), this,
+                getResources().getBoolean(R.bool.top_shelf_art), getResources().getStringArray(R.array.top_shelf_feeds),
+                getResources().getStringArray(R.array.top_shelf_links));
         corner = findViewById(R.id.corner);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
         topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
@@ -510,6 +511,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     @Override
     public void onTileFocused(int position, View card) {
         Perf.begin("tvhome:onTileFocused");
+        topShelf.leaveActions();
         rearranger.onTileFocused(position);
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
@@ -578,7 +580,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         topArea.setTranslationY(-Math.min(pageTravel, topArea.getBottom()));
         topArea.setAlpha(1f - Math.min(1f, pageTravel / (TOP_BAR_FADE_DP * density)));
         heroName.setY(heroBaseY - pageTravel);
-        shelfInfo.setTranslationY(-pageTravel);
+        topShelf.followPage(pageTravel);
     }
 
     /** Puts the top shelf's name at {@code y} (for the page at rest), wherever the page is now. */
@@ -674,6 +676,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 .setInterpolator(DECELERATE).start();
     }
 
+    /** The shelf's button: opens the title in its app, Home moving away as it does for a tile. */
+    @Override
+    public void onShelfAction(Intent intent) {
+        try {
+            onLaunchApp(intent);
+        } catch (RuntimeException e) {
+            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onShelfExit(boolean up) {
+        if (up) btnSettings.requestFocus();
+        else focusTile(lastFocused % COLUMNS);
+    }
+
     /** Art fills the screen: the glow under it needn't be drawn. */
     @Override
     public void onShelfCovered(boolean covered) {
@@ -707,8 +725,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     public boolean onTileDpadKey(int position, int keyCode) {
         int target = AppOrder.step(position, adapter.getItemCount(), COLUMNS, keyCode);
         if (target < 0) {
-            // Up from the dock opens the top right corner on Settings, next to the profile picture, as tvOS opens
-            // Control Center on its settings tab.
+            // Up from the dock: into the top shelf, as on tvOS, when it shows a title with something to open
+            // (Play, Resume); otherwise, and Up again from there, the top right corner opens on Settings, next to the
+            // profile picture, as tvOS opens Control Center on its settings tab.
+            if (!rearranger.isActive() && topShelf.enterActions()) return true;
             btnSettings.requestFocus();
             return true;
         }

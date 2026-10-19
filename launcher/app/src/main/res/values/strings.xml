@@ -40,4 +40,10 @@
     <string name="location_row">Row %1$d</string>
     <!-- Top shelf: a title you were watching, which the app put in Android TV's Watch Next. -->
     <string name="continue_watching">Continue watching</string>
+    <!-- Top shelf: the button under a suggested title (Up from the dock). -->
+    <string name="shelf_play">Play</string>
+    <string name="shelf_resume">Resume</string>
+    <string name="shelf_open">Open</string>
+    <!-- %1$s: the app, e.g. Netflix. -->
+    <string name="shelf_open_in">Open in %1$s</string>
 </resources>

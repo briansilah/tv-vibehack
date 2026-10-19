@@ -1,7 +1,13 @@
 package com.gathin.tvhome;
 
 import android.content.ComponentCallbacks2;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.net.Uri;
+import android.view.KeyEvent;
+import android.view.View;
+import android.widget.TextView;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.animation.DecelerateInterpolator;
@@ -32,6 +38,12 @@ final class TopShelf implements ShelfSource.Listener {
 
         /** Whether the art fills the screen, so the glow under it needn't be drawn. */
         void onShelfCovered(boolean covered);
+
+        /** The shelf's button was pressed: open this in its app (Home moves away as for a tile). */
+        void onShelfAction(Intent intent);
+
+        /** Focus leaves the shelf's button: Up to the top right corner, else back to the dock. */
+        void onShelfExit(boolean up);
     }
 
     private static final int NONE = 0, COVER = 1, CONTENT = 2;
@@ -42,9 +54,12 @@ final class TopShelf implements ShelfSource.Listener {
     private static final long HIDE_MS = 200L;
     /** Art that arrives after focus did. */
     private static final long ARRIVE_MS = 300L;
-    /** The carousel: each title shows this long, then the next one pushes it out (see TopShelfView.slide). */
-    private static final long CAROUSEL_MS = 8000L;
-    private static final long CAROUSEL_SLIDE_MS = 900L;
+    /**
+     * The carousel: each title stays at least this long, so it can be taken in, before the next one pushes it out
+     * (see TopShelfView.slide).
+     */
+    private static final long CAROUSEL_MS = 10_000L;
+    private static final long CAROUSEL_SLIDE_MS = 1400L;
     private static final long INFO_OUT_MS = 70L;
     private static final long INFO_IN_MS = 150L;
     private static final float SCRIM_CONTENT = 1f;
@@ -55,6 +70,14 @@ final class TopShelf implements ShelfSource.Listener {
 
     private final TopShelfView art;
     private final ShelfInfoView info;
+    /** The button under a suggested title, with focus after Up from the dock. */
+    private final TextView action;
+    /** Focus is on the button. */
+    private boolean acting;
+    /** How far the title is lifted to make room for the button, in pixels, and how far the page has moved. */
+    private float lift;
+    private float pageTravel;
+    private android.animation.ValueAnimator liftAnim;
     private final Host host;
     /** Null when the top shelf art is turned off (config.xml, top_shelf_art). */
     private final ShelfSource source;
@@ -74,12 +97,22 @@ final class TopShelf implements ShelfSource.Listener {
     private final Runnable preloadDock = this::preloadDock;
 
     /** {@code enabled}: config.xml's top_shelf_art; {@code feeds}: its top_shelf_feeds. */
-    TopShelf(android.content.Context ctx, TopShelfView art, ShelfInfoView info, Host host, boolean enabled,
-             String[] feeds) {
+    TopShelf(android.content.Context ctx, TopShelfView art, ShelfInfoView info, TextView action, Host host,
+             boolean enabled, String[] feeds, String[] links) {
         this.art = art;
         this.info = info;
+        this.action = action;
         this.host = host;
-        this.source = enabled ? new ShelfSource(ctx, feeds, this) : null;
+        this.source = enabled ? new ShelfSource(ctx, feeds, links, this) : null;
+        action.setOnClickListener(v -> act());
+        action.setOnKeyListener(this::onActionKey);
+        // Grows from its left edge, which stays in line with the title above it.
+        action.setPivotX(0f);
+        action.setOnFocusChangeListener((v, focused) -> {
+            v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
+                    .translationZ(focused ? 10 * density() : 0f).setDuration(focused ? 150 : 120)
+                    .setInterpolator(DECELERATE).start();
+        });
         art.setAlpha(0f);
         info.setAlpha(0f);
     }
@@ -170,8 +203,169 @@ final class TopShelf implements ShelfSource.Listener {
         return c != null && c.ownTitle();
     }
 
+    /** The page moved {@code travel} pixels from the dock: the title moves with it. */
+    void followPage(float travel) {
+        pageTravel = travel;
+        info.setTranslationY(-pageTravel - lift);
+    }
+
+    /** Whether focus is on the shelf's button. */
+    boolean acting() {
+        return acting;
+    }
+
+    /**
+     * Up from the dock: focus goes to the button under the title showing, if it has something to open (Play,
+     * Resume, Open in the app), and the carousel holds still. Returns false if there's nothing to act on.
+     */
+    boolean enterActions() {
+        if (!shown || tier != CONTENT || showingItem == null || current == null) return false;
+        acting = true;
+        handler.removeCallbacks(advance);
+        labelAction();
+        float d = density();
+        float rowH = 40 * d;
+        action.setX(contentLeft);
+        action.setY(contentBottom - rowH);
+        action.setVisibility(View.VISIBLE);
+        action.setFocusable(true);
+        action.animate().cancel();
+        action.setScaleX(1f);
+        action.setScaleY(1f);
+        action.animate().alpha(1f).setDuration(SHOW_MS).setInterpolator(DECELERATE).start();
+        liftTo(rowH + 18 * d);
+        action.requestFocus();
+        return true;
+    }
+
+    /** Focus left the button (for the dock, the top right corner, or an app): it goes, the title settles back. */
+    void leaveActions() {
+        if (!acting) return;
+        acting = false;
+        action.setFocusable(false);
+        action.animate().cancel();
+        action.animate().alpha(0f).setDuration(HIDE_MS).setInterpolator(DECELERATE)
+                .withEndAction(() -> {
+                    if (!acting) action.setVisibility(View.INVISIBLE);
+                }).start();
+        liftTo(0f);
+        if (shown && tier == CONTENT) scheduleCarousel();
+    }
+
+    private void liftTo(float to) {
+        if (liftAnim != null) liftAnim.cancel();
+        liftAnim = android.animation.ValueAnimator.ofFloat(lift, to);
+        liftAnim.setDuration(SHOW_MS);
+        liftAnim.setInterpolator(DECELERATE);
+        liftAnim.addUpdateListener(a -> {
+            lift = (float) a.getAnimatedValue();
+            info.setTranslationY(-pageTravel - lift);
+        });
+        liftAnim.start();
+    }
+
+    private float density() {
+        return action.getResources().getDisplayMetrics().density;
+    }
+
+    /** The button says what it does with the title showing. */
+    private void labelAction() {
+        ShelfFeeds.Item it = showingItem;
+        if (it == null || current == null) return;
+        String link = source.link(current.pkg, it);
+        int res = it.resume ? R.string.shelf_resume
+                : it.link != null ? (it.link.contains("autoPlay=false") ? R.string.shelf_open : R.string.shelf_play)
+                : 0;
+        action.setText(res != 0 ? action.getResources().getString(res)
+                : action.getResources().getString(R.string.shelf_open_in, current.label));
+        action.setContentDescription(it.title.isEmpty() ? action.getText()
+                : action.getText() + ", " + it.title);
+        action.setTag(link);
+    }
+
+    private boolean onActionKey(View v, int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return keyCode == KeyEvent.KEYCODE_BACK;
+        }
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_BACK:
+                host.onShelfExit(false);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                leaveActions();
+                host.onShelfExit(true);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                step(-1);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                step(1);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** Left and Right on the button page through the app's titles, as swiping does on tvOS's Top Shelf. */
+    private void step(int dir) {
+        if (current == null || tier != CONTENT) return;
+        List<ShelfFeeds.Item> items = source.items(current.pkg);
+        if (items == null || items.size() < 2) return;
+        int at = Math.max(0, items.indexOf(showingItem));
+        for (int k = 1; k < items.size(); k++) {
+            int i = Math.floorMod(at + dir * k, items.size());
+            Choice c = content(current, items.get(i));
+            if (c == null) {
+                loadItem(items.get(i), null);
+                continue;
+            }
+            carousel.put(current.pkg, i);
+            slideTo(c, dir);
+            labelAction();
+            return;
+        }
+    }
+
+    /** OK on the button: opens the title in its app, or the app if it can't be opened at the title. */
+    private void act() {
+        if (current == null) return;
+        Object tag = action.getTag();
+        Intent i = intentFor(tag instanceof String ? (String) tag : null, current.pkg);
+        PackageManager pm = action.getContext().getPackageManager();
+        if (i == null || i.resolveActivity(pm) == null) i = pm.getLeanbackLaunchIntentForPackage(current.pkg);
+        if (i == null) return;
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        host.onShelfAction(i);
+    }
+
+    /**
+     * An intent for an app's link that can only open that app: an "intent:" link (YouTube's) or a URI it handles
+     * (Stremio's, Netflix's), held to the app's package, without any permission grants it might carry.
+     */
+    static Intent intentFor(String link, String pkg) {
+        if (link == null) return null;
+        Intent i;
+        try {
+            if (link.startsWith("intent:")) {
+                i = Intent.parseUri(link, Intent.URI_INTENT_SCHEME);
+                i.setSelector(null);
+                if (i.getComponent() != null && !pkg.equals(i.getComponent().getPackageName())) i.setComponent(null);
+            } else {
+                i = new Intent(Intent.ACTION_VIEW, Uri.parse(link));
+            }
+        } catch (java.net.URISyntaxException | RuntimeException e) {
+            return null;
+        }
+        i.setPackage(pkg);
+        i.setFlags(i.getFlags() & ~(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION));
+        return i;
+    }
+
     /** Focus left the dock: the art fades out, kept for coming back. */
     void hide() {
+        leaveActions();
         if (!shown) return;
         shown = false;
         current = null;
@@ -356,14 +550,18 @@ final class TopShelf implements ShelfSource.Listener {
 
     /** The carousel's next title: the picture pushes in from the right, its title a little behind it. */
     private void slideTo(final Choice c) {
+        slideTo(c, 1);
+    }
+
+    private void slideTo(final Choice c, int dir) {
         String key = current.key;
         boolean hadOwnTitle = showingOwnTitle;
         tier = c.tier;
         showingKey = key;
         showingItem = c.item;
         showingOwnTitle = c.ownTitle();
-        art.slide(c.backdrop, c.tag, CAROUSEL_SLIDE_MS, () -> host.onShelfCovered(art.covered()));
-        final float d = 72 * info.getResources().getDisplayMetrics().density;
+        art.slide(c.backdrop, c.tag, dir, CAROUSEL_SLIDE_MS, () -> host.onShelfCovered(art.covered()));
+        final float d = dir * 72 * info.getResources().getDisplayMetrics().density;
         info.animate().cancel();
         info.animate().alpha(0f).translationX(-d).setDuration(CAROUSEL_SLIDE_MS * 2 / 5)
                 .setInterpolator(DECELERATE).withEndAction(() -> {
@@ -375,7 +573,7 @@ final class TopShelf implements ShelfSource.Listener {
                             .setInterpolator(DECELERATE).start();
                 }).start();
         if (showingOwnTitle != hadOwnTitle) host.onShelfArt(key, showingOwnTitle);
-        scheduleCarousel();
+        if (!acting) scheduleCarousel();
         List<ShelfFeeds.Item> items = source.items(current.pkg);
         if (items != null && items.size() > 1) {
             loadItem(items.get((Math.max(0, items.indexOf(c.item)) + 1) % items.size()), null);
@@ -384,7 +582,7 @@ final class TopShelf implements ShelfSource.Listener {
 
     private void scheduleCarousel() {
         handler.removeCallbacks(advance);
-        if (resumed && shown) handler.postDelayed(advance, CAROUSEL_MS);
+        if (resumed && shown && !acting) handler.postDelayed(advance, CAROUSEL_MS);
     }
 
     /** The carousel: the app's next title, if it's ready; otherwise it loads and the carousel tries again soon. */

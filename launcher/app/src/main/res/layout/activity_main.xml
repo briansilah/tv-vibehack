@@ -41,6 +41,28 @@
         android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 
+    <!-- Up from a dock app showing suggested content: its action (Play, Resume, Open in the app), under the title,
+         as tvOS's Top Shelf shows its buttons. Placed in code (TopShelf); hidden otherwise. -->
+    <TextView
+        android:id="@+id/shelfAction"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:alpha="0"
+        android:visibility="invisible"
+        android:focusable="false"
+        android:gravity="center_vertical"
+        android:paddingStart="18dp"
+        android:paddingEnd="22dp"
+        android:background="@drawable/shelf_button_bg"
+        android:drawableStart="@drawable/ic_play"
+        android:drawablePadding="8dp"
+        android:drawableTint="@color/shelf_button_text"
+        android:textColor="@color/shelf_button_text"
+        style="@style/Text.Callout"
+        android:fontFamily="@font/text_semibold"
+        android:includeFontPadding="false"
+        android:singleLine="true" />
+
     <!-- The app grid fills the screen, under the top bar, as on tvOS: going down into the grid, the top bar
          scrolls away with the page (MainActivity.followPage) and the rows use the whole screen. 32dp side margins:
          the grid widens by another 24dp of padding so the full-width dock panel and the scaled edge tiles fit;

@@ -38,4 +38,10 @@
     <string name="location_row">Reihe %1$d</string>
     <!-- Top shelf: a title you were watching, which the app put in Android TV's Watch Next. -->
     <string name="continue_watching">Weiterschauen</string>
+    <!-- Top shelf: the button under a suggested title (Up from the dock). -->
+    <string name="shelf_play">Abspielen</string>
+    <string name="shelf_resume">Fortsetzen</string>
+    <string name="shelf_open">Öffnen</string>
+    <!-- %1$s: the app, e.g. Netflix. -->
+    <string name="shelf_open_in">In %1$s öffnen</string>
 </resources>

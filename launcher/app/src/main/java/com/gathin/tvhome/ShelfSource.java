@@ -72,14 +72,16 @@ final class ShelfSource {
     static final class App {
         final String key;
         final String pkg;
+        final String label;
         final ApplicationInfo info;
         final int bannerRes;
         /** A private copy of its banner (or icon) to fall back on. */
         final Drawable drawable;
 
-        App(String key, String pkg, ApplicationInfo info, int bannerRes, Drawable drawable) {
+        App(String key, String pkg, String label, ApplicationInfo info, int bannerRes, Drawable drawable) {
             this.key = key;
             this.pkg = pkg;
+            this.label = label;
             this.info = info;
             this.bannerRes = bannerRes;
             this.drawable = drawable;
@@ -126,6 +128,7 @@ final class ShelfSource {
     private final boolean hd;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Map<String, ShelfFeeds.Feed> feeds;
+    private final Map<String, String> links;
     private final String country;
     private final String countryName;
     private final File dir;
@@ -148,10 +151,11 @@ final class ShelfSource {
     private long lastFetch;
     private int fetching;
 
-    ShelfSource(Context ctx, String[] feedLines, Listener listener) {
+    ShelfSource(Context ctx, String[] feedLines, String[] linkLines, Listener listener) {
         this.ctx = ctx.getApplicationContext();
         this.listener = listener;
         this.feeds = ShelfFeeds.parse(feedLines);
+        this.links = ShelfFeeds.parseLinks(linkLines);
         Locale locale = Locale.getDefault();
         this.country = ShelfFeeds.country(locale.getCountry());
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? "" : locale.getDisplayCountry();
@@ -186,6 +190,11 @@ final class ShelfSource {
     }
 
     private final Map<String, List<ShelfFeeds.Item>> combined = new HashMap<>();
+
+    /** What opens a title in its app: the link the app published, else one from config.xml's top_shelf_links. */
+    String link(String pkg, ShelfFeeds.Item it) {
+        return it.link != null ? it.link : ShelfFeeds.link(links.get(pkg), it);
+    }
 
     String caption(String pkg) {
         ShelfFeeds.Feed f = feeds.get(pkg);
@@ -294,24 +303,45 @@ final class ShelfSource {
             final Map<String, List<ShelfFeeds.Item>> got = new HashMap<>();
             try {
                 Map<Long, String> channels = new HashMap<>();
+                Set<Long> continuing = new HashSet<>();
                 try (Cursor c = cr.query(Uri.parse("content://android.media.tv/channel"),
-                        new String[]{"_id", "display_name"}, null, null, null)) {
-                    while (c != null && c.moveToNext()) channels.put(c.getLong(0), c.getString(1));
+                        new String[]{"_id", "display_name", "internal_provider_id"}, null, null, null)) {
+                    while (c != null && c.moveToNext()) {
+                        channels.put(c.getLong(0), c.getString(1));
+                        // A channel of what you were watching (Stremio's "Continue Watching").
+                        String id = c.getString(2), name = c.getString(1);
+                        if ((id != null && id.toLowerCase(Locale.ROOT).contains("continue"))
+                                || (name != null && name.toLowerCase(Locale.ROOT).startsWith("continue"))) {
+                            continuing.add(c.getLong(0));
+                        }
+                    }
                 }
                 // Watch Next, most recently watched first.
                 List<Row> watchNext = readPrograms(cr, "watch_next_program");
                 watchNext.sort((a, b) -> Long.compare(b.engaged, a.engaged));
                 for (Row r : watchNext) {
-                    own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, continueWatching));
+                    own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, continueWatching,
+                            null, r.link, true));
                 }
                 // Then the preview channels, in the order the app made them, a title from each in turn.
                 Map<String, Map<Long, List<ShelfFeeds.Item>>> preview = new HashMap<>();
-                for (Row r : readPrograms(cr, "preview_program")) {
+                // A preview programme you've started (it has a position) or in a "continue" channel counts as
+                // something you were watching, too.
+                List<Row> previews = readPrograms(cr, "preview_program");
+                previews.sort((a, b) -> Long.compare(b.position > 0 ? 1 : 0, a.position > 0 ? 1 : 0));
+                for (Row r : previews) {
+                    boolean resume = r.position > 0 || continuing.contains(r.channel);
+                    if (resume) {
+                        own(got, r.pkg).add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, continueWatching,
+                                null, r.link, true));
+                        continue;
+                    }
                     Map<Long, List<ShelfFeeds.Item>> byChannel = preview.get(r.pkg);
                     if (byChannel == null) preview.put(r.pkg, byChannel = new java.util.TreeMap<>());
                     List<ShelfFeeds.Item> l = byChannel.get(r.channel);
                     if (l == null) byChannel.put(r.channel, l = new ArrayList<>());
-                    l.add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, channels.get(r.channel)));
+                    l.add(new ShelfFeeds.Item(null, r.title, r.backdrop, r.logo, channels.get(r.channel), null, r.link,
+                            false));
                 }
                 for (Map.Entry<String, Map<Long, List<ShelfFeeds.Item>>> e : preview.entrySet()) {
                     own(got, e.getKey()).addAll(
@@ -347,8 +377,10 @@ final class ShelfSource {
         String title;
         String backdrop;
         String logo;
+        String link;
         long channel;
         long engaged;
+        long position;
     }
 
     /** A programme table's rows with a picture fit for a backdrop. All of them: filtered here, not by a selection. */
@@ -362,7 +394,9 @@ final class ShelfSource {
                     posterAr = c.getColumnIndex("poster_art_aspect_ratio"),
                     thumbCol = c.getColumnIndex("thumbnail_uri"), thumbAr = c.getColumnIndex("thumbnail_aspect_ratio"),
                     logoCol = c.getColumnIndex("logo_uri"), channelCol = c.getColumnIndex("channel_id"),
-                    engagedCol = c.getColumnIndex("last_engagement_time_utc_millis");
+                    engagedCol = c.getColumnIndex("last_engagement_time_utc_millis"),
+                    linkCol = c.getColumnIndex("intent_uri"),
+                    positionCol = c.getColumnIndex("last_playback_position_millis");
             if (pkgCol < 0) return rows;
             while (c.moveToNext()) {
                 Row r = new Row();
@@ -370,6 +404,8 @@ final class ShelfSource {
                 r.backdrop = ShelfFeeds.backdrop(str(c, thumbCol), num(c, thumbAr), str(c, posterCol), num(c, posterAr));
                 if (r.pkg == null || r.backdrop == null) continue;
                 r.title = str(c, titleCol);
+                r.link = str(c, linkCol);
+                r.position = positionCol >= 0 && !c.isNull(positionCol) ? c.getLong(positionCol) : 0L;
                 r.logo = str(c, logoCol);
                 if (r.logo != null && !r.logo.startsWith("https://")) r.logo = null;
                 r.channel = channelCol >= 0 && !c.isNull(channelCol) ? c.getLong(channelCol) : 0L;
@@ -444,7 +480,8 @@ final class ShelfSource {
                     r.endObject();
                     if (bg != null && bg.startsWith("https://")) {
                         out.add(new ShelfFeeds.Item(id, name, bg,
-                                logo != null && logo.startsWith("https://") ? logo : null));
+                                logo != null && logo.startsWith("https://") ? logo : null, null,
+                                url.contains("/catalog/series/") ? "series" : "movie", null, false));
                     }
                 }
                 return out;   // the rest isn't needed: closing stops the download

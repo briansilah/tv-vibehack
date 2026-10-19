@@ -55,17 +55,75 @@ final class ShelfFeeds {
         final String backdrop;
         final String logo;
         final String caption;
+        /** A feed's title: "movie" or "series" (its catalogue's type), for its app's link. */
+        final String type;
+        /** What the app published to open it (an intent: or app URI), or null. */
+        final String link;
+        /** From Watch Next: something you were watching. */
+        final boolean resume;
 
         Item(String id, String title, String backdrop, String logo) {
-            this(id, title, backdrop, logo, null);
+            this(id, title, backdrop, logo, null, null, null, false);
         }
 
         Item(String id, String title, String backdrop, String logo, String caption) {
+            this(id, title, backdrop, logo, caption, null, null, false);
+        }
+
+        Item(String id, String title, String backdrop, String logo, String caption, String type, String link,
+             boolean resume) {
             this.id = id == null ? "" : id;
             this.title = title == null ? "" : title;
             this.backdrop = backdrop;
             this.logo = logo == null || logo.isEmpty() ? null : logo;
             this.caption = caption == null || caption.isEmpty() ? null : caption;
+            this.type = type == null || type.isEmpty() ? null : type;
+            this.link = link == null || link.isEmpty() ? null : link;
+            this.resume = resume;
+        }
+    }
+
+    /**
+     * Links that open a feed's title in its app, by package, from config lines "package | link": {id} (the title's
+     * IMDb id), {type} (movie or series) and {title} (its name) are filled in.
+     */
+    static Map<String, String> parseLinks(String[] lines) {
+        Map<String, String> links = new LinkedHashMap<>();
+        if (lines == null) return links;
+        for (String line : lines) {
+            if (line == null) continue;
+            int bar = line.indexOf('|');
+            if (bar <= 0) continue;
+            String pkg = line.substring(0, bar).trim(), link = line.substring(bar + 1).trim();
+            if (!pkg.isEmpty() && link.contains("://")) links.put(pkg, link);
+        }
+        return links;
+    }
+
+    /** A feed title's link from its app's template, or null if the template needs something the title lacks. */
+    static String link(String template, Item it) {
+        if (template == null) return null;
+        String out = template;
+        if (out.contains("{id}")) {
+            if (it.id.isEmpty()) return null;
+            out = out.replace("{id}", encode(it.id));
+        }
+        if (out.contains("{type}")) {
+            if (it.type == null) return null;
+            out = out.replace("{type}", encode(it.type));
+        }
+        if (out.contains("{title}")) {
+            if (it.title.isEmpty()) return null;
+            out = out.replace("{title}", encode(it.title));
+        }
+        return out;
+    }
+
+    private static String encode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return s;
         }
     }
 
@@ -109,14 +167,26 @@ final class ShelfFeeds {
     private static final java.util.regex.Pattern YT_THUMB = java.util.regex.Pattern.compile(
             "(https://i\\d?\\.ytimg\\.com/vi/[\\w-]+/)(?:sd|hq|mq)?default\\.jpg(?:\\?.*)?");
 
-    /** An app's own suggestions first (what it published on the TV), then its feed's, at most {@code max}. */
+    /**
+     * An app's suggestions in the order they're shown, at most {@code max}: what you were watching first (its own
+     * titles marked {@link Item#resume}), so it's a press away; then its other suggestions and its feed's
+     * trending and popular titles, one of each in turn.
+     */
     static List<Item> combine(List<Item> own, List<Item> feed, int max) {
+        List<Item> resume = new ArrayList<>(), others = new ArrayList<>();
+        if (own != null) {
+            for (Item it : own) (it.resume ? resume : others).add(it);
+        }
         List<Item> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (List<Item> l : java.util.Arrays.asList(own, feed)) {
-            if (l == null) continue;
-            for (Item it : l) {
-                if (out.size() >= max) return out;
+        for (Item it : resume) {
+            if (out.size() < max && seen.add(it.id.isEmpty() ? it.backdrop : it.id)) out.add(it);
+        }
+        List<Item> rest = feed == null ? new ArrayList<>() : feed;
+        for (int i = 0; out.size() < max && (i < others.size() || i < rest.size()); i++) {
+            for (List<Item> l : java.util.Arrays.asList(others, rest)) {
+                if (i >= l.size() || out.size() >= max) continue;
+                Item it = l.get(i);
                 if (seen.add(it.id.isEmpty() ? it.backdrop : it.id)) out.add(it);
             }
         }
@@ -202,7 +272,8 @@ final class ShelfFeeds {
                 .append(fetchedAt).append('\t').append(clean(country)).append('\n');
         for (Item it : items) {
             sb.append(clean(it.id)).append('\t').append(clean(it.title)).append('\t')
-                    .append(clean(it.backdrop)).append('\t').append(clean(it.logo)).append('\n');
+                    .append(clean(it.backdrop)).append('\t').append(clean(it.logo)).append('\t')
+                    .append(clean(it.type)).append('\n');
         }
         return sb.toString();
     }
@@ -224,7 +295,7 @@ final class ShelfFeeds {
         for (int i = 2; i < lines.length; i++) {
             String[] f = lines[i].split("\t", -1);
             if (f.length < 4 || f[2].isEmpty()) continue;
-            items.add(new Item(f[0], f[1], f[2], f[3]));
+            items.add(new Item(f[0], f[1], f[2], f[3], null, f.length > 4 ? f[4] : null, null, false));
         }
         return new Cached(fetchedAt, country, items);
     }

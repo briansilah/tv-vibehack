@@ -72,9 +72,12 @@ A home screen that is yours again:
 
 - **Pitch-black background** and a dock of your four favourite apps at the bottom, in a translucent
   full-width rounded panel, exactly where Apple TV puts it.
-- **A top shelf** showing the focused app's name in large type, with an ambient glow in a colour
-  taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
-  sweeping along the dock doesn't flash every colour.
+- **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows what
+  it suggests: what you were watching first (with **Resume** a press of Up away), then the app's own
+  recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
+  Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
+  in every 10 seconds. An app without suggestions shows cover art: its logo on shapes in its own
+  colours. Otherwise, its name over an ambient glow in its colour. See [The top shelf](#the-top-shelf).
 - **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
   the dock row moves to the top, the time and profile picture scroll away with the page, and the rows
   get the whole screen. Back on the dock, they come back.
@@ -187,13 +190,14 @@ rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 230 KB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no blur, no
-video, no network, and no background services except, on Google TV, the small Home-button
-service described below.
+video, no network except the top shelf's pictures (below), and no background services except, on
+Google TV, the small Home-button service described below.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
-the dock order, apps to hide, your TV's Live TV package, and the number of columns.
+the dock order, apps to hide, your TV's Live TV package, the number of columns, and the top shelf's
+art and feeds.
 
 **Arrange** apps on the TV itself. Hold OK on an app for its actions:
 
@@ -211,6 +215,47 @@ says what's happening and which remote keys do what.
 
 Your order is saved on the TV and replaces the `dock_apps` default from then on. Apps you install later
 go at the end, as on Apple TV; apps you uninstall drop out and the rest close up.
+
+### The top shelf
+
+With focus on a dock app, the screen behind the dock shows the best of these that the app has, as
+Apple TV's Top Shelf does:
+
+1. **Suggested titles**, full screen with the title's logo (or name) and what it is ("Continue
+   watching", "Recommended for you", "Top 10 on Netflix · Kenya"). The next one pushes in from the
+   right every 10 seconds. First what you were watching, then the app's other suggestions and its
+   feed's titles, one of each in turn:
+   - **What the app publishes on the TV for the home screen**: Android TV's Watch Next and preview
+     channels (on our TV: YouTube's recommendations, Netflix's and Stremio's continue watching,
+     Stremio's library). Android only lets an app read other apps' rows with `READ_TV_LISTINGS`, which
+     `build-and-install.sh` grants. Without it, this source is skipped.
+   - **A public catalogue** per app, from `top_shelf_feeds` in `config.xml`: Netflix's Top 10 in your
+     TV's country (from its language and region settings), and what's popular on Apple TV+, Prime
+     Video, Disney+, JioHotstar and Stremio. These are [Stremio](https://www.stremio.com) catalogues,
+     which need no account or key: Stremio's Cinemeta, and the open-source
+     [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
+     come from Stremio's image service (metahub).
+2. **Cover art**: the app's logo, cut out of its banner, on soft shapes in its colours, like an app's
+   static Top Shelf image on tvOS.
+3. Otherwise the app's name over the ambient glow, as before.
+
+**Up** from a dock app showing a title moves to a button under it: **Resume** or **Play** opens it in
+the app (with the link the app published), **Open in …** opens a catalogue title in its app (a
+Stremio title's page, or a search for it in Netflix or Apple TV). Left and Right page through the
+titles; Down or Back returns to the dock, and Up again opens the top right corner. Apps don't let
+other apps add to their watchlists, so there's no such button.
+
+**The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
+the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept
+on the TV (up to 60 MB), so the shelf also works offline with what it last saw. Requests are plain
+GETs without cookies, accounts or identifiers. The Netflix Top 10 URL carries your TV's country, and
+the servers see your IP address, as for any download. The launcher sends no telemetry. To keep the
+launcher off the network, set `top_shelf_art` to `false` in `config.xml` (glow and name only), or
+remove a feed's line to keep that app to its own suggestions and cover art.
+
+**Memory**: on a TV with 1.5 GB of RAM or more, backdrops are fetched in 4K where available and
+shown at the screen's 1920 x 1080 (Android TV draws apps at 1080p, even on a 4K panel). On smaller
+TVs they're shown at 1280 x 720. Pictures not on screen are dropped when you open an app.
 
 **Build and install** with one command:
 

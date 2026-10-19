@@ -69,16 +69,37 @@ public class ShelfFeedsTest {
     }
 
     @Test
-    public void ownSuggestionsComeFirst() {
-        List<ShelfFeeds.Item> own = Collections.singletonList(
-                new ShelfFeeds.Item(null, "Watching", "https://bg/w", null, "Continue watching"));
-        List<ShelfFeeds.Item> feed = Arrays.asList(item("a", "https://bg/a"), item("b", "https://bg/b"));
-        List<ShelfFeeds.Item> out = ShelfFeeds.combine(own, feed, 2);
-        assertEquals(2, out.size());
-        assertEquals("Continue watching", out.get(0).caption);
-        assertEquals("a", out.get(1).id);
-        assertEquals(2, ShelfFeeds.combine(null, feed, 10).size());
+    public void inProgressFirstThenOwnAndFeedInTurn() {
+        ShelfFeeds.Item watching = new ShelfFeeds.Item(null, "Watching", "https://bg/w", null, "Continue watching",
+                null, "app://w", true);
+        ShelfFeeds.Item rec1 = new ShelfFeeds.Item("r1", "Rec 1", "https://bg/r1", null, "For you");
+        ShelfFeeds.Item rec2 = new ShelfFeeds.Item("r2", "Rec 2", "https://bg/r2", null, "For you");
+        List<ShelfFeeds.Item> own = Arrays.asList(rec1, watching, rec2);
+        List<ShelfFeeds.Item> feed = Arrays.asList(item("a", "https://bg/a"), item("b", "https://bg/b"),
+                item("c", "https://bg/c"));
+        List<ShelfFeeds.Item> out = ShelfFeeds.combine(own, feed, 10);
+        assertEquals(Arrays.asList("", "r1", "a", "r2", "b", "c"), ids(out));
+        assertTrue(out.get(0).resume);
+        assertEquals(3, ShelfFeeds.combine(own, feed, 3).size());
+        assertEquals(3, ShelfFeeds.combine(null, feed, 10).size());
         assertTrue(ShelfFeeds.combine(null, null, 10).isEmpty());
+    }
+
+    @Test
+    public void feedLinksFromTemplates() {
+        Map<String, String> links = ShelfFeeds.parseLinks(new String[]{
+                "com.stremio.one | stremio:///detail/{type}/{id}",
+                "com.netflix.ninja | https://www.netflix.com/search?q={title}",
+                "broken",
+        });
+        assertEquals(2, links.size());
+        ShelfFeeds.Item it = new ShelfFeeds.Item("tt123", "The Diplomat & Co", "https://bg", null, null, "series",
+                null, false);
+        assertEquals("stremio:///detail/series/tt123", ShelfFeeds.link(links.get("com.stremio.one"), it));
+        assertEquals("https://www.netflix.com/search?q=The%20Diplomat%20%26%20Co",
+                ShelfFeeds.link(links.get("com.netflix.ninja"), it));
+        assertNull(ShelfFeeds.link(links.get("com.stremio.one"), item("", "https://bg")));
+        assertNull(ShelfFeeds.link(null, it));
     }
 
     @Test
