@@ -37,10 +37,10 @@
     <string name="top_bar_style" translatable="false">tvos</string>
 
     <!-- Liquid Glass, as on Apple TV, for the dock and the top right: how see-through it is, from 0 to 100, as
-         Apple's Liquid Glass slider. 5 is Clear, Apple TV's own look; 95 is Tinted, darker and more frosted, for
-         readability over busy pictures. You can also change it on the TV: hold OK on any app, then Liquid Glass.
-         That choice is kept until you change it again, or clear the launcher's storage. -->
-    <integer name="liquid_glass">5</integer>
+         Apple's Liquid Glass slider. 0 is the clearest (the default); 5 is Clear, Apple TV's own look; 95 is Tinted,
+         darker and more frosted, for readability over busy pictures. You can also change it on the TV: hold OK on any
+         app, then Liquid Glass. That choice is kept until you change it again, or clear the launcher's storage. -->
+    <integer name="liquid_glass">0</integer>
 
     <!-- On Android 12 and later what's behind the glass shows through blurred and more colourful, and on Android 13
          and later it bends along its edges. It costs the GPU a small layer, redrawn only when the top shelf changes

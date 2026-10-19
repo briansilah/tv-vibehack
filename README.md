@@ -74,8 +74,8 @@ A home screen that is yours again:
   panel of **Liquid Glass**, exactly where Apple TV puts it. As on tvOS 26, the top shelf shows through
   it slightly blurred, more colourful and bent along its edges, under a bright rim (Android 12 and
   later; the bending needs Android 13). The top right's capsule is the same glass. How see-through it
-  is goes from Clear, Apple TV's own look, to Tinted, on a slider like Apple's: hold OK on any app and
-  pick **Liquid Glass**.
+  is goes on a slider like Apple's, from the clearest (the default) through Clear, Apple TV's own look,
+  to Tinted: hold OK on any app and pick **Liquid Glass**.
 - **A top shelf** showing the focused app's name in large type, with an ambient glow in a colour
   taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
   sweeping along the dock doesn't flash every colour.
@@ -200,7 +200,7 @@ off on low-RAM and pre-Android 12 TVs, and `liquid_glass_blur` in `config.xml` t
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
 the dock order, apps to hide, your TV's Live TV package, the number of columns, and how see-through the
-Liquid Glass is (`liquid_glass`, 0 to 100: 5 is Clear, 95 is Tinted).
+Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest and the default, 5 is Apple TV's Clear, 95 is Tinted).
 
 **Arrange** apps on the TV itself. Hold OK on an app for its actions:
 
