@@ -224,6 +224,24 @@ class ParserTests(unittest.TestCase):
         for sql in (perf.SUMMARY_SQL % (perf.PKG, 25), perf.ASYNC_SQL % perf.PKG, perf.FRAMES_SQL % perf.PKG):
             self.assertIn("'com.gathin.tvhome'", sql)
             self.assertNotIn("%", sql.replace("like 'tvhome:%'", ""))
+        self.assertIn("p.name = 'com.gathin.tvhome' and", perf.INPUT_SQL % perf.PKG)
+        self.assertIn("'com.gathin.tvhome:home'", perf.SERVICE_KEYS_SQL % perf.PKG)
+
+    def test_key_latencies(self):
+        offset = 24_000_000_000_000   # BOOTTIME - MONOTONIC
+        rows = [
+            ("deliverInputEvent src=0x301 eventTimeNano=8872868000000 id=0xc121cb96", 8872868000000 + offset + 2_900_000,
+             210_000),
+            ("deliverInputEvent src=0x301 eventTimeNano=8872900000000 id=0x1", 8872900000000 + offset + 6_700_000, 250_000),
+            ("deliverInputEvent src=0x0 eventTimeNano=8873000000000 id=0x2", 8873000000000 + offset + 11_000_000, 480_000),
+            ("deliverInputEvent", 1, 1),   # Android 11 and older: no event time
+        ]
+        keys = perf.key_latencies(rows, offset)
+        self.assertEqual([k[0] for k in keys], ["0x301", "0x301", "0x0"])
+        self.assertAlmostEqual(keys[0][1], 2.9)
+        self.assertAlmostEqual(keys[0][2], 0.21)
+        self.assertEqual(perf.key_table(keys), ["| 0x0 | 1 | 11.0 | 11.0 | 0.48 |",
+                                                "| 0x301 | 2 | 4.8 | 6.7 | 0.23 |"])
 
     def test_perfetto_config_is_shell_safe(self):
         cfg = perf.perfetto_config(12000)
