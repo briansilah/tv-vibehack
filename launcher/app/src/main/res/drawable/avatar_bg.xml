@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The profile picture's circle when there is no photo: Apple's grey, a little lighter at the top (sampled from an
+     Apple TV). Its oval also clips the picture (ProfileCorner). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:angle="270" android:startColor="#FFA9ADB6" android:endColor="#FF868A93" />
+</shape>

@@ -76,8 +76,8 @@ A home screen that is yours again:
   taken from the app's own artwork. Like tvOS, it waits for focus to settle before cross-fading, so
   sweeping along the dock doesn't flash every colour.
 - **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
-  the dock row moves to the top, the clock and buttons scroll away with the page, and the rows get
-  the whole screen. Back on the dock, they come back.
+  the dock row moves to the top, the time and profile picture scroll away with the page, and the rows
+  get the whole screen. Back on the dock, they come back.
 - **Apple TV-style transitions**: opening an app presses its tile in while Home grows toward you and
   fades, and the app comes from behind it; pressing Home or Back, Home falls back into place as it
   fades in, with focus still on the app you opened. Measured from Apple TV recordings; see
@@ -87,14 +87,18 @@ A home screen that is yours again:
 - **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange apps tile at the
   end of the grid. The app lifts, chevrons show where it can go, the arrows move it (into and out of
   the dock too) and OK puts it down.
-- **Three icon buttons**: Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the
-  network you're on) and Settings. On Google TV, Settings opens the TV's quick settings panel, as
-  the remote's Settings button does. Pick their look in `config.xml` (`top_bar_style`): grouped in
-  one tray with the focused button's name underneath, as on Google TV (the default); round icons
-  that open into labelled pills, as on Apple TV; or frosted pills that always show their names.
-- **A greeting, a large clock and the date.** All text is set in
-  [Inter](https://rsms.me/inter/), the open typeface closest to Apple TV's SF Pro, on a type scale
-  taken from tvOS's text styles (`values/styles.xml`).
+- **The time and your profile picture in the top right**, in a small glass capsule, as on Apple TV.
+  Press Up from the dock and it opens like the header of Apple TV's Control Center: the time glides
+  left and three icon buttons slide in under the picture. Inputs (a dropdown of HDMI ports, AV and
+  Live TV), Wi-Fi (showing the network you're on) and Settings; on Google TV, Settings opens the TV's
+  quick settings panel, as the remote's Settings button does. The picture opens the TV's accounts.
+  Down or Back closes it. Measured from Apple TV recordings, down to the spring. Set your name in
+  `config.xml` (`profile_name`) to show your initials instead of the silhouette, and pick the
+  buttons' look (`top_bar_style`): Control Center's tabs (the default); grouped in one tray with the
+  focused button's name underneath, as on Google TV; round icons that open into labelled pills; or
+  frosted pills that always show their names.
+- **All text is set in [Inter](https://rsms.me/inter/)**, the open typeface closest to Apple TV's
+  SF Pro, on a type scale taken from tvOS's text styles (`values/styles.xml`).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
 
 And a TV that stops working against you: no sponsored rows, no "Discover" nags, no analytics

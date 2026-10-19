@@ -27,10 +27,17 @@
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>
 
-    <!-- Top bar buttons (Inputs, Wi-Fi, Settings):
+    <!-- Top right: the time and your profile picture, as on Apple TV. Moving up there opens it and shows the
+         Inputs, Wi-Fi and Settings buttons, which look like this:
+         tvos    icons, the focused one in a white circle, like the tabs of Apple TV's Control Center
          google  icons grouped in one tray; the focused one turns pale and its name shows underneath,
                  like the Google TV home screen
-         apple   round icons; the focused one opens into a pill with its name, like Apple TV
+         apple   round icons; the focused one opens into a pill with its name
          pills   frosted pills, each with its icon and name -->
-    <string name="top_bar_style" translatable="false">google</string>
+    <string name="top_bar_style" translatable="false">tvos</string>
+
+    <!-- Your name, for the profile picture in the top right: its initials, as Apple TV shows for a profile
+         without a photo. Leave empty for the plain silhouette. (Android doesn't let apps read the TV's
+         Google account name or photo.) -->
+    <string name="profile_name" translatable="false"></string>
 </resources>

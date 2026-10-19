@@ -410,8 +410,13 @@ final class Rearranger {
             legend.addView(keys[i]);
         }
         root.addView(header);
-        View left = root.findViewById(R.id.leftBlock);
-        topBar = left != null ? (View) left.getParent() : null;
+        topBar = root.findViewById(R.id.corner);
+    }
+
+    /** Bottom of the header that stands in for the top bar while arranging, in the root's coordinates; 0 before
+     *  it is laid out. */
+    int headerBottom() {
+        return header != null ? header.getBottom() : 0;
     }
 
     private void showHeader(boolean show) {

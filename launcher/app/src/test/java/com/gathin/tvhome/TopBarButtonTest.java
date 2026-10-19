@@ -48,8 +48,9 @@ public class TopBarButtonTest {
         assertEquals(R.style.ThemeOverlay_TopBar_Pills, TopBarButton.themeFor("pills"));
         assertEquals(R.style.ThemeOverlay_TopBar_Apple, TopBarButton.themeFor(" apple "));
         assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor("google"));
-        assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor("unknown"));
-        assertEquals(R.style.ThemeOverlay_TopBar_Google, TopBarButton.themeFor(null));
+        assertEquals(R.style.ThemeOverlay_TopBar_Tvos, TopBarButton.themeFor("tvos"));
+        assertEquals(R.style.ThemeOverlay_TopBar_Tvos, TopBarButton.themeFor("unknown"));
+        assertEquals(R.style.ThemeOverlay_TopBar_Tvos, TopBarButton.themeFor(null));
     }
 
     @Test

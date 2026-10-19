@@ -68,7 +68,7 @@
         <item name="android:letterSpacing">0.01</item>
     </style>
 
-    <!-- A small capitalised label over a title: the greeting, "Home screen". -->
+    <!-- A small capitalised label over a title: "Home screen". -->
     <style name="Text.Overline">
         <item name="android:fontFamily">@font/text_semibold</item>
         <item name="android:textSize">12.5sp</item>
@@ -83,33 +83,19 @@
         <item name="android:letterSpacing">0.04</item>
     </style>
 
-    <!-- The large clock on Home. Proportional figures, as tvOS's clocks: tabular ones leave gaps around a 1. Inter
-         raises the colon between digits to the middle of the figures, as SF Pro does in times. -->
+    <!-- A large clock (the Clock screensaver's, below). Proportional figures, as tvOS's clocks: tabular ones leave
+         gaps around a 1. Inter raises the colon between digits to the middle of the figures, as SF Pro does in
+         times. -->
     <style name="Text.Clock">
         <item name="android:fontFamily">@font/display_medium</item>
         <item name="android:textSize">48sp</item>
         <item name="android:letterSpacing">-0.01</item>
     </style>
 
-    <!-- AM or PM after a clock. -->
-    <style name="Text.Clock.Period">
-        <item name="android:fontFamily">@font/text_semibold</item>
-        <item name="android:textSize">14.5sp</item>
-        <item name="android:letterSpacing">0.04</item>
-        <item name="android:textAllCaps">true</item>
-    </style>
-
-    <!-- The date next to a clock. -->
-    <style name="Text.Clock.Date">
-        <item name="android:fontFamily">@font/text_medium</item>
-        <item name="android:textSize">14.5sp</item>
-        <item name="android:letterSpacing">0.06</item>
-        <item name="android:textAllCaps">true</item>
-    </style>
-
-    <!-- A compact time in the top bar, as on tvOS (tvOS Headline). Tabular figures, so it keeps its width as it
-         changes and whatever sits beside it stays put. -->
-    <style name="Text.Time" parent="Text.Headline">
+    <!-- The time in the top right corner (ProfileCorner). On tvOS its digits are 18 px tall at 1080p, about Caption 1
+         (25 pt); here a fifth larger, like the rest of the corner (ProfileCorner.SIZE), which is Callout's size.
+         Tabular figures, so it keeps its width as it changes and the capsule around it stays put. -->
+    <style name="Text.Time" parent="Text.Callout">
         <item name="android:fontFeatureSettings">"tnum"</item>
     </style>
 
@@ -133,8 +119,14 @@
         <item name="android:textAllCaps">true</item>
     </style>
 
-    <!-- Top bar (layout/top_bar.xml), in three looks picked by config.xml's top_bar_style. Each look is a
-         theme overlay that sets the bar's and its buttons' styles. -->
+    <!-- Top bar (layout/top_bar.xml), in four looks picked by config.xml's top_bar_style. Each look is a
+         theme overlay that sets the bar's and its buttons' styles. The bar sits in the top right corner
+         (ProfileCorner) and comes out when focus moves up there. -->
+    <style name="ThemeOverlay.TopBar.Tvos" parent="">
+        <item name="topBarStyle">@style/TopBar</item>
+        <item name="topButtonStyle">@style/TopButton.Tvos</item>
+    </style>
+
     <style name="ThemeOverlay.TopBar.Pills" parent="">
         <item name="topBarStyle">@style/TopBar</item>
         <item name="topButtonStyle">@style/TopButton</item>
@@ -193,5 +185,17 @@
         <item name="topBarMode">caption</item>
         <item name="topBarIconSize">18dp</item>
         <item name="topBarIconTint">@drawable/gtv_icon</item>
+    </style>
+
+    <!-- Apple TV (tvOS 26), the tabs of Control Center's header: a grey glyph, in a white circle when focused.
+         Measured on tvOS at 1080p: 60 px circles side by side, glyphs about 28 px; a fifth larger here
+         (ProfileCorner.SIZE). -->
+    <style name="TopButton.Tvos">
+        <item name="android:layout_height">36dp</item>
+        <item name="android:layout_marginStart">0dp</item>
+        <item name="android:background">@drawable/tab_bg</item>
+        <item name="topBarMode">tab</item>
+        <item name="topBarIconSize">19dp</item>
+        <item name="topBarIconTint">@drawable/tab_icon</item>
     </style>
 </resources>

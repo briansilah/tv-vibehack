@@ -28,7 +28,7 @@
     <!-- The app grid fills the screen, under the top bar, as on tvOS: going down into the grid, the top bar
          scrolls away with the page (MainActivity.followPage) and the rows use the whole screen. 32dp side margins:
          the grid widens by another 24dp of padding so the full-width dock panel and the scaled edge tiles fit;
-         the top bar and tiles keep their 56dp inset. The wrapper clips at the grid's edge; the grid itself must
+         the tiles keep their 56dp inset. The wrapper clips at the grid's edge; the grid itself must
          not clip so scaled tiles can overflow their cells. -->
     <FrameLayout
         android:layout_width="match_parent"
@@ -51,81 +51,37 @@
             android:descendantFocusability="afterDescendants" />
     </FrameLayout>
 
-    <!-- Top bar: greeting, clock, date and buttons, over the grid. -->
+    <!-- Top right, over the grid, as on Apple TV, a fifth larger (ProfileCorner.SIZE): the time and the profile picture in a capsule whose right edge
+         lines up with the dock panel's (DockDecoration: 16dp past the tiles, 40dp from the screen's edge). Moving
+         up there opens it like Control Center's header, with the top bar's buttons, which come out from under the
+         picture a little beyond the capsule: nothing here clips them. -->
     <FrameLayout
         android:id="@+id/topArea"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingStart="56dp"
-        android:paddingEnd="56dp"
-        android:paddingTop="26dp">
+        android:paddingEnd="40dp"
+        android:paddingTop="25dp"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+        <com.gathin.tvhome.ProfileCorner
+            android:id="@+id/corner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:clipChildren="false">
 
-            <LinearLayout
-                android:id="@+id/leftBlock"
+            <!-- No format: TextClock then uses the locale's own, "8:52 PM" or "20:52" with the TV's 24-hour
+                 setting. -->
+            <TextClock
+                android:id="@+id/time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentStart="true"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/greeting"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textColor="#8CFFFFFF"
-                    style="@style/Text.Overline" />
-
-                <!-- The time, AM or PM and the date share the clock's baseline. -->
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:baselineAligned="true">
-
-                    <TextClock
-                        android:id="@+id/clock"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:format12Hour="h:mm"
-                        android:format24Hour="HH:mm"
-                        android:textColor="#FFFFFFFF"
-                        style="@style/Text.Clock"
-                        android:includeFontPadding="false" />
-
-                    <TextClock
-                        android:id="@+id/ampm"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:format12Hour="a"
-                        android:format24Hour=""
-                        android:textColor="#B3FFFFFF"
-                        style="@style/Text.Clock.Period" />
-
-                    <!-- Centred on the date's capitals. -->
-                    <View
-                        android:layout_width="1dp"
-                        android:layout_height="26dp"
-                        android:layout_gravity="bottom"
-                        android:layout_marginStart="16dp"
-                        android:layout_marginEnd="16dp"
-                        android:layout_marginBottom="4dp"
-                        android:background="#33FFFFFF" />
-
-                    <TextClock
-                        android:id="@+id/date"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:format12Hour="@string/date_format"
-                        android:format24Hour="@string/date_format"
-                        android:textColor="#A6FFFFFF"
-                        style="@style/Text.Clock.Date" />
-                </LinearLayout>
-            </LinearLayout>
+                android:textColor="#B8FFFFFF"
+                style="@style/Text.Time"
+                android:includeFontPadding="false"
+                android:singleLine="true" />
 
             <!-- Inflated in MainActivity with the look chosen in config.xml (top_bar_style). -->
             <ViewStub
@@ -133,11 +89,38 @@
                 android:inflatedId="@+id/topButtons"
                 android:layout="@layout/top_bar"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:layout_alignBottom="@id/leftBlock"
-                android:layout_marginBottom="6dp" />
-        </RelativeLayout>
+                android:layout_height="wrap_content" />
+
+            <FrameLayout
+                android:id="@+id/avatar"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:background="@drawable/avatar_bg"
+                android:focusable="true"
+                android:clickable="true"
+                android:contentDescription="@string/profile"
+                android:nextFocusLeft="@+id/btnSettings"
+                android:nextFocusDown="@+id/grid">
+
+                <ImageView
+                    android:id="@+id/avatarImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/avatar_silhouette"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/avatarInitials"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:visibility="gone"
+                    android:textColor="#FFFFFFFF"
+                    style="@style/Text.Caption1"
+                    android:includeFontPadding="false"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
+        </com.gathin.tvhome.ProfileCorner>
     </FrameLayout>
 
     <!-- Google TV-style top bar: the focused button's name, under the bar (positioned in code). -->

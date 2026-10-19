@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Apple TV top bar tab (tvOS 26 Control Center): a white circle behind the focused tab, none otherwise. Focus
+     arrives at once and fades out over 150 ms, passing through grey, as measured on tvOS. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="150">
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="#EDFFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#00FFFFFF" />
+        </shape>
+    </item>
+</selector>
