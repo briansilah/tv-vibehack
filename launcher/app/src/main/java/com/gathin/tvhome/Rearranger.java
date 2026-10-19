@@ -84,6 +84,8 @@ final class Rearranger {
     private final View[] keys = new View[3];
     private View topBar;
     private PopupWindow sheet;
+    /** The actions sheet's last row, for every app: how see-through the glass is (MainActivity.showGlassSlider). */
+    private Runnable glassAction;
 
     Rearranger(Activity activity, FrameLayout root, RecyclerView grid, AppAdapter adapter,
                AppAdapter.TileListener tiles, int columns) {
@@ -100,6 +102,10 @@ final class Rearranger {
 
     boolean isActive() {
         return arranging;
+    }
+
+    void setGlassAction(Runnable action) {
+        glassAction = action;
     }
 
     // ---- an app's actions (OK held) ---------------------------------------------------------------
@@ -144,6 +150,8 @@ final class Rearranger {
                     () -> moveAcrossDock(app));
         }
         addAction(actions, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
+        // Not about this app but the home screen, as iOS's Home Screen menu offers its look.
+        if (glassAction != null) addAction(actions, popup, R.string.liquid_glass, glassAction);
 
         sheet = popup;
         int[] at = new int[2];

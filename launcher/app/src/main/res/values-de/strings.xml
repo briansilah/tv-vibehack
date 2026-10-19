@@ -36,7 +36,11 @@
     <string name="legend_done">Fertig</string>
     <string name="location_dock">Im Dock</string>
     <string name="location_row">Reihe %1$d</string>
-    <!-- Top shelf: a title you were watching, which the app put in Android TV's Watch Next. -->
+    <string name="liquid_glass">Liquid Glass</string>
+    <string name="glass_clear">Klar</string>
+    <string name="glass_tinted">Getönt</string>
+    <string name="glass_value">%1$d %%</string>
+    <string name="glass_hint">Links und rechts zum Einstellen · OK, wenn fertig</string>
     <!-- Top shelf: titles from Android TV's Watch Next: the next episode, new episodes, a saved title. -->
     <string name="up_next">Als Nächstes</string>
     <string name="new_episodes">Neue Folgen</string>

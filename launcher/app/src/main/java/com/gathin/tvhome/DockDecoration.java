@@ -1,17 +1,16 @@
 package com.gathin.tvhome;
 
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
 /**
- * Draws the tvOS dock: a full-width, translucent rounded panel behind the first (dock) row, with room
- * around the tiles for the focused one to grow, and adds a gap below it.
+ * Draws the tvOS dock: a full-width panel of Liquid Glass ({@link LiquidGlass}) behind the first (dock) row, with
+ * room around the tiles for the focused one to grow, and adds a gap below it.
  */
 public class DockDecoration extends RecyclerView.ItemDecoration {
 
@@ -19,22 +18,22 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
     static final float PAD_V_DP = 22f;
     /** How far the panel reaches past the grid's content edges (into the grid's side padding). */
     private static final float EDGE_DP = 16f;
+    /**
+     * Concentric with the tiles, as on tvOS (its dock's corners are 70 px at 1080p: the tiles' radius plus the
+     * padding around them).
+     */
+    static final float RADIUS_DP = AppAdapter.TILE_RADIUS_DP + PAD_V_DP;
 
     private final int dockSize;
     private final float density;
-    private final Paint band = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF rect = new RectF();
+    private final LiquidGlass glass;
     private final float[] tops = new float[16];
 
-    DockDecoration(int dockSize, float density) {
+    /** {@code backdrop}: what shows through the panel; null for the plain tint and rim. */
+    DockDecoration(int dockSize, float density, @Nullable LiquidGlass.Backdrop backdrop) {
         this.dockSize = dockSize;
         this.density = density;
-        // Translucent like the Apple TV dock, so the top shelf's ambient glow shows through it.
-        band.setColor(0x17FFFFFF);
-        edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(density);
-        edge.setColor(0x24FFFFFF);
+        glass = new LiquidGlass(backdrop, LiquidGlass.DOCK, density);
     }
 
     @Override
@@ -69,7 +68,10 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
             tops[n++] = child.getTop() + card.getTop() + child.getTranslationY();
             height = card.getHeight();
         }
-        if (n == 0) return;
+        if (n == 0) {
+            glass.hide();
+            return;
+        }
         // Where most dock tiles are drawn: while apps are rearranged the panel slides with the whole row,
         // but a tile sliding into or out of the row doesn't stretch it.
         float top = tops[0];
@@ -88,10 +90,7 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         // Full width whatever the number of dock apps, as on tvOS.
         float edgeOut = EDGE_DP * density;
         float padV = PAD_V_DP * density;
-        rect.set(parent.getPaddingLeft() - edgeOut, top - padV,
-                parent.getWidth() - parent.getPaddingRight() + edgeOut, bottom + padV);
-        float radius = 26 * density;
-        c.drawRoundRect(rect, radius, radius, band);
-        c.drawRoundRect(rect, radius, radius, edge);
+        glass.draw(c, parent, parent.getPaddingLeft() - edgeOut, top - padV,
+                parent.getWidth() - parent.getPaddingRight() + edgeOut, bottom + padV, RADIUS_DP * density);
     }
 }

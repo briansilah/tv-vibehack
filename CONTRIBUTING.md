@@ -27,7 +27,9 @@ is reversible from the TV's own settings if the tools are gone.
 The launcher lives in `launcher/` and is deliberately small: plain Java, AndroidX RecyclerView and
 DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
 
-- No blur, no video backgrounds, no polling, no background services.
+- Blur only where it is measured cheap on a real TV (the dock's Liquid Glass blurs a small
+  half-resolution layer, redrawn only when what's behind it changes, and falls back to a plain tint on
+  older or low-RAM TVs). No video backgrounds, no polling, no background services.
 - The network only for the top shelf's pictures and public catalogues (README, "The top shelf"):
   fetched off the main thread with short timeouts, cached on the TV so it works offline, without
   accounts, keys or identifiers, and within each source's terms. Never telemetry.

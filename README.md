@@ -70,8 +70,12 @@ first time; with this repo as context, people report about fifteen minutes.
 
 A home screen that is yours again:
 
-- **Pitch-black background** and a dock of your four favourite apps at the bottom, in a translucent
-  full-width rounded panel, exactly where Apple TV puts it.
+- **Pitch-black background** and a dock of your four favourite apps at the bottom, in a full-width
+  panel of **Liquid Glass**, exactly where Apple TV puts it. As on tvOS 26, the top shelf shows through
+  it slightly blurred, more colourful and bent along its edges, under a bright rim (Android 12 and
+  later; the bending needs Android 13). The top right's capsule is the same glass. How see-through it
+  is goes on a slider like Apple's, from the clearest (the default) through Clear, Apple TV's own look,
+  to Tinted: hold OK on any app and pick **Liquid Glass**.
 - **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows what
   it suggests: what you were watching first (with **Resume** a press of Up away), then your watchlist,
   then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
@@ -90,11 +94,12 @@ A home screen that is yours again:
 - **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange apps tile at the
   end of the grid. The app lifts, chevrons show where it can go, the arrows move it (into and out of
   the dock too) and OK puts it down.
-- **The time and your profile picture in the top right**, in a small glass capsule, as on Apple TV.
+- **The time and your profile picture in the top right**, in a small Liquid Glass capsule, as on Apple TV.
   Press Up from the dock and it opens like the header of Apple TV's Control Center: the time glides
-  left and three icon buttons slide in under the picture. Inputs (a dropdown of HDMI ports, AV and
-  Live TV), Wi-Fi (showing the network you're on) and Settings; on Google TV, Settings opens the TV's
-  quick settings panel, as the remote's Settings button does. The picture opens the TV's accounts.
+  left and three icon buttons come out from behind the picture, each with a caption saying what it
+  does. Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the network you're on) and
+  Settings; on Google TV, Settings opens the TV's quick settings panel, as the remote's Settings
+  button does. The picture opens the TV's Accounts & Profiles.
   Down or Back closes it. Measured from Apple TV recordings, down to the spring. Set your name in
   `config.xml` (`profile_name`) to show your initials instead of the silhouette, and pick the
   buttons' look (`top_bar_style`): Control Center's tabs (the default); grouped in one tray with the
@@ -191,13 +196,17 @@ rewriting themselves.
 ## The launcher
 
 A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
-AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no blur, no
-video, no network except the top shelf's pictures (below), and no background services except, on
-Google TV, the small Home-button service described below.
+AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no video, no
+network except the top shelf's pictures (below), and no background services except, on Google TV,
+the small Home-button service described below. The only blur is the dock's and the top right's
+Liquid Glass, a small half-resolution layer redrawn only when the top shelf changes; it is measured
+in [docs/performance.md](docs/performance.md), off on low-RAM and pre-Android 12 TVs, and
+`liquid_glass_blur` in `config.xml` turns it off.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
-the dock order, apps to hide, your TV's Live TV package, the number of columns, and the top shelf's
-art and feeds.
+the dock order, apps to hide, your TV's Live TV package, the number of columns, the top shelf's art,
+feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
+and the default, 5 is Apple TV's Clear, 95 is Tinted).
 
 **Arrange** apps on the TV itself. Hold OK on an app for its actions:
 
@@ -208,6 +217,11 @@ art and feeds.
 - **Move to Dock** puts the app in the dock's last slot, whose app moves down to the start of the grid;
   **Move out of Dock** puts a dock app at the start of the grid.
 - **App info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
+- **Liquid Glass** isn't about the app but the home screen: a slider, like Apple's, for how see-through
+  the dock and the top right are. Left and Right move it from Clear to Tinted while they change behind
+  it; OK keeps it. To try looks from a computer:
+  `adb shell am start -n com.gathin.tvhome/.MainActivity --ei liquid_glass 50` (`-1` goes back to
+  `config.xml`'s).
 
 To arrange several apps in one go, select **Arrange apps** at the end of the grid: OK picks an app up
 and puts it down, and Back (or the tile, now **Done**) finishes. While arranging, the top of the screen

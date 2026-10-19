@@ -108,6 +108,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     /** Focused tile size relative to the others, as measured on an Apple TV 4K (about 152 vs 124 px). */
     static final float FOCUS_SCALE = 1.22f;
+    /** The tiles' corner radius (also drawable/tile_bg.xml). */
+    static final float TILE_RADIUS_DP = 16f;
     /**
      * Select pressed on a focused tile: it sinks to this much of its focused size, as tvOS's does when you click
      * (1.20x to 1.11x of the tiles around it in about 100 ms, while Home moves away).
@@ -656,7 +658,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             scaleX.addUpdateListener((a, value, velocity) -> marks.setScaleX(value));
             scaleY.addUpdateListener((a, value, velocity) -> marks.setScaleY(value));
 
-            final float radius = density * 16f;
+            final float radius = density * TILE_RADIUS_DP;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
