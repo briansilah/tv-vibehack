@@ -7,8 +7,10 @@ See docs/performance.md for the method and what each number means.
 
     perf.py run --label main                    all scenarios: cold, warm, jank, mem
     perf.py run --label fix --scenarios warm,jank --runs 5
+    perf.py run --label fix --scenarios dock    moving between two dock apps: top shelf latency and frames
     perf.py compare tools/perf-results/main.json tools/perf-results/fix.json
     perf.py trace --seconds 15 --action keys    Perfetto trace while it presses D-pad keys
+    perf.py trace --action dock                 ... while it moves between the first two dock apps
     perf.py summarize trace.perfetto-trace      slowest launcher trace sections (pip install perfetto)
 
 Connection: with TV_HOST set it connects like tools/tv.py (adb_shell, no adb binary). Otherwise, or with
@@ -41,6 +43,11 @@ HOME_INTENT = "am start -W -a android.intent.action.MAIN -c android.intent.categ
 KEYCODES = {"UP": 19, "DOWN": 20, "LEFT": 21, "RIGHT": 22, "CENTER": 23}
 # 16 moves across the dock and the first grid rows, then back to the dock.
 DEFAULT_KEYS = "RIGHT RIGHT RIGHT LEFT LEFT LEFT DOWN RIGHT RIGHT DOWN LEFT LEFT UP UP RIGHT LEFT"
+# Puts focus on the first dock app from anywhere: Up climbs the grid to the top bar and stops there, Down
+# goes back to the dock, Left stops at the dock's first app.
+TO_FIRST_DOCK_APP = " ".join(["UP"] * 14 + ["DOWN"] + ["LEFT"] * 4)
+DOCK_TRACE_KEYS = "RIGHT LEFT RIGHT LEFT RIGHT LEFT RIGHT LEFT"
+ALL_SCENARIOS = ("cold", "warm", "jank", "dock", "mem")
 TRACE_REMOTE = "/data/misc/perfetto-traces/tvhome.perfetto-trace"
 TRACE_CONFIG_REMOTE = "/data/local/tmp/tvhome-perfetto.pbtx"
 
@@ -214,6 +221,24 @@ def parse_logcat(out, since=0.0):
     return res
 
 
+def parse_events(out, event, since=0.0):
+    """Every `event` timing line logged at or after `since`, oldest first, as dicts like parse_logcat's
+    ({"<event>_ms": ..., "<event>_<part>_ms": ..., other extras})."""
+    res = []
+    for line in out.splitlines():
+        m = _LOG_LINE.match(line)
+        if not m or m.group(2) != event or float(m.group(1)) < since:
+            continue
+        e = {event + "_ms": float(m.group(3))}
+        for k, v in re.findall(r"(\w+)=(\S+)", m.group(4)):
+            try:
+                e[event + "_" + k if k.endswith("_ms") else k] = float(v)
+            except ValueError:
+                e[k] = v
+        res.append(e)
+    return res
+
+
 def parse_components(out):
     """Component names ("pkg/.Activity") from `cmd package query-activities --brief`."""
     return [m.group(1) for m in re.finditer(r"^\s*([A-Za-z][\w.]*/[\w.$]+)\s*$", out, re.M)]
@@ -315,10 +340,13 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
     for i in range(runs):
         open_other_app(sh, other)
         time.sleep(settle)
+        sh.shell("dumpsys gfxinfo %s reset" % PKG)
         t = device_epoch(sh)
         s = parse_am_start(sh.shell(HOME_INTENT if via_home else "am start -W -n " + ACTIVITY))
         time.sleep(settle)
         s.update(launcher_logs(sh, t))
+        g = parse_gfxinfo(sh.shell("dumpsys gfxinfo " + PKG))
+        s["home_frames"], s["home_janky_frames"] = g.get("total_frames"), g.get("janky_frames")
         if s.get("activity") and not s["activity"].startswith(PKG):
             log("  warning: Home opened %s, not the launcher; is it the default home app?" % s["activity"])
         if s.get("total_ms") is None or s.get("launch_state") == "UNKNOWN":
@@ -344,6 +372,39 @@ def scenario_jank(sh, rounds, keys, interval, log):
             % (i + 1, rounds, g.get("total_frames"), g.get("janky_pct"), g.get("p90_ms"), g.get("p99_ms")))
         samples.append(g)
     return {"samples": samples, "summary": summarize(samples), "keys": keys, "interval_s": interval}
+
+
+def scenario_dock(sh, rounds, moves, interval, log):
+    """The top shelf: moves focus back and forth between the first two dock apps, one press every
+    `interval` seconds so each change can finish, and records how long the shelf takes to show the new
+    app (the launcher's `shelf` timing lines) and the frames drawn meanwhile."""
+    sh.shell("am start -W -n " + ACTIVITY)
+    time.sleep(2.5)
+    sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
+    time.sleep(1.5)
+    sh.shell(key_loop("RIGHT LEFT", interval), timeout=60)   # warm-up, not counted
+    time.sleep(2.0)
+    keys = " ".join(["RIGHT", "LEFT"] * (moves // 2) + ["RIGHT"] * (moves % 2))
+    events, frames = [], []
+    for i in range(rounds):
+        sh.shell("dumpsys gfxinfo %s reset" % PKG)
+        t = device_epoch(sh)
+        sh.shell(key_loop(keys, interval), timeout=60 + moves * (interval + 5))
+        time.sleep(1.5)
+        g = parse_gfxinfo(sh.shell("dumpsys gfxinfo " + PKG))
+        e = parse_events(sh.shell("logcat -d -v epoch -s %s:D" % PERF_TAG), "shelf", t)
+        e = [x for x in e if x.get("kind") != "show"]
+        shelf = statistics.median([x["shelf_ms"] for x in e]) if e else None
+        log("  dock %d/%d: %d shelf changes, median %s ms; %s frames, %s%% janky, p90 %s ms"
+            % (i + 1, rounds, len(e), shelf, g.get("total_frames"), g.get("janky_pct"), g.get("p90_ms")))
+        if len(e) < moves:
+            log("  warning: %d of %d moves changed the shelf; was focus on the dock?" % (len(e), moves))
+        events += e
+        frames.append(g)
+        time.sleep(2.0)
+    summary = summarize(events)
+    summary.update(summarize(frames))
+    return {"samples": events, "frames": frames, "summary": summary, "keys": keys, "interval_s": interval}
 
 
 def scenario_mem(sh, samples_n, log):
@@ -382,7 +443,7 @@ def apk_size(sh):
 
 def cmd_run(args):
     scenarios = [s.strip() for s in args.scenarios.split(",") if s.strip()]
-    bad = [s for s in scenarios if s not in ("cold", "warm", "jank", "mem")]
+    bad = [s for s in scenarios if s not in ALL_SCENARIOS]
     if bad:
         sys.exit("unknown scenario(s): %s" % ", ".join(bad))
     sh = args.shell or connect(args)
@@ -418,6 +479,9 @@ def cmd_run(args):
             if "jank" in scenarios:
                 log("D-pad jank x%d" % args.rounds)
                 result["jank"] = scenario_jank(sh, args.rounds, args.keys, args.key_interval, log)
+            if "dock" in scenarios:
+                log("dock moves x%d" % args.rounds)
+                result["dock"] = scenario_dock(sh, args.rounds, args.dock_moves, args.dock_interval, log)
             if "mem" in scenarios:
                 log("memory")
                 result["mem"] = scenario_mem(sh, 3, log)
@@ -445,6 +509,7 @@ METRICS = [
     ("cold.summary.reload_ms", "  of which: app list reload", "ms"),
     ("warm.summary.total_ms", "Home / warm start (TotalTime)", "ms"),
     ("warm.summary.focus_restored_ms", "Home: onResume to focus restored", "ms"),
+    ("warm.summary.home_frames", "  frames drawn until Home settles", ""),
     ("warm.summary.resume_ms", "  onResume main-thread time", "ms"),
     ("warm.summary.reload_ms", "  of which: app list reload", "ms"),
     ("warm.summary.reload_load_ms", "    loading banners/icons/labels", "ms"),
@@ -454,6 +519,15 @@ METRICS = [
     ("jank.summary.p99_ms", "99th percentile frame", "ms"),
     ("jank.summary.slow_ui_thread", "Slow UI thread frames", ""),
     ("jank.summary.high_input_latency", "High input latency frames", ""),
+    ("dock.summary.shelf_ms", "Dock move: top shelf shows the new app", "ms"),
+    ("dock.summary.shelf_text_ms", "  name shown", "ms"),
+    ("dock.summary.shelf_glow_ms", "  glow colour reached", "ms"),
+    ("dock.summary.total_frames", "Frames drawn per round of dock moves", ""),
+    ("dock.summary.janky_pct", "Janky frames (dock moves)", "%"),
+    ("dock.summary.p50_ms", "  50th percentile frame", "ms"),
+    ("dock.summary.p90_ms", "  90th percentile frame", "ms"),
+    ("dock.summary.p99_ms", "  99th percentile frame", "ms"),
+    ("dock.summary.gpu_p90_ms", "  90th percentile GPU", "ms"),
     ("mem.summary.total_pss_kb", "Memory (PSS)", "MB"),
     ("mem.summary.java_heap_kb", "  Java heap", "MB"),
     ("mem.summary.native_heap_kb", "  Native heap (bitmaps)", "MB"),
@@ -554,6 +628,9 @@ def cmd_trace(args):
         if args.action != "cold":
             sh.shell("am start -W -n " + ACTIVITY)
             time.sleep(2.0)
+        if args.action == "dock":
+            sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
+            time.sleep(1.5)
         sh.shell("rm -f " + TRACE_REMOTE)
         sh.shell("printf '%%s' '%s' > %s" % (perfetto_config(int(args.seconds * 1000)), TRACE_CONFIG_REMOTE))
         out = sh.shell("cat %s | perfetto --txt -c - -o %s --background" % (TRACE_CONFIG_REMOTE, TRACE_REMOTE))
@@ -571,7 +648,9 @@ def cmd_trace(args):
             time.sleep(2.0)
             sh.shell(HOME_INTENT)
         elif args.action == "keys":
-            sh.shell(key_loop(args.keys, args.key_interval), timeout=120)
+            sh.shell(key_loop(args.keys, args.key_interval or 0.35), timeout=120)
+        elif args.action == "dock":
+            sh.shell(key_loop(DOCK_TRACE_KEYS, args.key_interval or 1.2), timeout=120)
         remaining = args.seconds - (time.time() - start) + 2.0
         if remaining > 0:
             time.sleep(remaining)
@@ -598,6 +677,22 @@ group by thread, s.name order by total_ms desc limit %d
 """
 
 
+# tvhome:* sections that span frames (Perf.Span, e.g. tvhome:shelf) live on process tracks.
+ASYNC_SQL = """
+select s.name, count(*) as count, round(sum(s.dur) / 1e6, 1) as total_ms, round(avg(s.dur) / 1e6, 2) as avg_ms,
+       round(max(s.dur) / 1e6, 1) as max_ms
+from slice s join process_track pt on s.track_id = pt.id join process p using (upid)
+where p.name = '%s' and s.name like 'tvhome:%%' group by s.name order by total_ms desc
+"""
+
+# Frames as SurfaceFlinger saw them (android.surfaceflinger.frametimeline, Android 12+).
+FRAMES_SQL = """
+select a.jank_type, count(*) as count, round(avg(a.dur) / 1e6, 2) as avg_ms, round(max(a.dur) / 1e6, 1) as max_ms
+from actual_frame_timeline_slice a join process p using (upid)
+where p.name = '%s' group by a.jank_type order by count desc
+"""
+
+
 def cmd_summarize(args):
     sql = SUMMARY_SQL % (PKG, args.limit)
     try:
@@ -609,6 +704,11 @@ def cmd_summarize(args):
     tp = TraceProcessor(trace=args.trace)
     try:
         rows = list(tp.query(sql))
+        spans = list(tp.query(ASYNC_SQL % PKG))
+        try:
+            frames = list(tp.query(FRAMES_SQL % PKG))
+        except Exception:   # no frame timeline in traces from Android 11 and older
+            frames = []
     finally:
         tp.close()
     print("Slices on the launcher's main thread and RenderThread, plus its tvhome:* sections. Nested slices "
@@ -616,6 +716,16 @@ def cmd_summarize(args):
           "|---|---|---|---|---|---|")
     for r in rows:
         print("| %s | %s | %d | %s | %s | %s |" % (r.thread, r.name, r.count, r.total_ms, r.avg_ms, r.max_ms))
+    if spans:
+        print("\nSections across frames:\n\n| section | count | total ms | avg ms | max ms |\n|---|---|---|---|---|")
+        for r in spans:
+            print("| %s | %d | %s | %s | %s |" % (r.name, r.count, r.total_ms, r.avg_ms, r.max_ms))
+    if frames:
+        total = sum(r.count for r in frames)
+        print("\nFrames (SurfaceFlinger frame timeline), %d in all:\n\n| jank type | frames | avg ms | max ms |\n"
+              "|---|---|---|---|" % total)
+        for r in frames:
+            print("| %s | %d | %s | %s |" % (r.jank_type, r.count, r.avg_ms, r.max_ms))
 
 
 # ---- command line ------------------------------------------------------------------------------
@@ -634,11 +744,13 @@ def build_parser():
     r = sub.add_parser("run", help="measure and save a result file")
     conn(r)
     r.add_argument("--label", required=True, help="name for this run, e.g. main or the branch")
-    r.add_argument("--scenarios", default="cold,warm,jank,mem")
+    r.add_argument("--scenarios", default="cold,warm,jank,dock,mem")
     r.add_argument("--runs", type=int, default=10, help="cold and warm starts (default 10)")
-    r.add_argument("--rounds", type=int, default=3, help="D-pad rounds for jank (default 3)")
+    r.add_argument("--rounds", type=int, default=3, help="D-pad rounds for jank and dock (default 3)")
     r.add_argument("--keys", default=DEFAULT_KEYS, help="D-pad sequence for jank (UP DOWN LEFT RIGHT)")
     r.add_argument("--key-interval", type=float, default=0.35, help="seconds between key presses")
+    r.add_argument("--dock-moves", type=int, default=8, help="moves between the first two dock apps per round")
+    r.add_argument("--dock-interval", type=float, default=1.2, help="seconds between dock moves")
     r.add_argument("--settle", type=float, default=1.5, help="seconds to wait between steps")
     r.add_argument("--via-home", action="store_true",
                    help="warm start with the HOME intent instead of starting MainActivity directly "
@@ -653,9 +765,10 @@ def build_parser():
     t = sub.add_parser("trace", help="record a Perfetto trace while doing something")
     conn(t)
     t.add_argument("--seconds", type=float, default=12.0)
-    t.add_argument("--action", choices=("keys", "cold", "home", "none"), default="keys")
+    t.add_argument("--action", choices=("keys", "dock", "cold", "home", "none"), default="keys",
+                   help="keys: --keys; dock: Right/Left between the first two dock apps")
     t.add_argument("--keys", default=DEFAULT_KEYS)
-    t.add_argument("--key-interval", type=float, default=0.35)
+    t.add_argument("--key-interval", type=float, help="seconds between keys (default 0.35; 1.2 for dock)")
     t.add_argument("--out", help="local file (default tvhome-<time>.perfetto-trace)")
     t.set_defaults(func=cmd_trace)
 

@@ -151,7 +151,7 @@ rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 1.6 MB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 230 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no blur, no
 video, no network, and no background services except, on Google TV, the small Home-button
 service described below.
@@ -173,8 +173,9 @@ sdkmanager "platforms;android-34" "build-tools;34.0.0"
 ```
 
 Without Homebrew, the script also finds a JDK 17 known to `/usr/libexec/java_home` and an SDK in
-`~/Library/Android/sdk`, Android Studio's default. A release build (`./gradlew assembleRelease`)
-is smaller and faster on 1 GB sets; sign it yourself before installing.
+`~/Library/Android/sdk`, Android Studio's default. It installs a release build (shrunk by R8, signed
+with your local debug key) and compiles it ahead of time on the TV, which is much faster than a debug
+build; `BUILD_TYPE=debug` (`-BuildType debug` on Windows) installs a debuggable one instead.
 
 **Performance** is measured, not guessed: `tools/perf.py` times cold start and Home, counts janky
 frames and reads memory on your TV, and records Perfetto traces. See
