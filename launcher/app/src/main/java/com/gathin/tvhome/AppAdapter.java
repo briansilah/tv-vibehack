@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
@@ -86,15 +87,22 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         final String key;
         final Drawable banner;
         final Drawable icon;
+        /** For the top shelf's cover art, which loads the banner in its sharpest version. */
+        final ApplicationInfo appInfo;
+        final int bannerRes;
+        ShelfSource.App shelfApp;
         int ambient;
 
-        Entry(String label, ComponentName component, Drawable banner, Drawable icon) {
+        Entry(String label, ComponentName component, Drawable banner, Drawable icon, ApplicationInfo appInfo,
+              int bannerRes) {
             this.label = label;
             this.component = component;
             this.pkg = component.getPackageName();
             this.key = component.flattenToShortString();
             this.banner = banner;
             this.icon = icon;
+            this.appInfo = appInfo;
+            this.bannerRes = bannerRes;
         }
     }
 
@@ -253,7 +261,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
             Drawable icon = ri.loadIcon(pm);
             String label = String.valueOf(ri.loadLabel(pm));
-            return new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon);
+            return new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon,
+                    ri.activityInfo.applicationInfo, ri.activityInfo.getBannerResource());
         } finally {
             Perf.end();
         }
@@ -476,6 +485,24 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     Drawable iconAt(int position) {
         return position >= 0 && position < items.size() ? copy(items.get(position).icon) : null;
+    }
+
+    /** What the top shelf needs to know about the app at a position, or null. */
+    ShelfSource.App shelfAppAt(int position) {
+        if (position < 0 || position >= items.size()) return null;
+        Entry e = items.get(position);
+        if (e.shelfApp == null) {
+            e.shelfApp = new ShelfSource.App(e.key, e.pkg, e.appInfo, e.bannerRes,
+                    copy(e.banner != null ? e.banner : e.icon));
+        }
+        return e.shelfApp;
+    }
+
+    /** The dock's apps, for the top shelf to prepare their art. */
+    List<ShelfSource.App> dockApps() {
+        List<ShelfSource.App> out = new ArrayList<>();
+        for (int i = 0; i < Math.min(dockSize, items.size()); i++) out.add(shelfAppAt(i));
+        return out;
     }
 
     private static Drawable copy(Drawable d) {

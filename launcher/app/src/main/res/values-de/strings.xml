@@ -36,4 +36,6 @@
     <string name="legend_done">Fertig</string>
     <string name="location_dock">Im Dock</string>
     <string name="location_row">Reihe %1$d</string>
+    <!-- Top shelf: a title you were watching, which the app put in Android TV's Watch Next. -->
+    <string name="continue_watching">Weiterschauen</string>
 </resources>

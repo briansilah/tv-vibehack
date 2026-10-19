@@ -56,7 +56,7 @@ import java.util.Locale;
 /**
  * tvOS style home: black, a pinned dock row, an app grid; the focused tile grows on a soft shadow.
  */
-public class MainActivity extends Activity implements AppAdapter.TileListener {
+public class MainActivity extends Activity implements AppAdapter.TileListener, TopShelf.Host {
 
     /** Tiles per row and dock slots (res/values/config.xml, columns). Set in onCreate. */
     static int COLUMNS = 4;
@@ -95,6 +95,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private FrameLayout root;
     private View ambient;
     private TextView heroName;
+    /** The top shelf's art: suggested content or cover art, over the glow (see {@link TopShelf}). */
+    private TopShelf topShelf;
+    private ShelfInfoView shelfInfo;
+    /** The name is fading out to change: its end decides whether it comes back (see {@link #swapShelf}). */
+    private boolean nameSwapping;
     private GradientDrawable ambientGlow;
     private int ambientColor;
     private ValueAnimator ambientFade;
@@ -193,9 +198,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             handler.postDelayed(this, MINUTE_MS);
         }
     };
-    /** From a dock focus change until the top shelf shows that app (name and glow); tools/perf.py's dock scenario. */
-    private final Perf.Span shelfTiming = new Perf.Span("shelf", "text", "glow");
-    private static final int SHELF_TEXT = 0, SHELF_GLOW = 1;
+    /**
+     * From a dock focus change until the top shelf shows that app (name or title, glow, and art when it's ready);
+     * tools/perf.py's dock scenario.
+     */
+    private final Perf.Span shelfTiming = new Perf.Span("shelf", "text", "glow", "art");
+    private static final int SHELF_TEXT = 0, SHELF_GLOW = 1, SHELF_ART = 2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -232,6 +240,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.setBackground(ambientGlow);
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
+        shelfInfo = findViewById(R.id.shelfInfo);
+        topShelf = new TopShelf(this, findViewById(R.id.shelfArt), shelfInfo, this,
+                getResources().getBoolean(R.bool.top_shelf_art), getResources().getStringArray(R.array.top_shelf_feeds));
         corner = findViewById(R.id.corner);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
         topBarStub.setLayoutInflater(LayoutInflater.from(new ContextThemeWrapper(this,
@@ -336,6 +347,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Perf.begin("tvhome:onResume");
         super.onResume();
         resumed = true;
+        topShelf.resume();
         comeBackFromApp();
         // The top shelf stays as it was when an app was opened, so Home comes back showing it at once
         // instead of fading the name and glow in again; the focus restore below updates it if needed.
@@ -370,6 +382,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void reloadApps() {
         appsChanged = false;
         adapter.reload();
+        topShelf.setDock(adapter.dockApps());
         // The app the top shelf shows may have a new name or banner: make the next focus on it swap it in again.
         shelfKey = null;
     }
@@ -380,6 +393,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (reportedFullyDrawn) return;
         reportedFullyDrawn = true;
         Transitions.prepare(getApplicationContext());
+        // The top shelf's art reads the disk and the network: not before Home is up.
+        handler.post(topShelf::start);
         try {
             reportFullyDrawn();   // "Fully drawn" in the system log, for cold-start measurements
         } catch (RuntimeException ignored) {
@@ -467,6 +482,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(reloadNow);   // appsChanged is still set, so the next onResume reloads
         handler.removeCallbacks(minuteTick);
         shelfTiming.cancel();
+        topShelf.pause();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        topShelf.trim(level);
     }
 
     @Override
@@ -556,6 +578,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         topArea.setTranslationY(-Math.min(pageTravel, topArea.getBottom()));
         topArea.setAlpha(1f - Math.min(1f, pageTravel / (TOP_BAR_FADE_DP * density)));
         heroName.setY(heroBaseY - pageTravel);
+        shelfInfo.setTranslationY(-pageTravel);
     }
 
     /** Puts the top shelf's name at {@code y} (for the page at rest), wherever the page is now. */
@@ -569,17 +592,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void showHero(int position, float dockTopInRoot) {
         String key = adapter.keyAt(position);
         float y = dockTopInRoot - DockDecoration.PAD_V_DP * density - 26 * density - heroName.getHeight();
+        topShelf.place(heroName.getLeft(), y + heroName.getHeight(), dockTopInRoot - DockDecoration.PAD_V_DP * density);
 
         if (!heroShown) {
             // Coming (back) to the dock: show this app straight away.
             heroShown = true;
             shelfKey = key;
             final int span = shelfTiming.start(Perf.enabled() ? "kind=show pkg=" + key : null);
+            boolean ownTitle = topShelf.show(adapter.shelfAppAt(position), true,
+                    () -> shelfTiming.part(SHELF_ART, span));
             heroName.animate().cancel();
+            nameSwapping = false;
             heroName.setText(adapter.labelAt(position));
             placeHero(y);
             heroName.setTranslationX(0f);
-            heroName.animate().alpha(1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
+            // The art's own title or logo takes the name's place.
+            heroName.animate().alpha(ownTitle ? 0f : 1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
                     .withEndAction(() -> shelfTiming.part(SHELF_TEXT, span)).start();
             if (ambientFade != null) ambientFade.cancel();
             setAmbient(adapter.ambientColorAt(position));
@@ -592,17 +620,28 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
-    /** Changes the top shelf (name and ambient glow) to the dock app that just got focus. */
+    /**
+     * Changes the top shelf (art, name and ambient glow) to the dock app that just got focus. The name comes back
+     * only if the art has no title or logo of its own for the app.
+     */
     private void swapShelf(int position, float y, int span) {
         final String label = adapter.labelAt(position);
         shelfKey = adapter.keyAt(position);
+        topShelf.show(adapter.shelfAppAt(position), false, () -> shelfTiming.part(SHELF_ART, span));
         heroName.animate().cancel();
+        nameSwapping = true;
         // Out from wherever the name is (a swap just before may still be fading it), then the new one in.
         heroName.animate().alpha(0f).translationX(-8 * density)
                 .setDuration((long) (NAME_OUT_MS * heroName.getAlpha())).setInterpolator(LINEAR)
                 .withEndAction(() -> {
+                    nameSwapping = false;
                     heroName.setText(label);
                     placeHero(y);
+                    if (topShelf.ownTitle(shelfKey)) {
+                        heroName.setTranslationX(0f);
+                        shelfTiming.part(SHELF_TEXT, span);
+                        return;
+                    }
                     heroName.setTranslationX(8 * density);
                     heroName.animate().alpha(1f).translationX(0f).setDuration(NAME_IN_MS)
                             .setInterpolator(DECELERATE).withEndAction(() -> shelfTiming.part(SHELF_TEXT, span))
@@ -625,6 +664,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambientFade.start();
     }
 
+    /** The art for the app on the shelf arrived (or changed) after focus did: the name makes way, or comes back. */
+    @Override
+    public void onShelfArt(String key, boolean ownTitle) {
+        if (!heroShown || nameSwapping || key == null || !key.equals(shelfKey)) return;
+        heroName.animate().cancel();
+        heroName.setTranslationX(0f);
+        heroName.animate().alpha(ownTitle ? 0f : 1f).setDuration(ownTitle ? SHELF_HIDE_NAME_MS : NAME_IN_MS)
+                .setInterpolator(DECELERATE).start();
+    }
+
+    /** Art fills the screen: the glow under it needn't be drawn. */
+    @Override
+    public void onShelfCovered(boolean covered) {
+        ambient.setVisibility(covered ? View.INVISIBLE : View.VISIBLE);
+    }
+
     private void setAmbient(int color) {
         ambientColor = color;
         int c = color & 0x00FFFFFF;
@@ -635,6 +690,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         shelfTiming.cancel();
         if (!heroShown) return;
         heroShown = false;
+        nameSwapping = false;
+        topShelf.hide();
         heroName.animate().cancel();   // drops a pending name swap's end action, which would fade it back in
         heroName.animate().alpha(0f).setDuration(SHELF_HIDE_NAME_MS).setInterpolator(DECELERATE).start();
         ambient.animate().alpha(0f).setDuration(SHELF_HIDE_GLOW_MS).setInterpolator(DECELERATE).start();

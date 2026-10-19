@@ -40,4 +40,27 @@
          without a photo. Leave empty for the plain silhouette. (Android doesn't let apps read the TV's
          Google account name or photo.) -->
     <string name="profile_name" translatable="false"></string>
+
+    <!-- Top shelf art: with focus on a dock app, the space above the dock shows, best first,
+         1. what the app suggests: what it publishes on the TV for the home screen (what you were watching, its
+            recommendations; needs READ_TV_LISTINGS, which build-and-install.sh grants), then the titles of its
+            feed below;
+         2. its cover art: its logo, cut out of its banner, on shapes in its colours;
+         3. otherwise the ambient glow and its name.
+         false: always the glow and name, with no network use. -->
+    <bool name="top_shelf_art">true</bool>
+
+    <!-- Public catalogues of suggested titles, per app: "package | caption | URL | URL ...", each URL a Stremio
+         catalogue (JSON with "metas": id, name, background, logo). {country} in a URL becomes the TV's country from
+         its language and region settings (ke, us, ...), or "global" without one; the caption then names it.
+         Fetched at most every 6 hours, only when Home shows, and kept on the TV for offline use. Remove a line to
+         keep an app to its own suggestions and cover art. -->
+    <string-array name="top_shelf_feeds" translatable="false">
+        <item>com.netflix.ninja | Top 10 on Netflix | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/series/netflix-top10-{country}.json | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/movie/netflix-top10-{country}.json</item>
+        <item>com.apple.atve.androidtv.appletv | Popular on Apple TV+ | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/series/atp.json | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/movie/atp.json</item>
+        <item>com.amazon.amazonvideo.livingroom | Popular on Prime Video | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/series/amp.json | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/movie/amp.json</item>
+        <item>com.disney.disneyplus | Popular on Disney+ | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/series/dnp.json | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/movie/dnp.json</item>
+        <item>in.startv.hotstar | Popular on JioHotstar | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/series/jhs.json | https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/catalog/movie/jhs.json</item>
+        <item>com.stremio.one | Popular on Stremio | https://cinemeta-catalogs.strem.io/top/catalog/movie/top.json | https://cinemeta-catalogs.strem.io/top/catalog/series/top.json</item>
+    </string-array>
 </resources>

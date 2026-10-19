@@ -12,6 +12,14 @@
         android:layout_height="match_parent"
         android:alpha="0" />
 
+    <!-- Top shelf art over the glow, full screen behind the dock as on tvOS: suggested content's backdrop or the
+         app's cover art (TopShelf). It covers the glow when it shows; without art, the glow shows. -->
+    <com.gathin.tvhome.TopShelfView
+        android:id="@+id/shelfArt"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
+
     <!-- Top shelf: the focused dock app's name, positioned above the dock in code. Full width, so changing
          the name redraws it without laying out the screen again. -->
     <TextView
@@ -24,6 +32,14 @@
         style="@style/Text.LargeTitle"
         android:includeFontPadding="false"
         android:singleLine="true" />
+
+    <!-- The top shelf art's own words: a caption and the title's logo (or name), or the app's logo on its cover
+         art, in place of the name. Drawn in code, moved with the page. -->
+    <com.gathin.tvhome.ShelfInfoView
+        android:id="@+id/shelfInfo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
 
     <!-- The app grid fills the screen, under the top bar, as on tvOS: going down into the grid, the top bar
          scrolls away with the page (MainActivity.followPage) and the rows use the whole screen. 32dp side margins:

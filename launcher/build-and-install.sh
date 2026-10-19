@@ -44,7 +44,8 @@ case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *pack
     "pm install -r /data/local/tmp/tvhome.apk" \
     "rm -f /data/local/tmp/tvhome.apk" \
     "cmd package compile -m speed -f com.gathin.tvhome >/dev/null 2>&1; echo compiled" \
-    "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted"
+    "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted" \
+    "pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted"
   if [ "$GOOGLE_TV" = 1 ]; then
     # Re-enable it in case an older version of this script disabled it.
     echo "pm enable $GOOGLE_TV_LAUNCHER"

@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Opens Google TV's quick settings panel from the top bar (StatusBarManager.expandNotificationsPanel). -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <!-- Top shelf art (config.xml, top_shelf_art): suggested titles' pictures and public catalogue feeds. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Top shelf art: reads what apps publish on the TV for the home screen (Watch Next, preview channels) from
+         TvProvider. Granted over adb at install time; without it the top shelf uses feeds and cover art. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
 
     <application
         android:label="@string/app_name"
