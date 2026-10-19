@@ -1,6 +1,7 @@
 package com.gathin.tvhome;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -26,12 +27,24 @@ public class ProfileCornerTest {
     }
 
     @Test
-    public void tabsFadeInOverTheFirstPartOfTheWay() {
-        assertEquals(0f, ProfileCorner.tabAlpha(0f), 0f);
-        assertEquals(0f, ProfileCorner.tabAlpha(-0.01f), 0f);
-        assertEquals(0.5f, ProfileCorner.tabAlpha(ProfileCorner.TAB_FADE / 2f), 1e-6f);
-        assertEquals(1f, ProfileCorner.tabAlpha(ProfileCorner.TAB_FADE), 0f);
-        assertEquals(1f, ProfileCorner.tabAlpha(1.002f), 0f);
+    public void leapStartsWhereTvosFirstMovingFrameIs() {
+        float[] rest = ProfileCorner.leap(0f);
+        assertEquals(0f, rest[0], 1e-6f);
+        assertEquals(0f, rest[1], 1e-6f);
+        // Measured: 47 % and 52 % of the way in the first frames that move when opening, 30 % when closing.
+        assertEquals(0.43f, ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S)[0], 0.03f);
+        assertEquals(0.30f, ProfileCorner.leap(ProfileCorner.CLOSE_LEAP_S)[0], 0.03f);
+        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S)[1] > 0f);
+    }
+
+    @Test
+    public void leapSettlesWithoutVisibleOvershoot() {
+        float max = 0f;
+        for (int ms = 0; ms <= 2000; ms += 4) max = Math.max(max, ProfileCorner.leap(ms / 1000f)[0]);
+        assertTrue(max < 1.002f);
+        // 95 % about 310 ms after tvOS's first moving frame.
+        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S + 0.28f)[0] < 0.95f);
+        assertTrue(ProfileCorner.leap(ProfileCorner.OPEN_LEAP_S + 0.34f)[0] > 0.95f);
     }
 
     @Test

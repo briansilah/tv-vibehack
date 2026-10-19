@@ -27,14 +27,19 @@ import java.util.Locale;
 
 /**
  * The top right of the home screen, as on Apple TV (tvOS 26): the time and the profile picture in a glass capsule.
- * When focus moves into it, it opens like the header of Control Center: the capsule clears, the time glides left,
- * and the top bar's buttons come out from under the picture and line up before it, the picture shrinking to one of
- * them. Focus leaving closes it the same way back.
+ * When focus moves into it, it opens like the header of Control Center, as measured frame by frame on tvOS:
+ * <ul>
+ * <li>Opening: the capsule clears, the time glides left, and the top bar's buttons slide in from the right as one
+ * row, passing under the picture, which shrinks to the size of a tab.</li>
+ * <li>Closing: the buttons are gone at once and the picture is back at its size; the capsule is back too, still
+ * stretched to the time, and its left end follows the time home.</li>
+ * </ul>
  *
- * <p>Children: the time (a TextView), the top bar (set with {@link #setBar}) and the picture ({@code R.id.avatar}),
- * drawn in that order so the buttons pass under the picture. They are laid out once, where they sit when open;
- * opening and closing only change translations, alpha and scale, render properties that don't lay out or redraw
- * anything. Sizes are tvOS's, measured at 1080p (1 dp = 2 px on a 1080p TV); the PR that added this has the table.
+ * <p>Children: the capsule, the time (a TextView), the top bar (set with {@link #setBar}) and the picture
+ * ({@code R.id.avatar}), drawn in that order so the buttons pass under the picture. They are laid out once, where
+ * they sit when open; opening and closing change translations, alpha and scale (render properties), and redraw
+ * only the capsule while it closes. Sizes are tvOS's, measured at 1080p, where 1 dp is 2 px; the PR that added this
+ * has the table and the recordings.
  */
 public class ProfileCorner extends ViewGroup {
 
@@ -60,22 +65,30 @@ public class ProfileCorner extends ViewGroup {
     static final float HEADER_WIDTH_DP = 222f;
     /** Never closer than this to the first button, when the buttons or the time are wider than tvOS's. */
     static final float MIN_TIME_GAP_DP = 16f;
-    /** The buttons start one slot right of the picture, under which they pass. */
-    static final float TAB_START_SLOTS = 1f;
-    /** They are fully visible once 30 % of the way out (and go when 30 % from home, closing). */
-    static final float TAB_FADE = 0.3f;
+    /** The row of buttons slides in from 231 px right of where it ends, on the same spring as the time. */
+    static final float TAB_TRAVEL_DP = 115.5f;
 
     /**
-     * The opening: a spring fitted to a 60 fps recording of tvOS 26 opening and closing Control Center (ζ 0.9;
-     * there 95 % of the way 320 to 340 ms after the first moving frame, and settled by 550 ms). It starts with
-     * some speed instead of from rest, so the first frames move; it is a spring so focus can turn it around mid-way.
+     * The motion: a spring fitted to three recordings of tvOS 26 opening and closing Control Center (two at 60 fps,
+     * one at 30 fps; 0.7 % RMS error). It settles without a visible overshoot, 95 % of the way 310 ms after the
+     * first frame that moves. Being a spring, focus can turn it around mid-way.
      */
-    static final float OPEN_STIFFNESS = 120f;
-    static final float OPEN_DAMPING = 0.9f;
-    static final float OPEN_START_VELOCITY = 4f;
-    /** The capsule clears within 80 ms of opening and is back within 120 ms of closing, as on tvOS. */
+    static final float STIFFNESS = 88f;
+    static final float DAMPING = 0.92f;
+    /**
+     * tvOS's first frame that moves is already this far into the spring: about 45 % of the way when opening and
+     * 30 % when closing, in all three recordings. The rest of the motion is the spring's; so it starts there.
+     */
+    static final float OPEN_LEAP_S = 0.15f;
+    static final float CLOSE_LEAP_S = 0.115f;
+    /**
+     * The capsule: 30 % there in the first frame of opening, gone 80 ms later; 75 % back in the first frame of
+     * closing, all there 70 ms later.
+     */
+    static final float CAPSULE_OPEN_FROM = 0.3f;
     static final long CAPSULE_OUT_MS = 80L;
-    static final long CAPSULE_IN_MS = 120L;
+    static final float CAPSULE_CLOSE_FROM = 0.75f;
+    static final long CAPSULE_IN_MS = 70L;
 
     private static final FloatPropertyCompat<ProfileCorner> OPENNESS = new FloatPropertyCompat<>("openness") {
         @Override
@@ -105,21 +118,22 @@ public class ProfileCorner extends ViewGroup {
 
     private final float density;
     private final View capsule;
+    private final GlassCapsule glass;
     private TextView time;
     private View avatar;
     private View bar;
     private final SpringAnimation openSpring;
     private final SpringAnimation avatarSpring;
-    /** 0 at rest, 1 open; the spring may take it a little past either end. */
+    /** 0 at rest, 1 open. */
     private float openness;
     /** 0: the picture is a tab like the others; 1: it has focus and is at full size. */
     private float avatarFocus;
     private boolean open;
 
-    // Where things sit at rest, from the last layout (open positions are the children's own).
+    // From the last layout: where things sit at rest (open positions are the children's own).
     private float timeRestLeft;
     private float avatarRestCenter;
-    private float tabStart;
+    private int capsuleRestLeft;
 
     private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (oldFocus, newFocus) -> {
         setOpen(contains(newFocus));
@@ -129,13 +143,19 @@ public class ProfileCorner extends ViewGroup {
     public ProfileCorner(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
-        capsule = new View(context);
-        capsule.setBackground(new GlassCapsule(density));
+        capsule = new View(context) {
+            @Override
+            public boolean hasOverlappingRendering() {
+                return false;   // its fades draw the capsule straight to the screen, without an offscreen layer
+            }
+        };
+        glass = new GlassCapsule(density);
+        capsule.setBackground(glass);
         capsule.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         addView(capsule, 0);   // first, so it is drawn under the time and the picture
 
         openSpring = new SpringAnimation(this, OPENNESS, 0f);
-        openSpring.getSpring().setStiffness(OPEN_STIFFNESS).setDampingRatio(OPEN_DAMPING);
+        openSpring.getSpring().setStiffness(STIFFNESS).setDampingRatio(DAMPING);
         openSpring.setMinimumVisibleChange(DynamicAnimation.MIN_VISIBLE_CHANGE_SCALE);
         avatarSpring = new SpringAnimation(this, AVATAR_FOCUS, 0f);
         avatarSpring.getSpring().setStiffness(TopBarButton.STIFFNESS).setDampingRatio(TopBarButton.DAMPING);
@@ -211,9 +231,21 @@ public class ProfileCorner extends ViewGroup {
         if (this.open == open) return;
         this.open = open;
         capsule.animate().cancel();
-        capsule.animate().alpha(open ? 0f : 1f).setDuration(open ? CAPSULE_OUT_MS : CAPSULE_IN_MS).start();
-        if (!openSpring.isRunning()) openSpring.setStartVelocity(open ? OPEN_START_VELOCITY : -OPEN_START_VELOCITY);
+        if (open) {
+            capsule.setAlpha(Math.min(capsule.getAlpha(), CAPSULE_OPEN_FROM));
+            capsule.animate().alpha(0f).setDuration(CAPSULE_OUT_MS).start();
+        } else {
+            capsule.setAlpha(Math.max(capsule.getAlpha(), CAPSULE_CLOSE_FROM));
+            capsule.animate().alpha(1f).setDuration(CAPSULE_IN_MS).start();
+        }
+        if (!openSpring.isRunning()) {
+            // From rest: start where tvOS's first moving frame is, at the spring's speed there.
+            float[] leap = leap(open ? OPEN_LEAP_S : CLOSE_LEAP_S);
+            openSpring.setStartValue(open ? leap[0] : 1f - leap[0]);
+            openSpring.setStartVelocity(open ? leap[1] : -leap[1]);
+        }
         openSpring.animateToFinalPosition(open ? 1f : 0f);
+        apply();   // the buttons and the picture change at once when closing
     }
 
     private void setAvatarFocused(boolean focused) {
@@ -238,15 +270,15 @@ public class ProfileCorner extends ViewGroup {
         int exact = MeasureSpec.makeMeasureSpec(avatarSize, MeasureSpec.EXACTLY);
         avatar.measure(exact, exact);
 
-        int restWidth = restWidth(dp(TIME_INSET_DP), time.getMeasuredWidth(), dp(TIME_GAP_DP), dp(AVATAR_REST_DP),
-                dp(AVATAR_REST_INSET_DP));
-        int capsuleHeight = dp(CAPSULE_HEIGHT_DP);
-        capsule.measure(MeasureSpec.makeMeasureSpec(restWidth, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(capsuleHeight, MeasureSpec.EXACTLY));
-
         int barWidth = hasBar ? bar.getMeasuredWidth() : 0;
         int openWidth = dp(OPEN_INSET_DP) + dp(SLOT_DP) + barWidth + dp(MIN_TIME_GAP_DP) + time.getMeasuredWidth();
-        int w = Math.max(restWidth, Math.max(dp(HEADER_WIDTH_DP), openWidth));
+        int restWidth = restWidth(dp(TIME_INSET_DP), time.getMeasuredWidth(), dp(TIME_GAP_DP), dp(AVATAR_REST_DP),
+                dp(AVATAR_REST_INSET_DP));
+        int w = Math.max(restWidth, Math.max(dp(HEADER_WIDTH_DP), openWidth)) + dp(TIME_INSET_DP);
+        int capsuleHeight = dp(CAPSULE_HEIGHT_DP);
+        // The capsule view spans the whole width; its drawable is as wide as the time needs (see apply()).
+        capsule.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(capsuleHeight, MeasureSpec.EXACTLY));
         int h = Math.max(Math.max(capsuleHeight, avatarSize), Math.max(time.getMeasuredHeight(),
                 hasBar ? bar.getMeasuredHeight() : 0));
         setMeasuredDimension(resolveSize(w, widthMeasureSpec), resolveSize(h, heightMeasureSpec));
@@ -255,8 +287,8 @@ public class ProfileCorner extends ViewGroup {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         int w = r - l, cy = (b - t) / 2;
-        int capsuleW = capsule.getMeasuredWidth(), capsuleH = capsule.getMeasuredHeight();
-        capsule.layout(w - capsuleW, cy - capsuleH / 2, w, cy - capsuleH / 2 + capsuleH);
+        int capsuleH = capsule.getMeasuredHeight();
+        capsule.layout(0, cy - capsuleH / 2, w, cy - capsuleH / 2 + capsuleH);
 
         int slot = dp(SLOT_DP);
         int slotsRight = w - dp(OPEN_INSET_DP);   // the picture's slot ends here, the buttons' where it starts
@@ -279,44 +311,36 @@ public class ProfileCorner extends ViewGroup {
         int timeLeft = openTimeLeft(w, dp(HEADER_WIDTH_DP), barLeft, dp(MIN_TIME_GAP_DP), tw);
         time.layout(timeLeft, timeTop, timeLeft + tw, timeTop + th);
 
-        timeRestLeft = w - capsuleW + dp(TIME_INSET_DP);
+        int restWidth = restWidth(dp(TIME_INSET_DP), tw, dp(TIME_GAP_DP), dp(AVATAR_REST_DP), dp(AVATAR_REST_INSET_DP));
+        capsuleRestLeft = w - restWidth;
+        timeRestLeft = capsuleRestLeft + dp(TIME_INSET_DP);
         avatarRestCenter = w - dp(AVATAR_REST_INSET_DP) - dp(AVATAR_REST_DP) / 2f;
-        tabStart = avatarRestCenter + TAB_START_SLOTS * slot;
         apply();
     }
 
-    /** Puts everything where it is at the current openness. Render properties only. */
+    /** Puts everything where it is at the current openness. */
     private void apply() {
         if (time == null) return;
         float f = openness;
         float closed = 1f - f;
-        time.setTranslationX((timeRestLeft - time.getLeft()) * closed);
+        float timeShift = (timeRestLeft - time.getLeft()) * closed;
+        time.setTranslationX(timeShift);
+        // The capsule's left end stays the same distance before the time, as it follows it home.
+        glass.setLeft(Math.min(capsuleRestLeft, Math.round(time.getLeft() + timeShift - TIME_INSET_DP * density)));
 
         float avatarOpenCenter = (avatar.getLeft() + avatar.getRight()) / 2f;
-        avatar.setTranslationX((avatarRestCenter - avatarOpenCenter) * closed);
-        float s = avatarScale(f, avatarFocus);
+        float avatarOpen = open ? f : 0f;   // closing, the picture is back at its place at once
+        avatar.setTranslationX((avatarRestCenter - avatarOpenCenter) * (1f - avatarOpen));
+        float s = avatarScale(avatarOpen, avatarFocus);
         avatar.setScaleX(s);
         avatar.setScaleY(s);
 
         if (bar == null) return;
-        float alpha = tabAlpha(f);
-        if (bar.getBackground() != null) {
-            // A look with a tray behind the buttons (google): the tray comes out as one piece.
-            bar.setTranslationX((tabStart - (bar.getLeft() + bar.getRight()) / 2f) * closed);
-            bar.setAlpha(alpha);
-            return;
-        }
-        if (!(bar instanceof ViewGroup)) return;
-        ViewGroup row = (ViewGroup) bar;
-        for (int i = 0; i < row.getChildCount(); i++) {
-            View tab = row.getChildAt(i);
-            float center = bar.getLeft() + (tab.getLeft() + tab.getRight()) / 2f;
-            tab.setTranslationX((tabStart - center) * closed);
-            tab.setAlpha(alpha);
-        }
+        bar.setTranslationX(TAB_TRAVEL_DP * density * closed);
+        bar.setAlpha(open ? 1f : 0f);   // and the buttons are gone
     }
 
-    // ---- geometry, separate so it can be unit tested --------------------------------------------------------
+    // ---- geometry and motion, separate so they can be unit tested -------------------------------------------
 
     static int restWidth(int timeInset, int timeWidth, int timeGap, int avatarRest, int avatarInset) {
         return timeInset + timeWidth + timeGap + avatarRest + avatarInset;
@@ -330,16 +354,25 @@ public class ProfileCorner extends ViewGroup {
         return Math.max(0, Math.min(width - headerWidth, barLeft - minGap - timeWidth));
     }
 
-    static float tabAlpha(float openness) {
-        return Math.max(0f, Math.min(1f, openness / TAB_FADE));
-    }
-
     /** Scale of the picture's view (laid out at its focused size): 50 px at rest, 38 px open, 52 px focused. */
     static float avatarScale(float openness, float focus) {
         float rest = AVATAR_REST_DP / AVATAR_FOCUSED_DP;
         float tab = AVATAR_OPEN_DP / AVATAR_FOCUSED_DP;
         float openScale = tab + (1f - tab) * focus;
         return rest + (openScale - rest) * openness;
+    }
+
+    /**
+     * Position (0 to 1) and speed (per second) of the spring {@link #STIFFNESS}, {@link #DAMPING}, released from rest
+     * at 0 towards 1, {@code seconds} later.
+     */
+    static float[] leap(float seconds) {
+        double w = Math.sqrt(STIFFNESS), z = DAMPING;
+        double wd = w * Math.sqrt(1 - z * z);
+        double decay = Math.exp(-z * w * seconds);
+        double x = 1 - decay * (Math.cos(wd * seconds) + z * w / wd * Math.sin(wd * seconds));
+        double v = decay * w / Math.sqrt(1 - z * z) * Math.sin(wd * seconds);
+        return new float[]{(float) x, (float) v};
     }
 
     /** Up to two initials, as Apple shows them: of the first and last word ("Brian Silah" → "BS"). */
@@ -356,19 +389,28 @@ public class ProfileCorner extends ViewGroup {
     /**
      * tvOS's glass capsule over a dark screen: about 8 % white, with a brighter rim along the top that fades out
      * towards the bottom (sampled from Apple TV frames). Without the blur: behind it there is only black or the
-     * dock app's soft glow, which a blur wouldn't change.
+     * dock app's soft glow, which a blur wouldn't change. Its left end can move ({@link #setLeft}); the right end is
+     * the bounds'.
      */
     static final class GlassCapsule extends Drawable {
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF rect = new RectF();
         private final float rimWidth;
+        private int left;
 
         GlassCapsule(float density) {
             fill.setColor(0x14FFFFFF);
-            rimWidth = Math.max(1f, 1.5f * density / 2f);
+            rimWidth = Math.max(1f, 0.75f * density);
             rim.setStyle(Paint.Style.STROKE);
             rim.setStrokeWidth(rimWidth);
+        }
+
+        /** Left end, in the bounds' coordinates. Redraws only when it moves. */
+        void setLeft(int left) {
+            if (this.left == left) return;
+            this.left = left;
+            invalidateSelf();
         }
 
         @Override
@@ -381,7 +423,7 @@ public class ProfileCorner extends ViewGroup {
         public void draw(@NonNull Canvas canvas) {
             Rect b = getBounds();
             float r = b.height() / 2f;
-            rect.set(b);
+            rect.set(Math.max(b.left, left), b.top, b.right, b.bottom);
             canvas.drawRoundRect(rect, r, r, fill);
             float inset = rimWidth / 2f;
             rect.inset(inset, inset);
@@ -390,9 +432,7 @@ public class ProfileCorner extends ViewGroup {
 
         @Override
         public void getOutline(@NonNull Outline outline) {
-            Rect b = getBounds();
-            outline.setRoundRect(b, b.height() / 2f);
-            outline.setAlpha(0f);
+            outline.setEmpty();   // no shadow, no clipping
         }
 
         @Override

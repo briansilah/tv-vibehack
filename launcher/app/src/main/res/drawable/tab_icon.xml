@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Apple TV top bar tab glyph: dark on the focused tab's white circle, grey (60 % white) otherwise. -->
+<!-- Apple TV top bar tab glyph: dark on the focused tab's white circle, grey otherwise (sampled from tvOS over a
+     dark screen). Opaque: the icon's tint blends SRC_ATOP (top_bar_button.xml), which ignores a tint's alpha. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true" android:color="#FF2C2C2E" />
-    <item android:color="#99FFFFFF" />
+    <item android:color="#FF8E8E8E" />
 </selector>
