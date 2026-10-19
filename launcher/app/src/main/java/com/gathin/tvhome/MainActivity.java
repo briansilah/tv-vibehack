@@ -137,6 +137,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 return;   // not a TV app, and not one we show (e.g. a background service package changing)
             }
             appsChanged = true;
+            adapter.dropPreload();
             if (resumed) {
                 handler.removeCallbacks(reloadNow);   // an update sends several broadcasts
                 handler.post(reloadNow);
@@ -172,9 +173,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         long t0 = Perf.now();
         Perf.begin("tvhome:onCreate");
         super.onCreate(savedInstanceState);
+        COLUMNS = Math.max(1, getResources().getInteger(R.integer.columns));
+        adapter = new AppAdapter(this, this, COLUMNS);
+        // Listen for app changes before the loading starts, so none falls between its query and onResume.
+        IntentFilter packages = new IntentFilter();
+        packages.addAction(Intent.ACTION_PACKAGE_ADDED);
+        packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        packages.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        packages.addDataScheme("package");
+        registerReceiver(packageReceiver, packages);
+        IntentFilter storage = new IntentFilter(Intent.ACTION_EXTERNAL_APPLICATIONS_AVAILABLE);
+        storage.addAction(Intent.ACTION_EXTERNAL_APPLICATIONS_UNAVAILABLE);
+        registerReceiver(packageReceiver, storage);
+        // Start loading the apps (other apps' banners, icons and labels) now, in the background, so it overlaps
+        // inflating the screen; onResume shows them.
+        adapter.preload();
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
-        COLUMNS = Math.max(1, getResources().getInteger(R.integer.columns));
         liveTvPkg = getString(R.string.live_tv_package).trim();
 
         root = findViewById(R.id.root);
@@ -201,7 +217,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.addItemDecoration(new DockDecoration(COLUMNS, density));
         grid.setLayoutAnimation(new LayoutAnimationController(
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
-        adapter = new AppAdapter(this, this, COLUMNS);
         grid.setAdapter(adapter);
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
 
@@ -254,16 +269,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
-        IntentFilter packages = new IntentFilter();
-        packages.addAction(Intent.ACTION_PACKAGE_ADDED);
-        packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
-        packages.addAction(Intent.ACTION_PACKAGE_CHANGED);
-        packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
-        packages.addDataScheme("package");
-        registerReceiver(packageReceiver, packages);
-        IntentFilter storage = new IntentFilter(Intent.ACTION_EXTERNAL_APPLICATIONS_AVAILABLE);
-        storage.addAction(Intent.ACTION_EXTERNAL_APPLICATIONS_UNAVAILABLE);
-        registerReceiver(packageReceiver, storage);
         Perf.end();
         Perf.log("create", t0, null);
     }
@@ -287,7 +292,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             grid.scheduleLayoutAnimation();
         }
         updateGreeting();
-        updateWifiLabel();
         handler.postDelayed(minuteTick, MINUTE_MS);
 
         // Return to the app we left from, or the same slot if that app is gone. Always refocus: after
@@ -295,7 +299,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.post(() -> {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
-            Choreographer.getInstance().postFrameCallback(frameNanos -> onFocusRestored(t0));
+            Choreographer.getInstance().postFrameCallback(frameNanos -> {
+                onFocusRestored(t0);
+                // After this first frame: the network pill's binder calls took 4-12 ms on a TV before it, and the
+                // network callback has kept the pill up to date meanwhile.
+                handler.post(this::updateWifiLabel);
+            });
         });
         Perf.end();
         Perf.log("resume", t0, null);

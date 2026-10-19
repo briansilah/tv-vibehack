@@ -11,7 +11,7 @@ See docs/performance.md for the method and what each number means.
     perf.py compare tools/perf-results/main.json tools/perf-results/fix.json
     perf.py trace --seconds 15 --action keys    Perfetto trace while it presses D-pad keys
     perf.py trace --action dock                 ... while it moves between the first two dock apps
-    perf.py summarize trace.perfetto-trace      slowest launcher trace sections (pip install perfetto)
+    perf.py summarize trace.perfetto-trace      slowest launcher trace sections, frames and key latency (pip install perfetto)
 
 Connection: the same as tools/tv.py. With TV_HOST set it uses adb_shell (no adb binary); otherwise, or with
 --adb, the adb binary (--serial or ANDROID_SERIAL picks the device, else the only one attached), e.g. for
@@ -561,7 +561,7 @@ def perfetto_config(duration_ms):
     ftrace_events = ["sched/sched_switch", "sched/sched_wakeup", "sched/sched_waking", "sched/sched_process_exit",
                      "sched/sched_process_free", "task/task_newtask", "task/task_rename", "power/cpu_frequency",
                      "power/cpu_idle"]
-    categories = ["am", "wm", "gfx", "view", "input", "res", "dalvik", "binder_driver"]
+    categories = ["am", "wm", "gfx", "view", "input", "res", "dalvik", "binder_driver", "aidl"]
     ftrace = " ".join('ftrace_events: "%s"' % e for e in ftrace_events)
     ftrace += " " + " ".join('atrace_categories: "%s"' % c for c in categories)
     ftrace += ' atrace_apps: "%s"' % PKG
@@ -646,6 +646,47 @@ from actual_frame_timeline_slice a join process p using (upid)
 where p.name = '%s' group by a.jank_type order by count desc
 """
 
+# Keys reaching the launcher's main thread: ViewRootImpl's "deliverInputEvent src=0x.. eventTimeNano=.." slices (Android
+# 12+). The event time is CLOCK_MONOTONIC, from when the remote's key reached the TV; traces use CLOCK_BOOTTIME.
+INPUT_SQL = """
+select s.name, s.ts, s.dur from slice s join thread_track tt on s.track_id = tt.id join thread t using (utid)
+join process p using (upid) where p.name = '%s' and t.tid = p.pid and s.name like 'deliverInputEvent %%' order by s.ts
+"""
+# BOOTTIME (6) minus MONOTONIC (3) in the same clock snapshot: the time the TV has spent asleep since boot.
+CLOCK_OFFSET_SQL = """
+select b.clock_value - m.clock_value as offset from clock_snapshot b join clock_snapshot m using (snapshot_id)
+where b.clock_id = 6 and m.clock_id = 3 limit 1
+"""
+# HomeButtonService.onKeyEvent in the launcher's :home process (the "aidl" category, Android 10+).
+SERVICE_KEYS_SQL = """
+select count(*) as count, round(avg(s.dur) / 1e6, 2) as avg_ms, round(max(s.dur) / 1e6, 2) as max_ms
+from slice s join thread_track tt on s.track_id = tt.id join thread t using (utid) join process p using (upid)
+where p.name = '%s:home' and s.name like '%%IAccessibilityServiceClient::onKeyEvent%%'
+"""
+_DELIVER = re.compile(r"src=0x([0-9a-fA-F]+) eventTimeNano=(\d+)")
+
+
+def key_latencies(rows, offset):
+    """[(source, ms from the key's event time until the launcher's main thread took it, ms it took to handle)] from
+    INPUT_SQL rows (name, ts, dur). Source 0x301 is a remote's D-pad; `adb shell input` keys show other sources."""
+    out = []
+    for name, ts, dur in rows:
+        m = _DELIVER.search(name)
+        if m:
+            out.append(("0x" + m.group(1), (ts - int(m.group(2)) - offset) / 1e6, dur / 1e6))
+    return out
+
+
+def key_table(latencies):
+    """Markdown rows per input source: keys, median and max latency, median handling time."""
+    lines = []
+    for src in sorted({s for s, _, _ in latencies}):
+        lat = sorted(l for s, l, _ in latencies if s == src)
+        handle = [h for s, _, h in latencies if s == src]
+        lines.append("| %s | %d | %.1f | %.1f | %.2f |" % (src, len(lat), statistics.median(lat), lat[-1],
+                                                          statistics.median(handle)))
+    return lines
+
 
 def cmd_summarize(args):
     sql = SUMMARY_SQL % (PKG, args.limit)
@@ -663,6 +704,9 @@ def cmd_summarize(args):
             frames = list(tp.query(FRAMES_SQL % PKG))
         except Exception:   # no frame timeline in traces from Android 11 and older
             frames = []
+        offset = [r.offset for r in tp.query(CLOCK_OFFSET_SQL)]
+        keys = key_latencies([(r.name, r.ts, r.dur) for r in tp.query(INPUT_SQL % PKG)], offset[0]) if offset else []
+        service = [r for r in tp.query(SERVICE_KEYS_SQL % PKG) if r.count]
     finally:
         tp.close()
     print("Slices on the launcher's main thread and RenderThread, plus its tvhome:* sections. Nested slices "
@@ -680,6 +724,14 @@ def cmd_summarize(args):
               "|---|---|---|---|" % total)
         for r in frames:
             print("| %s | %d | %s | %s |" % (r.jank_type, r.count, r.avg_ms, r.max_ms))
+    if keys:
+        print("\nKeys on the launcher's main thread, from when the key reached the TV (0x301: the remote's D-pad, which "
+              "goes through HomeButtonService on Google TV; `adb shell input` keys skip it):\n\n"
+              "| source | keys | median latency ms | max latency ms | median handling ms |\n|---|---|---|---|---|")
+        print("\n".join(key_table(keys)))
+    for r in service:
+        print("\nHomeButtonService.onKeyEvent (:home process): %d keys, avg %s ms, max %s ms"
+              % (r.count, r.avg_ms, r.max_ms))
 
 
 # ---- command line ------------------------------------------------------------------------------

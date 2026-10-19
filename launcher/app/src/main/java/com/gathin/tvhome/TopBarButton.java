@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.Outline;
 import android.graphics.Rect;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -121,6 +122,8 @@ public class TopBarButton extends ViewGroup {
 
     /** Text shown in the pill (or the caption). */
     void setLabel(CharSequence text) {
+        // Unchanged (the network pill is refreshed on every Home press and every minute): no layout pass, no redraw.
+        if (TextUtils.equals(label.getText(), text)) return;
         label.setText(text);
     }
 

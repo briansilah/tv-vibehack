@@ -6,6 +6,36 @@
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
+    <!-- Text in Outfit (a variable font) at one weight: use style="@style/Outfit.Medium" instead of fontFamily plus
+         fontVariationSettings on the view. A view with its own android:fontVariationSettings builds a new typeface
+         as it inflates, about 10 ms per view on a TCL Google TV (docs/performance.md). On Android 9+ values-v28 loads
+         each weight once, from res/font-v28, and every view shares it. Android 8 can't set a weight in font XML,
+         so there these styles set it per view as before. -->
+    <style name="Outfit.ExtraLight" parent="">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:fontVariationSettings">"'wght' 200"</item>
+    </style>
+
+    <style name="Outfit.Light" parent="">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:fontVariationSettings">"'wght' 300"</item>
+    </style>
+
+    <style name="Outfit.Regular" parent="">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:fontVariationSettings">"'wght' 400"</item>
+    </style>
+
+    <style name="Outfit.Medium" parent="">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:fontVariationSettings">"'wght' 500"</item>
+    </style>
+
+    <style name="Outfit.Bold" parent="">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:fontVariationSettings">"'wght' 700"</item>
+    </style>
+
     <!-- Top bar (layout/top_bar.xml), in three looks picked by config.xml's top_bar_style. Each look is a
          theme overlay that sets the bar's and its buttons' styles. -->
     <style name="ThemeOverlay.TopBar.Pills" parent="">

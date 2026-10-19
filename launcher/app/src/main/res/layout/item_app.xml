@@ -73,7 +73,6 @@
         android:translationY="2dp"
         android:textColor="#F2FFFFFF"
         android:textSize="14sp"
-        android:fontFamily="@font/outfit"
-        android:fontVariationSettings="'wght' 500"
+        style="@style/Outfit.Medium"
         android:letterSpacing="0.02" />
 </FrameLayout>
