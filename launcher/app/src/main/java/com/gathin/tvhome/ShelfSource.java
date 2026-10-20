@@ -153,7 +153,10 @@ final class ShelfSource {
     private final Map<String, Cover> covers = new HashMap<>();
     /** Covers being made, and who's waiting for each. */
     private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
-    /** The dock apps' current titles' pictures: kept out of the cache's turnover, so a dock move finds them. */
+    /**
+     * What may show next (TopShelf.keep): each dock app's first title, and those next to the title showing. Kept out
+     * of the cache's turnover, so a dock move, Left, Right or the carousel finds them decoded.
+     */
     private final Map<String, Bitmap> pinned = new HashMap<>();
     private final Set<String> pins = new HashSet<>();
     private final Map<String, List<Done<Bitmap>>> loading = new HashMap<>();
@@ -187,9 +190,10 @@ final class ShelfSource {
         hd = am != null && !am.isLowRamDevice() && mi.totalMem >= 1536L << 20;
         BACKDROP_W = hd ? 1920 : 1280;
         BACKDROP_H = hd ? 1080 : 720;
-        // Decoded pictures beyond the dock apps' current titles (pinned, see pin): the next ones along. Hardware
-        // bitmaps aren't on the Java heap, but they are memory all the same.
-        int budget = hd ? 26 << 20 : 10 << 20;
+        // Decoded pictures beyond those pinned (see pin: what may show next): ones that showed lately, so going
+        // back a little further needs no decoding. About one full-screen picture and a few logos. Hardware bitmaps
+        // aren't on the Java heap, but they are memory all the same.
+        int budget = hd ? 12 << 20 : 5 << 20;
         bitmaps = new LruCache<String, Bitmap>(budget) {
             @Override
             protected int sizeOf(String key, Bitmap b) {
@@ -546,22 +550,22 @@ final class ShelfSource {
     }
 
     /**
-     * The pictures to keep decoded whatever else loads (the dock apps' current titles); others drop back into the
-     * cache.
+     * The pictures to keep decoded whatever else loads (what may show next); others drop back into the cache.
      */
     void pin(Collection<String> urls) {
         pins.clear();
         pins.addAll(urls);
+        // The new pins out of the cache first: the ones let go, put back into it, could push them out.
+        for (String u : pins) {
+            Bitmap b = bitmaps.remove(u);
+            if (b != null) pinned.put(u, b);
+        }
         java.util.Iterator<Map.Entry<String, Bitmap>> it = pinned.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, Bitmap> e = it.next();
             if (pins.contains(e.getKey())) continue;
             bitmaps.put(e.getKey(), e.getValue());
             it.remove();
-        }
-        for (String u : pins) {
-            Bitmap b = bitmaps.remove(u);
-            if (b != null) pinned.put(u, b);
         }
     }
 

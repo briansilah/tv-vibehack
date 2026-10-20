@@ -257,6 +257,11 @@ class PlanTests(unittest.TestCase):
         self.assertPlan(plan_for(ps.Change("launcher/app/lint.xml", None, "x\n", None, None)), ps.SCENARIOS,
                         ["default"])
 
+    def test_shelf_order_is_the_top_shelf(self):
+        # What shows next and what stays decoded: the dock's moves and memory, not everything.
+        p = plan_for(ps.Change(ps.JAVA + "ShelfOrder.java", None, "final class ShelfOrder {\n}\n", None, None))
+        self.assertPlan(p, ["dock", "mem"])
+
     def test_class_rule(self):
         old = "class ProfileCorner {\n    void open() {\n        a();\n    }\n}\n"
         new = old.replace("a();", "b();")

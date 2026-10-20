@@ -269,8 +269,10 @@ watching resumes only what you've started); **Open in …** opens the title's pa
 Stremio title, or one the app published without playing it); **Search in …** searches the app for a
 catalogue title by its name, where the app can't be opened at the title (Netflix, Apple TV); and
 **Open …** opens just the app when there's no link it accepts (`top_shelf_links` in `config.xml`).
-Left and Right page through the titles; Down or Back returns to the dock, and Up again opens the top
-right corner. Apps don't let other apps add to their watchlists, so there's no such button.
+Left and Right page through the titles one at a time, in the same order both ways (one still
+downloading slides in when it arrives); Down or Back returns to the dock, and Up again opens the top
+right corner. Focus coming back to an app starts again at its first title. Apps don't let other apps
+add to their watchlists, so there's no such button.
 
 **The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
 the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept
@@ -282,7 +284,9 @@ remove a feed's line to keep that app to its own suggestions and cover art.
 
 **Memory**: on a TV with 1.5 GB of RAM or more, backdrops are fetched in 4K where available and
 shown at the screen's 1920 x 1080 (Android TV draws apps at 1080p, even on a 4K panel). On smaller
-TVs they're shown at 1280 x 720. Pictures not on screen are dropped when you open an app.
+TVs they're shown at 1280 x 720. Kept decoded: each dock app's first title, so moving along the dock
+shows it at once, and the titles either side of the one showing; a few others that showed lately.
+Pictures not on screen are dropped when you open an app.
 
 **Build and install** with one command:
 
