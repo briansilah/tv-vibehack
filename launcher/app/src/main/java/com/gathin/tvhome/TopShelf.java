@@ -376,7 +376,6 @@ final class TopShelf implements ShelfSource.Listener {
 
     private void slideIn(Choice c) {
         slideTo(c, moveDir);
-        if (acting) labelAction();
         logTitle(moveHow, moveSince, current.pkg, titles, at, moveDir);
     }
 
@@ -467,6 +466,10 @@ final class TopShelf implements ShelfSource.Listener {
             if (tier == CONTENT && titles != null) {
                 // You may be looking through them: the titles you have keep their places, new ones go at the end.
                 titles = ShelfOrder.merge(titles, source.items(pkg));
+                // The title showing as read again: its link may have changed.
+                int i = ShelfOrder.indexOf(titles, showingItem);
+                if (i >= 0) showingItem = titles.get(i);
+                if (acting) labelAction();
             } else {
                 // None of them has shown yet: its newest list, from the top.
                 visit(current);
@@ -655,6 +658,8 @@ final class TopShelf implements ShelfSource.Listener {
         swapInfo(c, ms);
         if (notify && key != null && showingOwnTitle != hadOwnTitle) host.onShelfArt(key, showingOwnTitle);
         if (c != null && c.tier == CONTENT) scheduleCarousel();
+        // The button opens what's showing (enterActions labels it as it appears: setText would lay out again).
+        if (acting) labelAction();
     }
 
     private void swapInfo(final Choice c, long ms) {
@@ -707,6 +712,7 @@ final class TopShelf implements ShelfSource.Listener {
                 }).start();
         if (showingOwnTitle != hadOwnTitle) host.onShelfArt(key, showingOwnTitle);
         if (!acting) scheduleCarousel();
+        if (acting) labelAction();
     }
 
     private void scheduleCarousel() {
