@@ -91,14 +91,26 @@ final class ShelfSource {
         }
     }
 
-    /** An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out). */
+    /**
+     * An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out); or its static
+     * Top Shelf image ({@code image}), full screen with its logo in the picture.
+     */
     static final class Cover {
         final Bitmap backdrop;
         final Bitmap logo;
+        final boolean image;
+        /** For an app with a static image: which file it was made from ("" for none), to notice a new one. */
+        final String stamp;
 
         Cover(Bitmap backdrop, Bitmap logo) {
+            this(backdrop, logo, false, null);
+        }
+
+        Cover(Bitmap backdrop, Bitmap logo, boolean image, String stamp) {
             this.backdrop = backdrop;
             this.logo = logo;
+            this.image = image;
+            this.stamp = stamp;
         }
     }
 
@@ -138,6 +150,12 @@ final class ShelfSource {
     private final Map<String, ShelfFeeds.Feed> feeds;
     private final Map<String, String> links;
     private final Map<String, ShelfFeeds.LogoSpec> logos;
+    /** Apps whose top shelf is a static image (config.xml, top_shelf_images): the URL it's fetched from, or "". */
+    private final Map<String, String> images;
+    /** Static images put on the TV: {@code <package>.jpg} (or .png, .webp) in the launcher's external files. */
+    static final String IMAGE_DIR = "top-shelf";
+    private static final String[] IMAGE_TYPES = {".jpg", ".png", ".webp"};
+    private final Set<String> imagesFetching = new HashSet<>();
     /** Simple Icons' vector logos (CC0), pinned to a major version: fetched once per app, kept on the TV. */
     private static final String ICON_URL = "https://cdn.jsdelivr.net/npm/simple-icons@16/icons/%s.svg";
     private final String country;
@@ -151,6 +169,8 @@ final class ShelfSource {
     private final Map<String, Long> fetchedAt = new HashMap<>();
     private final Map<String, String> fetchedFor = new HashMap<>();
     private final Map<String, Cover> covers = new HashMap<>();
+    /** The apps covers were made for, by key: to make one again. */
+    private final Map<String, App> coverApps = new HashMap<>();
     /** Covers being made, and who's waiting for each. */
     private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
     /** The dock apps' current titles' pictures: kept out of the cache's turnover, so a dock move finds them. */
@@ -166,12 +186,14 @@ final class ShelfSource {
     private long lastFetch;
     private int fetching;
 
-    ShelfSource(Context ctx, String[] feedLines, String[] linkLines, String[] logoLines, Listener listener) {
+    ShelfSource(Context ctx, String[] feedLines, String[] linkLines, String[] logoLines, String[] imageLines,
+                Listener listener) {
         this.ctx = ctx.getApplicationContext();
         this.listener = listener;
         this.feeds = ShelfFeeds.parse(feedLines);
         this.links = ShelfFeeds.parseLinks(linkLines);
         this.logos = ShelfFeeds.parseLogos(logoLines);
+        this.images = ShelfFeeds.parseImages(imageLines);
         this.country = ShelfFeeds.country(timeZoneRegion(), Locale.getDefault().getCountry());
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? ""
                 : new Locale("", country.toUpperCase(Locale.ROOT)).getDisplayCountry();
@@ -200,6 +222,8 @@ final class ShelfSource {
 
     /** The app's suggested titles, its own first, or null if none (yet). */
     List<ShelfFeeds.Item> items(String pkg) {
+        // An app with a static image shows only that, as on tvOS.
+        if (images.containsKey(pkg)) return null;
         List<ShelfFeeds.Item> l = combined.get(pkg);
         if (l == null) {
             l = ShelfFeeds.combine(ownItems.get(pkg), feedItems.get(pkg), ShelfFeeds.MAX_ITEMS);
@@ -218,6 +242,11 @@ final class ShelfSource {
     String caption(String pkg) {
         ShelfFeeds.Feed f = feeds.get(pkg);
         return f == null ? null : ShelfFeeds.caption(f, country, countryName);
+    }
+
+    /** Whether the app's top shelf is a static image (config.xml, top_shelf_images): its cover art until it has one. */
+    boolean staticImage(String pkg) {
+        return images.containsKey(pkg);
     }
 
     /** The dock's apps changed: fetches their feeds if they're new and stale. */
@@ -267,13 +296,14 @@ final class ShelfSource {
      */
     void refresh() {
         if (!started) return;
+        if (!images.isEmpty()) checkImages();
         if (System.currentTimeMillis() - lastOwnRead > OWN_READ_MS) readOwn();
         if (fetching > 0) return;
         long now = System.currentTimeMillis();
         if (now - lastFetch < RETRY_MS) return;
         List<ShelfFeeds.Feed> stale = new ArrayList<>();
         for (ShelfFeeds.Feed f : feeds.values()) {
-            if (!wanted.contains(f.pkg)) continue;
+            if (!wanted.contains(f.pkg) || images.containsKey(f.pkg)) continue;
             Long at = fetchedAt.get(f.pkg);
             boolean otherCountry = f.byCountry() && !country.equals(fetchedFor.get(f.pkg));
             if (otherCountry || !ShelfFeeds.fresh(at == null ? 0 : at, now, FEED_TTL_MS)) stale.add(f);
@@ -873,27 +903,209 @@ final class ShelfSource {
         waiting = new ArrayList<>();
         if (done != null) waiting.add(done);
         coversLoading.put(app.key, waiting);
+        coverApps.put(app.key, app);
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
+        final String imageUrl = images.get(app.pkg);
         WORK.execute(() -> {
-            Cover made = null;
-            try {
-                made = renderCover(ctx, app);
-                // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
-                if (made != null && svgFile != null && svgFile.exists()) made = withLogo(ctx, made, app, spec, svgFile);
-            } catch (RuntimeException | OutOfMemoryError e) {
-                // A banner that can't be drawn: the glow it is.
-            }
-            final Cover result = made;
+            final Cover result = buildCover(app, imageUrl, spec, svgFile);
             main.post(() -> {
                 List<Done<Cover>> waiters = coversLoading.remove(app.key);
                 if (result != null) covers.put(app.key, result);
                 if (waiters != null) {
                     for (Done<Cover> d : waiters) d.done(result);
                 }
+                if (result != null && result.image) return;
+                if (imageUrl != null) fetchImage(app, imageUrl);
                 if (result != null && svgFile != null && !svgFile.exists()) fetchLogo(app, spec, svgFile);
             });
         });
+    }
+
+    /** The app's static image if it has one on the TV, else its cover art, or null. Worker thread. */
+    private Cover buildCover(App app, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
+        File f = imageUrl == null ? null : staticImageFile(app.pkg, imageUrl);
+        Cover made = imageCover(f);
+        try {
+            if (made == null) made = renderCover(ctx, app);
+            // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
+            if (made != null && !made.image && svgFile != null && svgFile.exists()) {
+                made = withLogo(ctx, made, app, spec, svgFile);
+            }
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;   // a banner that can't be drawn: the glow it is
+        }
+        if (made == null || imageUrl == null) return made;
+        // Which picture it was made from (or failed to be), so a new one put on the TV is noticed (checkImages).
+        return new Cover(made.backdrop, made.logo, made.image, stamp(f));
+    }
+
+    /**
+     * The app's static image on the TV, or null: one put there with tools/top_shelf_image.py, else the one fetched
+     * from its URL. Worker thread.
+     */
+    private File staticImageFile(String pkg, String url) {
+        File put = ctx.getExternalFilesDir(IMAGE_DIR);
+        if (put != null) {
+            for (String type : IMAGE_TYPES) {
+                File f = new File(put, pkg + type);
+                if (f.isFile()) return f;
+            }
+        }
+        if (url.isEmpty()) return null;
+        File f = artFile(url);
+        return f.exists() ? f : null;
+    }
+
+    /** A static image fetched from its URL: kept, not pruned with the titles' pictures. */
+    private File artFile(String url) {
+        return new File(dir, "art-" + sha1(url));
+    }
+
+    private static String stamp(File f) {
+        return f == null ? "" : f.getPath() + " " + f.lastModified() + " " + f.length();
+    }
+
+    /** Fetches an app's static image from its URL once, then shows it in place of its cover art. */
+    private void fetchImage(final App app, final String url) {
+        if (url.isEmpty() || failedLately(url) || !imagesFetching.add(url)) return;
+        NET.execute(() -> {
+            final File f = artFile(url);
+            final boolean ok = f.exists() || download(url, f);
+            WORK.execute(() -> {
+                final Cover made = ok ? imageCover(f) : null;
+                final String stamp = stamp(f);
+                main.post(() -> {
+                    imagesFetching.remove(url);
+                    if (made == null) {
+                        failed.put(url, System.currentTimeMillis());
+                        return;
+                    }
+                    if (!covers.containsKey(app.key)) return;   // apps changed meanwhile
+                    covers.put(app.key, new Cover(made.backdrop, null, true, stamp));
+                    listener.onCover(app.key);
+                });
+            });
+        });
+    }
+
+    /**
+     * Home shows again: if an app's static image was put on the TV, replaced or removed since its cover was made
+     * (tools/top_shelf_image.py), makes it again, and it changes in place.
+     */
+    private void checkImages() {
+        final Map<String, String> made = new HashMap<>();
+        final Map<String, String> pkgs = new HashMap<>();
+        for (Map.Entry<String, Cover> e : covers.entrySet()) {
+            App a = coverApps.get(e.getKey());
+            if (a != null && e.getValue().stamp != null && !coversLoading.containsKey(e.getKey())) {
+                made.put(e.getKey(), e.getValue().stamp);
+                pkgs.put(e.getKey(), a.pkg);
+            }
+        }
+        if (made.isEmpty()) return;
+        WORK.execute(() -> {
+            final List<String> changed = new ArrayList<>();
+            for (Map.Entry<String, String> e : made.entrySet()) {
+                String pkg = pkgs.get(e.getKey());
+                if (!stamp(staticImageFile(pkg, images.get(pkg))).equals(e.getValue())) changed.add(e.getKey());
+            }
+            if (!changed.isEmpty()) main.post(() -> {
+                for (String key : changed) remakeCover(key);
+            });
+        });
+    }
+
+    private void remakeCover(final String key) {
+        final App app = coverApps.get(key);
+        if (app == null || !covers.containsKey(key) || coversLoading.containsKey(key)) return;
+        coversLoading.put(key, new ArrayList<>());
+        final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
+        final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
+        WORK.execute(() -> {
+            final Cover result = buildCover(app, images.get(app.pkg), spec, svgFile);
+            main.post(() -> {
+                List<Done<Cover>> waiters = coversLoading.remove(key);
+                if (result != null && covers.containsKey(key)) covers.put(key, result);
+                if (waiters != null) {
+                    for (Done<Cover> d : waiters) d.done(covers.get(key));
+                }
+                if (result != null) listener.onCover(key);
+            });
+        });
+    }
+
+    /** A static image as the app's cover, or null if there's none or it can't be decoded. Worker thread. */
+    private static Cover imageCover(File f) {
+        if (f == null) return null;
+        try {
+            return new Cover(hardware(placeImage(decodeImage(f))), null, true, null);
+        } catch (IOException | RuntimeException | OutOfMemoryError e) {
+            return null;
+        }
+    }
+
+    /** A static image decoded no wider than the screen, in memory the CPU can read (placeImage draws it). */
+    private static Bitmap decodeImage(File f) throws IOException {
+        if (Build.VERSION.SDK_INT >= 28) {
+            return ImageDecoder.decodeBitmap(ImageDecoder.createSource(f), (decoder, info, src) -> {
+                int w = info.getSize().getWidth(), h = info.getSize().getHeight();
+                if (w > BACKDROP_W) decoder.setTargetSize(BACKDROP_W, Math.max(1, Math.round(h * BACKDROP_W / (float) w)));
+                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+            });
+        }
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(f.getPath(), o);
+        int sample = 1;
+        while (o.outWidth / (sample * 2) >= BACKDROP_W) sample *= 2;
+        o = new BitmapFactory.Options();
+        o.inSampleSize = sample;
+        Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
+        if (b == null) throw new IOException("undecodable");
+        return b;
+    }
+
+    /**
+     * A static image as the screen shows it, full width from the top, as on tvOS. One shorter than the screen (the
+     * part of a tvOS capture above its dock) carries on below as a blurred reflection of its bottom edge, which shows
+     * only through the dock's glass and under it. Then the covers' scrim, for the dock.
+     */
+    static Bitmap placeImage(Bitmap src) {
+        int sw = BACKDROP_W, sh = BACKDROP_H, w = src.getWidth(), h = src.getHeight();
+        Bitmap out = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
+        float s = sw / (float) w;
+        int top = Math.round(h * s);
+        if (top >= sh) {
+            // As tall as the screen, or taller: its middle.
+            int y = Math.round((h - sh / s) / 2f);
+            c.drawBitmap(src, new android.graphics.Rect(0, y, w, Math.min(h, y + Math.round(sh / s))),
+                    new android.graphics.Rect(0, 0, sw, sh), p);
+        } else {
+            c.drawBitmap(src, null, new android.graphics.Rect(0, 0, sw, top), p);
+            // The bottom of the image, as tall as what's left of the screen, flipped and shrunk to a sixteenth in
+            // halves (each a 2 x 2 average), then drawn back up to size: a soft blur.
+            int rest = sh - top, strip = Math.max(1, Math.min(h, Math.round(rest / s)));
+            int bw = Math.max(1, sw / 2), bh = Math.max(1, rest / 2);
+            Bitmap small = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+            Canvas sc = new Canvas(small);
+            sc.scale(1f, -1f, 0f, bh / 2f);
+            sc.drawBitmap(src, new android.graphics.Rect(0, h - strip, w, h), new android.graphics.Rect(0, 0, bw, bh), p);
+            for (int i = 0; i < 3 && bw > 1 && bh > 1; i++) {
+                Bitmap half = Bitmap.createScaledBitmap(small, Math.max(1, bw / 2), Math.max(1, bh / 2), true);
+                small.recycle();
+                small = half;
+                bw = small.getWidth();
+                bh = small.getHeight();
+            }
+            c.drawBitmap(small, null, new android.graphics.Rect(0, top, sw, sh), p);
+            small.recycle();
+        }
+        src.recycle();
+        scrim(c, sw, sh, 0.55f, false);
+        return out;
     }
 
     /** Fetches an app's vector logo once, then redraws its cover with it. */
@@ -924,8 +1136,10 @@ final class ShelfSource {
                 final Cover result = old;
                 if (result == null) return;
                 main.post(() -> {
-                    if (!covers.containsKey(app.key)) return;   // apps changed meanwhile
-                    covers.put(app.key, result);
+                    Cover now = covers.get(app.key);
+                    if (now == null || now.image) return;   // apps changed meanwhile, or its image came
+                    covers.put(app.key, now.stamp == null ? result
+                            : new Cover(result.backdrop, result.logo, false, now.stamp));
                     listener.onCover(app.key);
                 });
             });
@@ -992,6 +1206,7 @@ final class ShelfSource {
     /** Apps changed: their banners may have too. */
     void forgetCovers() {
         covers.clear();
+        coverApps.clear();
     }
 
     private static Cover renderCover(Context ctx, App app) {
@@ -1090,6 +1305,8 @@ final class ShelfSource {
             if (!keep.contains(e.getValue())) bitmaps.remove(e.getKey());
         }
         pinned.values().removeIf(b -> !keep.contains(b));
+        // Static images are full-screen pictures too: made again from the TV's copy when Home shows.
+        covers.values().removeIf(c -> c.image && !keep.contains(c.backdrop));
     }
 
     // ---- files ---------------------------------------------------------------------------------------------

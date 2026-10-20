@@ -54,4 +54,6 @@
     <string name="shelf_open">Open</string>
     <!-- %1$s: the app, e.g. Netflix. -->
     <string name="shelf_open_in">Open in %1$s</string>
+    <!-- Under an app's static top shelf image: opens the app. -->
+    <string name="shelf_open_app">Open %1$s</string>
 </resources>

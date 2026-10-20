@@ -108,6 +108,24 @@ final class ShelfFeeds {
         return links;
     }
 
+    /**
+     * Apps whose top shelf is a static image, by package, from config lines "package [| https URL]": the URL it's
+     * fetched from, or "" for an image only put on the TV itself (tools/top_shelf_image.py).
+     */
+    static Map<String, String> parseImages(String[] lines) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (lines == null) return out;
+        for (String line : lines) {
+            if (line == null) continue;
+            String[] f = line.split("\\|", -1);
+            String pkg = f[0].trim(), url = f.length > 1 ? f[1].trim() : "";
+            if (!pkg.matches("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+") || f.length > 2) continue;
+            if (!url.isEmpty() && !url.startsWith("https://")) continue;
+            out.put(pkg, url);
+        }
+        return out;
+    }
+
     /** A crisp vector logo for an app's cover art: a Simple Icons slug, its brand colour, and whether it's a wordmark. */
     static final class LogoSpec {
         final String slug;
