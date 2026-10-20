@@ -29,11 +29,18 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tv  # noqa: E402
+import provenance  # noqa: E402
 
 RESULTS_DIR = os.path.join(HERE, "perf-results")
 
 PKG = "com.gathin.tvhome"
 ACTIVITY = PKG + "/.MainActivity"
+# The launcher as it ships, for its process only (MainActivity.EXTRA_DEFAULT_CONFIG): config.xml's Liquid Glass, not
+# the saved choice, which stays saved; no stand-in art. Every start passes it, since a cold start is a new process.
+DEFAULT_CONFIG = "--ez default_config"
+START = "am start -W -n %s %s true" % (ACTIVITY, DEFAULT_CONFIG)
+ANIMATION_SCALES = (("window_animation_scale", "window"), ("transition_animation_scale", "transition"),
+                    ("animator_duration_scale", "animator"))
 PERF_TAG = "TvHomePerf"
 # Fallback only: TV Settings is translucent, so the launcher stays visible (paused, not stopped) behind it.
 # perf.py prefers an installed full-screen app; see resolve_other_app().
@@ -130,7 +137,8 @@ def parse_meminfo(out):
 
 
 def parse_package(out):
-    """Build facts from `dumpsys package <pkg>` that change every number: debuggable and compiled state."""
+    """Build facts from `dumpsys package <pkg>` that change every number: what it was built from (the versionName's
+    provenance stamp), when it was installed, debuggable, and compiled state."""
     if not re.search(r"Package \[%s\]" % re.escape(PKG), out):
         return None
     m = re.search(r"^\s*(?:pkgFlags|flags)=\[([^\]]*)\]", out, re.M)
@@ -138,8 +146,11 @@ def parse_package(out):
     status = re.search(r"\[status=([\w-]+)\]", out)
     reason = re.search(r"\[reason=([\w-]+)\]", out)
     version = re.search(r"versionName=(\S+)", out)
+    installed = re.search(r"^\s*lastUpdateTime=(.+?)\s*$", out, re.M)
     return {
         "version_name": version.group(1) if version else None,
+        "provenance": provenance.parse_stamp(version.group(1) if version else None),
+        "installed": installed.group(1) if installed else None,
         "debuggable": "DEBUGGABLE" in flags,
         "compiler_filter": status.group(1) if status else None,
         "compile_reason": reason.group(1) if reason else None,
@@ -155,10 +166,12 @@ def parse_logcat(out, since=0.0):
     """Launcher timing events (`logcat -v epoch`) logged at or after `since` (device epoch seconds).
 
     Returns {"<event>_ms": first value, ...} plus integer extras (e.g. apps) and the system's
-    "Displayed" / "Fully drawn" times for MainActivity."""
+    "Displayed" / "Fully drawn" times for MainActivity. The launcher's "config" lines are launcher_config()'s."""
     res = {}
     for line in out.splitlines():
         m = _LOG_LINE.match(line)
+        if m and m.group(2) == "config":
+            continue
         if m and float(m.group(1)) >= since:
             key = m.group(2) + "_ms"
             if key not in res:
@@ -277,7 +290,7 @@ def scenario_cold(sh, runs, settle, other, log):
         kill_launcher(sh, log)
         time.sleep(settle)
         t = device_epoch(sh)
-        s = parse_am_start(sh.shell("am start -W -n " + ACTIVITY))
+        s = parse_am_start(sh.shell(START))
         time.sleep(settle * 2)   # entrance animation, focus restore, logs
         s.update(launcher_logs(sh, t))
         if s.get("launch_state") not in (None, "COLD"):
@@ -289,7 +302,7 @@ def scenario_cold(sh, runs, settle, other, log):
 
 
 def scenario_warm(sh, runs, settle, via_home, other, log):
-    sh.shell("am start -W -n " + ACTIVITY)
+    sh.shell(START)
     time.sleep(settle * 2)
     samples = []
     for i in range(runs):
@@ -297,7 +310,7 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
         time.sleep(settle)
         sh.shell("dumpsys gfxinfo %s reset" % PKG)
         t = device_epoch(sh)
-        s = parse_am_start(sh.shell(HOME_INTENT if via_home else "am start -W -n " + ACTIVITY))
+        s = parse_am_start(sh.shell(HOME_INTENT if via_home else START))
         time.sleep(settle)
         s.update(launcher_logs(sh, t))
         g = parse_gfxinfo(sh.shell("dumpsys gfxinfo " + PKG))
@@ -314,7 +327,7 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
 
 
 def scenario_jank(sh, rounds, keys, interval, log):
-    sh.shell("am start -W -n " + ACTIVITY)
+    sh.shell(START)
     time.sleep(2.5)
     n = len(keys.split())
     samples = []
@@ -333,7 +346,7 @@ def scenario_dock(sh, rounds, moves, interval, log):
     """The top shelf: moves focus back and forth between the first two dock apps, one press every
     `interval` seconds so each change can finish, and records how long the shelf takes to show the new
     app (the launcher's `shelf` timing lines) and the frames drawn meanwhile."""
-    sh.shell("am start -W -n " + ACTIVITY)
+    sh.shell(START)
     time.sleep(2.5)
     sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
     time.sleep(1.5)
@@ -363,7 +376,7 @@ def scenario_dock(sh, rounds, moves, interval, log):
 
 
 def scenario_mem(sh, samples_n, log):
-    sh.shell("am start -W -n " + ACTIVITY)
+    sh.shell(START)
     time.sleep(3.0)
     samples = []
     for i in range(samples_n):
@@ -396,6 +409,50 @@ def apk_size(sh):
         return None
 
 
+def animation_scales(sh):
+    """The system animation scales, {"window", "transition", "animator"}; unset is 1. They decide which of the
+    launcher's transitions run (Transitions, HomeMotion)."""
+    out = {}
+    for key, name in ANIMATION_SCALES:
+        try:
+            out[name] = float(sh.shell("settings get global " + key).strip())
+        except ValueError:   # "null": never set
+            out[name] = 1.0
+    return out
+
+
+def launcher_config(sh, shipped=True):
+    """Starts the launcher with --ez default_config true (or false: back to the saved choices) and returns the
+    configuration it reports in its "config" log line, or None for a build that doesn't. Logging must be on."""
+    sh.shell("am start -W -n " + ACTIVITY)   # a fresh task gets an intent without extras (it outlives the process)
+    t = device_epoch(sh)
+    sh.shell("am start -W -n %s %s %s" % (ACTIVITY, DEFAULT_CONFIG, "true" if shipped else "false"))
+    time.sleep(1.0)
+    e = parse_events(sh.shell("logcat -d -v epoch -s %s:D" % PERF_TAG), "config", t)
+    if not e:
+        return None
+    e[-1].pop("config_ms", None)
+    return {k: int(v) if isinstance(v, float) and v.is_integer() else v for k, v in e[-1].items()}
+
+
+def check_measured(result, log):
+    """Says what is about to be measured, and warns when it can't say or it isn't how the launcher ships."""
+    log("measuring " + provenance.describe(result))
+    if not provenance.stamp(result):
+        log("warning: the installed build has no provenance stamp, so nothing will say what was measured; install "
+            "one built from this repository's launcher/ (launcher/build-and-install.sh)")
+    s = result["config"]["animation_scales"]
+    if any(v != 1 for v in s.values()):
+        log("warning: the system animation scales aren't 1 (%s), so the launcher's transitions don't run as they "
+            "ship; set them back in Developer options" % ", ".join("%s %g" % kv for kv in s.items()))
+    v = provenance.variant(result)
+    if v is None:
+        log("note: this build doesn't report its configuration (it predates default_config); a saved Liquid Glass "
+            "choice or stand-in art may be in effect")
+    elif v:
+        log("warning: not the configuration the launcher ships with: " + ", ".join(v))
+
+
 def cmd_run(args):
     scenarios = [s.strip() for s in args.scenarios.split(",") if s.strip()]
     bad = [s for s in scenarios if s not in ALL_SCENARIOS]
@@ -425,6 +482,8 @@ def cmd_run(args):
         log("device: %(manufacturer)s %(model)s, Android %(android)s, %(ram_mb)s MB RAM" % result["device"])
         sh.shell("setprop log.tag.%s DEBUG" % PERF_TAG)
         try:
+            result["config"] = {"animation_scales": animation_scales(sh), "launcher": launcher_config(sh)}
+            check_measured(result, log)
             if "cold" in scenarios:
                 log("cold start x%d" % args.runs)
                 result["cold"] = scenario_cold(sh, args.runs, args.settle, other, log)
@@ -441,11 +500,18 @@ def cmd_run(args):
                 log("memory")
                 result["mem"] = scenario_mem(sh, 3, log)
         finally:
+            back = launcher_config(sh, shipped=False)
+            if back:
+                log("launcher back to its saved configuration (Liquid Glass %s)" % back.get("glass"))
             sh.shell("setprop log.tag.%s ''" % PERF_TAG)
             sh.shell(HOME_INTENT)
     finally:
         if not args.shell:
             sh.close()
+    if re.search(r"(?<![a-z])main(?![a-z])", args.label.lower()):
+        for level, text in provenance.problems(result):
+            if level == provenance.MISMATCH:
+                log("warning: labelled %s, but it isn't main as it ships: %s" % (args.label, text))
     out = args.out or os.path.join(RESULTS_DIR, re.sub(r"[^\w.-]+", "_", args.label) + ".json")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w") as f:
@@ -516,8 +582,10 @@ def _fmt(v, unit):
     return ("%d" % v if float(v).is_integer() else "%.1f" % v) + (" " + unit if unit else "")
 
 
-def render_table(results):
-    """Markdown table of medians; with two results adds the change from the first to the second."""
+def render_table(results, problems=None):
+    """Markdown table of medians; with two results adds the change from the first to the second. Under it, what each
+    result measured and `problems` (provenance.problems(); by default those of the results after the first against
+    the first), mismatches in bold."""
     head = ["Metric (median)"] + [r.get("label", "?") for r in results]
     if len(results) == 2:
         head.append("change")
@@ -531,20 +599,10 @@ def render_table(results):
             a, b = vals
             row.append("%+.0f %%" % ((b - a) * 100.0 / a) if a and b is not None else "–")
         lines.append("| " + " | ".join(row) + " |")
-    notes = []
-    for r in results:
-        b, d = r.get("build", {}), r.get("device", {})
-        notes.append("%s: %s %s (Android %s), %s build, compiled %s" % (
-            r.get("label"), d.get("manufacturer"), d.get("model"), d.get("android"),
-            "debug" if b.get("debuggable") else "release", b.get("compiler_filter")))
-    if len(results) == 2:
-        a, b = results
-        if a.get("device", {}).get("model") != b.get("device", {}).get("model"):
-            notes.append("**Different devices: the numbers are not comparable.**")
-        if a.get("params", {}).get("other_app") != b.get("params", {}).get("other_app"):
-            notes.append("Different background apps for cold/warm starts.")
-        if a.get("build", {}).get("debuggable") != b.get("build", {}).get("debuggable"):
-            notes.append("Debug vs release build: part of the change comes from the build type alone.")
+    notes = [provenance.describe(r) for r in results]
+    if problems is None:
+        problems = provenance.compare_problems(results) if len(results) > 1 else []
+    notes += ["**%s.**" % t if level == provenance.MISMATCH else t + "." for level, t in problems]
     return "\n".join(lines) + "\n\n" + "\n".join("- " + n for n in notes)
 
 
@@ -553,7 +611,13 @@ def cmd_compare(args):
     for path in args.files:
         with open(path) as f:
             results.append(json.load(f))
-    print(render_table(results))
+    problems = provenance.compare_problems(results, args.main) if len(results) > 1 else []
+    mismatches = [t for level, t in problems if level == provenance.MISMATCH]
+    if mismatches and not args.force:
+        sys.exit("perf.py compare: these results would mislead:\n%s\n\nMeasure again (docs/performance.md, \"Measure "
+                 "the main that ships\"), or pass --force for the table with these warnings under it."
+                 % "\n".join("- " + t for t in mismatches))
+    print(render_table(results, problems))
 
 
 # ---- tracing -----------------------------------------------------------------------------------
@@ -582,7 +646,7 @@ def cmd_trace(args):
     try:
         other = resolve_other_app(sh, args.other_app, log) if args.action in ("cold", "home") else None
         if args.action != "cold":
-            sh.shell("am start -W -n " + ACTIVITY)
+            sh.shell(START)
             time.sleep(2.0)
         if args.action == "dock":
             sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
@@ -598,7 +662,7 @@ def cmd_trace(args):
             open_other_app(sh, other)
             time.sleep(1.0)
             kill_launcher(sh, log)
-            sh.shell("am start -W -n " + ACTIVITY)
+            sh.shell(START)
         elif args.action == "home":
             open_other_app(sh, other)
             time.sleep(2.0)
@@ -618,6 +682,7 @@ def cmd_trace(args):
         local = args.out or "tvhome-%s.perfetto-trace" % datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         sh.pull(TRACE_REMOTE, local)
         log("saved %s: open it at https://ui.perfetto.dev, or run `perf.py summarize %s`" % (local, local))
+        sh.shell("am start -n %s %s false" % (ACTIVITY, DEFAULT_CONFIG))   # back to the saved choices
     finally:
         if not args.shell:
             sh.close()
@@ -766,8 +831,13 @@ def build_parser():
     r.add_argument("--out", help="result file (default tools/perf-results/<label>.json)")
     r.set_defaults(func=cmd_run)
 
-    c = sub.add_parser("compare", help="Markdown table of result files (change is relative to the first)")
+    c = sub.add_parser("compare", help="Markdown table of result files (change is relative to the first, the "
+                                       "baseline); refuses results that would mislead")
     c.add_argument("files", nargs="+")
+    c.add_argument("--main", default=provenance.MAIN_REF,
+                   help="the git ref the baseline must match (default %(default)s, as of your last fetch)")
+    c.add_argument("--force", action="store_true",
+                   help="print the table even when the results would mislead, with the reasons under it")
     c.set_defaults(func=cmd_compare)
 
     t = sub.add_parser("trace", help="record a Perfetto trace while doing something")

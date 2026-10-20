@@ -45,7 +45,8 @@ two measure that hand-over rather than the launcher alone. Use the default warm 
 2. **Baseline.** Install `main` and run `tools/perf.py run --label main`.
 3. **Change one thing**, install that build and run `tools/perf.py run --label my-fix`.
 4. **Compare:** `tools/perf.py compare tools/perf-results/main.json tools/perf-results/my-fix.json`
-   and paste the table into the pull request. Medians of 10 runs; treat changes smaller than about
+   and paste the table into the pull request. It refuses results that would mislead
+   ([Measure the main that ships](#measure-the-main-that-ships)). Medians of 10 runs; treat changes smaller than about
    10 %, or within the min-max spread in the JSON, as noise and re-run.
 5. **Find the cause** of a slow number with a trace:
 
@@ -83,7 +84,59 @@ the background. It must cover the whole screen: TV Settings is see-through, so t
 stay visible behind it and the system wouldn't time the start (`perf.py` warns when that happens).
 By default `perf.py` uses the first installed TV app by package name and records it; choose one
 with `--other-app <package>` (one that opens without playing video is best) and use the same one
-for A and B.
+for A and B: `compare` refuses different ones. On the TCL TV, use `--other-app com.tcl.ui_mediaCenter`.
+
+### Measure the main that ships
+
+A before/after table is only as good as its baseline, and the baseline is the current `main`'s launcher
+as it ships: a release build compiled with `speed`, in the configuration `config.xml` gives it, with the
+TV's animations at their normal speed. Not an older `main`, a retired variant (like the transitions
+before #12), or your branch from before it had `main`'s latest changes.
+
+- **Merge the latest `main` into your branch, then measure once, at the end.** Numbers taken before the
+  merge compare against a `main` that no longer exists: on 2026-10-19 two branches measured `main` with
+  the old transitions in the morning, merged the new ones at noon, and had to measure everything again.
+- **Measure a variant only when your change adds or changes it**: another Liquid Glass look,
+  `liquid_glass_blur=false`, or stand-in art (`--ez glass_test_art true`) for changes to the glass or
+  the top shelf's art.
+
+**Every APK says what it was built from.** The Gradle build adds a stamp to `versionName`:
+`2.0+commit-<sha>.launcher-<tree>[.dirty]`, where `<tree>` is the git tree hash of `launcher/` as it
+was on disk, uncommitted changes included, and `.dirty` says there were some. A clean build's tree is
+`git rev-parse HEAD:launcher`; `tools/provenance.py` computes both. It works in a shallow clone; without
+git (a source zip) the version is a plain `2.0`. See what a TV has installed with
+`adb shell dumpsys package com.gathin.tvhome | grep -E 'versionName|lastUpdateTime'`.
+
+**Every result says what it measured.** `run` records the stamp in `build.provenance` (`commit`,
+`launcher_tree`, `dirty`) and the install time in `build.installed`. Under `config` it records the
+system animation scales (`window`, `transition`, `animator`), which decide which transitions run, and
+what the launcher reports about itself: the Liquid Glass look in effect and `config.xml`'s, the saved
+choice, the glass tier and stand-in art. It warns when the build has no stamp, when a scale isn't 1,
+and when a result labelled `main` isn't the current `origin/main` as it ships.
+
+**The shipped configuration, without losing the TV owner's.** `run` and `trace` start the launcher
+with `--ez default_config true`: for that process only, it shows `config.xml`'s Liquid Glass instead
+of the slider's saved choice, which stays saved, and drops stand-in art. Every start passes it (a cold
+start is a new process), and the run ends with `--ez default_config false`, back to the saved choice.
+Don't reset a TV with `--ei liquid_glass`: it saves the value as the owner's choice, and `-1` forgets
+it.
+
+**`compare` refuses results that would mislead.** The first file is the baseline. It checks the
+results against each other, and with git against `origin/main` as of your last `git fetch` (`--main`
+picks another ref):
+
+| Refused | Because |
+|---|---|
+| A build without a stamp | nothing says what was measured |
+| A baseline whose `launcher/` isn't `origin/main`'s, or with uncommitted changes | `main` has moved since it was measured, or it isn't `main`: measure `main` again. `main` moving only outside `launcher/` is fine |
+| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships |
+| A build that doesn't contain the baseline's `main` | merge `main`, rebuild and measure again; otherwise the change column mixes `main`'s own changes (say, new transitions) into yours |
+| Different devices, build types, compiler filters, background apps, animation scales, `--settle`, D-pad keys, or configurations | the change would come from the difference |
+
+`--force` prints the table anyway, with the reasons in bold under it. Some things are only noted under
+the table: a build with uncommitted changes (commit what you measured), the same `launcher/` in two
+configurations (a variant comparison), and what git couldn't check (a commit that isn't in your
+clone: `git fetch`).
 
 ## What is measured
 
@@ -97,7 +150,8 @@ for A and B.
 
 The JSON also records the device, the Android version, the APK size on the TV, whether the build is
 debuggable, and how ART compiled it (`verify`, `speed-profile`, `speed`), because each of these
-changes every number.
+changes every number; and what the build was built from and how it was configured
+([above](#measure-the-main-that-ships)).
 
 To read the app's timings yourself:
 

@@ -93,6 +93,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      */
     private static final String PREF_GLASS = "liquid_glass";
     static final String EXTRA_GLASS = "liquid_glass";
+    /**
+     * {@code --ez default_config true}: the launcher as it ships, for tools/perf.py, until the process ends or
+     * {@code --ez default_config false}: config.xml's Liquid Glass instead of the saved choice (which stays saved), and
+     * no stand-in art.
+     */
+    static final String EXTRA_DEFAULT_CONFIG = "default_config";
+    /** Static, so it lasts exactly as long as the process. */
+    private static boolean defaultConfig;
     private static final long GLASS_PANEL_IN_MS = 180L;
     private static final long GLASS_PANEL_OUT_MS = 140L;
     /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
@@ -260,8 +268,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         prefs = getSharedPreferences("home", MODE_PRIVATE);
+        Intent start = getIntent();
+        if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
+            defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
+        }
         backdrop = new LiquidGlass.Backdrop(findViewById(R.id.backdrop), LiquidGlass.tier(this),
-                new LiquidGlass.Look(prefs.getInt(PREF_GLASS, getResources().getInteger(R.integer.liquid_glass))));
+                new LiquidGlass.Look(glassChoice()));
         shelfInfo = findViewById(R.id.shelfInfo);
         topShelf = new TopShelf(this, findViewById(R.id.shelfArt), shelfInfo, findViewById(R.id.shelfAction), this,
                 getResources().getBoolean(R.bool.top_shelf_art), getResources().getStringArray(R.array.top_shelf_feeds),
@@ -295,7 +307,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         adapter.setOnOrderSaved(() -> topShelf.setDock(adapter.dockApps()));
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
         rearranger.setGlassAction(this::showGlassSlider);
-        applyGlassExtra(getIntent());
+        applyAdbExtras(getIntent());
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -441,7 +453,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         super.onNewIntent(intent);
         rearranger.end();   // Home pressed while arranging: keep the new arrangement
         showMode = intent.getIntExtra(Transitions.EXTRA_SHOW, Transitions.SHOW_INTENT);
-        applyGlassExtra(intent);
+        applyAdbExtras(intent);
     }
 
     /**
@@ -764,9 +776,40 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         if (save) prefs.edit().putInt(PREF_GLASS, backdrop.look().value).apply();
     }
 
-    /** The adb extras: {@code --ei liquid_glass 50} (-1 for config.xml's value), {@code --ez glass_test_art true}. */
-    private void applyGlassExtra(Intent intent) {
+    /** The glass to show: the saved choice, or config.xml's when there is none or with {@link #EXTRA_DEFAULT_CONFIG}. */
+    private int glassChoice() {
+        int shipped = getResources().getInteger(R.integer.liquid_glass);
+        return defaultConfig ? shipped : prefs.getInt(PREF_GLASS, shipped);
+    }
+
+    /**
+     * The adb extras: {@code --ez default_config true} (see {@link #EXTRA_DEFAULT_CONFIG}), {@code --ei liquid_glass 50}
+     * (-1 for config.xml's value), {@code --ez glass_test_art true}. With tools/perf.py's logging on, an intent with any
+     * of them logs what's in effect after it ("config").
+     */
+    private void applyAdbExtras(Intent intent) {
         if (intent == null) return;
+        boolean adb = intent.hasExtra(EXTRA_DEFAULT_CONFIG) || intent.hasExtra(EXTRA_GLASS)
+                || intent.hasExtra(GlassTestArt.EXTRA);
+        if (intent.hasExtra(EXTRA_DEFAULT_CONFIG)) {
+            defaultConfig = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
+            if (defaultConfig) showTestArt(false);
+            // Only when it changes: perf.py passes it on every start, and a new look re-records the glass.
+            if (backdrop.look().value != glassChoice()) setGlass(glassChoice(), false);
+        }
+        applyGlassExtra(intent);
+        if (adb && Perf.enabled()) {
+            String[] tiers = {"flat", "blur", "lens"};
+            Perf.log("config", Perf.now(), "default_config=" + (defaultConfig ? 1 : 0)
+                    + " glass=" + backdrop.look().value
+                    + " glass_default=" + getResources().getInteger(R.integer.liquid_glass)
+                    + " glass_saved=" + prefs.getInt(PREF_GLASS, -1)
+                    + " glass_tier=" + tiers[LiquidGlass.tier(this)]
+                    + " test_art=" + (testArt != null ? 1 : 0));
+        }
+    }
+
+    private void applyGlassExtra(Intent intent) {
         if (intent.hasExtra(GlassTestArt.EXTRA)) showTestArt(intent.getBooleanExtra(GlassTestArt.EXTRA, false));
         if (!intent.hasExtra(EXTRA_GLASS)) return;
         Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_GLASS) : null;

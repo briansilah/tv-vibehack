@@ -39,7 +39,8 @@ DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
   screenshot: `tools/tv.py 'input keyevent KEYCODE_DPAD_DOWN; screencap -p /sdcard/s.png'` then
   `tools/tv.py --pull /sdcard/s.png s.png`. Include a screenshot in your pull request.
 - For performance changes, include a before/after table from `tools/perf.py compare`, measured on
-  the same TV ([docs/performance.md](docs/performance.md)).
+  the same TV against the current `main` as it ships, after merging it
+  ([docs/performance.md](docs/performance.md#measure-the-main-that-ships)).
 
 Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
