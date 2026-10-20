@@ -367,10 +367,11 @@ class FakeTv:
 class FakeEmulator(FakeTv):
     """An Android 14 emulator: ART compiles the default Home app `verify` whatever `-m speed` asks."""
 
-    def __init__(self, home="com.gathin.tvhome/.MainActivity", stock=True, **kw):
+    def __init__(self, home="com.gathin.tvhome/.MainActivity", stock=True, stock_disabled=False, **kw):
         super().__init__(debuggable=False, **kw)
         self.home = home
         self.stock = stock
+        self.stock_disabled = stock_disabled   # as launcher/build-and-install.sh leaves it on an emulator
 
     def compile_as_home_allows(self):
         filt = "verify" if self.home.startswith(perf.PKG + "/") else "speed"
@@ -389,9 +390,17 @@ class FakeEmulator(FakeTv):
                    "com.google.android.tvlauncher/.MainActivity\n"   # as on the emulator: not the role holder
         if cmd.startswith("cmd package query-activities") and "category.HOME" in cmd:
             self.commands.append(cmd)
-            stock = ("  Activity #1:\n    com.google.android.tvlauncher/.MainActivity\n" if self.stock else "")
+            stock = ("  Activity #1:\n    com.google.android.tvlauncher/.MainActivity\n"
+                     if self.stock and not self.stock_disabled else "")
             return ("  Activity #0:\n    com.android.tv.settings/.system.FallbackHome\n" + stock +
                     "  Activity #2:\n    com.gathin.tvhome/.MainActivity\n")
+        if cmd == "pm list packages -d":
+            self.commands.append(cmd)
+            return "package:com.example.other\n" + ("package:com.google.android.tvlauncher\n" if self.stock_disabled else "")
+        if cmd.startswith("pm enable "):
+            self.commands.append(cmd)
+            self.stock_disabled = self.stock_disabled and cmd.split()[-1] != "com.google.android.tvlauncher"
+            return "Package com.google.android.tvlauncher new state: enabled\n"
         if cmd.startswith("cmd package set-home-activity"):
             self.commands.append(cmd)
             self.home = cmd.split()[-1]
@@ -429,6 +438,17 @@ class EmulatorSpeedTests(unittest.TestCase):
         tv.shell = lambda cmd, timeout=120: ("com.example.home/.Home\n" if "resolve-activity" in cmd
                                              else "Unknown command: role\n")
         self.assertEqual(perf.home_package(tv), "com.example.home")
+
+    def test_a_disabled_stock_launcher_is_enabled_again(self):
+        emu = FakeEmulator(stock_disabled=True)
+        emu.compile_as_home_allows()
+        logs = []
+        self.assertTrue(perf.emulator_speed(emu, logs.append))
+        self.assertIn("pm enable com.google.android.tvlauncher", emu.commands)
+        self.assertNotIn("pm enable com.example.other", emu.commands)   # only launchers
+        self.assertEqual(emu.home, "com.google.android.tvlauncher/.MainActivity")
+        self.assertEqual(perf.parse_package(emu.package)["compiler_filter"], "speed")
+        self.assertIn("enabled com.google.android.tvlauncher again", logs[0])
 
     def test_via_home_keeps_the_launcher_as_home(self):
         emu = FakeEmulator()
