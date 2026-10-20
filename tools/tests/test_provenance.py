@@ -199,6 +199,13 @@ class ProblemTests(unittest.TestCase):
             m = levels(self.problems(self.repo.result("main", self.c1, **kw)), M)
             self.assertTrue(any(words in t for t in m), (kw, m))
 
+    def test_both_compiled_by_art_as_the_default_home_app(self):
+        """An emulator (or a TV where the launcher is the default Home) gives both builds `verify`: a fair pair."""
+        p = self.problems(self.repo.result("main", self.c1, compiler="verify"),
+                          self.repo.result("fix", self.fix, compiler="verify"))
+        self.assertEqual(levels(p, M), [])
+        self.assertTrue(any("so was the other" in t for t in levels(p, N)))
+
     def test_pairs_that_differ(self):
         main = self.repo.result("main", self.c1)
         for kw, words in ((dict(model="Android TV emulator"), "Different devices"),

@@ -1177,14 +1177,18 @@ def render(plan, n_keys=16, runs=10, rounds=3, verbose=False, command="python3 t
     runs = ([("", scen, plan["keys"])] if scen else []) + [
         (v["variant"], v["scenarios"], v["keys"]) for v in plan.get("variants", [])]
     if runs:
-        lines.append("Then on your emulator (with --quick), and once it looks right, on the TV:")
+        lines.append("Then on your emulator (--quick on both), and once it looks right, on the TV: main's numbers "
+                     "(cached, or measured now), your build, then yours:")
     for variant, sc, keys in runs:
         cmd = "--scenarios " + ",".join(sc)
         if "jank" in sc and keys != ["default"]:
             cmd += " --keys " + ",".join(keys)
         var = " --variant '%s'" % variant if variant else ""
+        lines.append("  %s baseline ensure --scenarios auto%s" % (command, var))
         lines.append("  %s run --label <name>%s --scenarios auto%s      # = %s"
                      % (command, "-art" if variant == ART else "-variant" if variant else "", var, cmd))
+    if runs:
+        lines.append("  %s compare --against main tools/perf-results/<name>.json" % command)
     traces = _trace_commands(plan, command)
     if traces:
         lines.append("If a number moves, or for what no scenario measures:")

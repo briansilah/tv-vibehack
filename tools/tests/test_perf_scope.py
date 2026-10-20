@@ -568,5 +568,26 @@ class PerfWiringTests(unittest.TestCase):
         self.assertEqual(json.loads(out.call_args[0][0])["scenarios"], ["dock", "mem"])
 
 
+from test_perf_baseline import Base, FakeDevice  # noqa: E402
+
+
+class BaselineTests(Base):
+    """baseline ensure --scenarios auto measures main for exactly what run --scenarios auto measures."""
+
+    def test_ensure_and_run_follow_the_same_plan(self):
+        fake = {"base": "origin/main", "head": "working tree", "merge_base": "abc", "scenarios": ["jank", "mem"],
+                "keys": ["corner"], "variants": [{"variant": ps.ART, "scenarios": ["dock"], "keys": []}]}
+        with mock.patch.object(perf.perf_scope, "plan", return_value=fake):
+            main, logs, _ = self.ensure(FakeDevice(), "--scenarios", "auto")
+            self.assertEqual(sorted(main["baseline"]["scenarios"]), ["jank", "mem"])
+            self.assertEqual(main["params"]["keys"], perf.KEY_PRESETS["corner"])
+            self.assertTrue(any("also --variant '%s': dock" % ps.ART in m for m in logs))
+            mine = self.run_mine(FakeDevice(), "mine", "--scenarios", "auto")
+            _, _, table = self.perf(None, "compare", "--against", "main", mine)
+            self.assertIn("| Janky frames (D-pad moves) |", table)
+            art, _, _ = self.ensure(FakeDevice(), "--scenarios", "auto", "--variant", ps.ART)
+            self.assertEqual((sorted(art["baseline"]["scenarios"]), art["params"]["variant"]), (["dock"], ps.ART))
+
+
 if __name__ == "__main__":
     unittest.main()
