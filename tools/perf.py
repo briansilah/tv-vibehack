@@ -448,6 +448,13 @@ def is_emulator(sh):
     return "1" in (sh.shell("getprop ro.kernel.qemu").strip(), sh.shell("getprop ro.boot.qemu").strip())
 
 
+def _stock_homes(sh):
+    """The device's other enabled Home activities, a launcher first; never Settings' FallbackHome."""
+    stock = [c for c in parse_components(sh.shell("cmd package query-activities --brief " + HOME_QUERY))
+             if not c.startswith(PKG + "/") and "FallbackHome" not in c]
+    return sorted(stock, key=lambda c: "launcher" not in c.lower())
+
+
 def home_package(sh):
     """The device's Home app: the HOME role's holder (Android 10+, what ART goes by), else what HOME resolves to."""
     held = [l.strip() for l in sh.shell("cmd role get-role-holders android.app.role.HOME").splitlines()
@@ -476,13 +483,19 @@ def emulator_speed(sh, log, keep_home=False):
             "same way" % pkg.get("compiler_filter"))
         return False
     if ours:
-        stock = [c for c in parse_components(sh.shell("cmd package query-activities --brief " + HOME_QUERY))
-                 if not c.startswith(PKG + "/") and "FallbackHome" not in c]
+        stock = _stock_homes(sh)
+        if not stock:
+            # launcher/build-and-install.sh disables the stock launcher on TVs other than Google TV, an emulator too:
+            # enabled again here, on an emulator only (a -read-only one forgets it when it stops).
+            for p in re.findall(r"^package:(\S*launcher\S*)$", sh.shell("pm list packages -d"), re.M):
+                if p != PKG:
+                    sh.shell("pm enable " + p)
+                    log("emulator: enabled %s again (launcher/build-and-install.sh had disabled it)" % p)
+            stock = _stock_homes(sh)
         if not stock:
             log("note: the launcher is this emulator's only Home app, so ART compiled it %s, not speed"
                 % pkg.get("compiler_filter"))
             return False
-        stock.sort(key=lambda c: "launcher" not in c.lower())
         sh.shell("cmd package set-home-activity --user 0 " + stock[0])
         log("emulator: %s is Home again, so ART compiles the launcher speed (it compiles the Home app %s)"
             % (stock[0], pkg.get("compiler_filter")))

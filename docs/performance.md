@@ -185,7 +185,8 @@ with `launcher/build-and-install.sh` and measure it again, which compiles it the
 profile, whatever the install asks for. On TVs other than Google TV the launcher is the default Home, so both come
 out `verify` there; on Google TV the stock home stays the default, and both are `speed`. **On an emulator** `run`
 and `baseline` give Home back to the emulator's stock launcher (from the HOME role, which
-`launcher/build-and-install.sh` gives the launcher there) and compile it `speed` first, so every emulator measures
+`launcher/build-and-install.sh` gives the launcher there, enabling the stock launcher again if the script disabled
+it) and compile it `speed` first, so every emulator measures
 the same build and their shared baseline doesn't flip between `verify` and `speed`; `--via-home` keeps the launcher
 as Home and only notes it.
 
