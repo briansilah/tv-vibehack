@@ -40,6 +40,8 @@ DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
   `tools/tv.py --pull /sdcard/s.png s.png`. Include a screenshot in your pull request.
 - For performance changes, include a before/after table from `tools/perf.py compare`, measured on
   the same TV ([docs/performance.md](docs/performance.md)).
+- Coding agents: [.github/skills/launcher-tv-testing](.github/skills/launcher-tv-testing/SKILL.md) says which
+  checks a change needs and how to spend as little time on the TV as possible.
 
 Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
@@ -71,6 +73,8 @@ just wireless debugging. `tools/tests` covers both offline:
 ## Pull requests
 
 - One topic per PR. Small is fine.
+- Keep the description short, in three parts: **Why** (the problem), **What** (the fix) and **How tested**
+  (with screenshots). [.github/skills/pull-requests](.github/skills/pull-requests/SKILL.md) has the details.
 - CI (`.github/workflows/ci.yml`) must pass. On every PR it builds the launcher (debug and
   release), runs its unit tests, and checks the Python tools and shell scripts. The debug APK is
   attached to each run as the `tvhome-debug-apk` artifact.
