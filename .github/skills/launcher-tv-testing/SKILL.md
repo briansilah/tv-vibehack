@@ -54,7 +54,9 @@ else's.
 
 Its numbers are only relative. Its GPU is software, so its frame times say little about a TV's, and other
 emulators share the CPU with it. Compare `main` and your build on the same emulator (emulators from one AVD share
-`main`'s cached baseline), and never put emulator numbers in a pull request as TV numbers.
+`main`'s cached baseline), and never put emulator numbers in a pull request as TV numbers. `perf.py` compiles the
+launcher `speed` on an emulator before measuring, taking the Home role back from it if
+`launcher/build-and-install.sh` gave it one (Android compiles the Home app `verify`).
 
 ## 2. Before/after: compare against the main that ships
 
