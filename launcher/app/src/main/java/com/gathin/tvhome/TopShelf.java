@@ -13,9 +13,7 @@ import android.os.Looper;
 import android.view.animation.DecelerateInterpolator;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The top shelf's art for the focused dock app, after tvOS's Top Shelf: the best it has, in this order.
@@ -63,8 +61,6 @@ final class TopShelf implements ShelfSource.Listener {
     private static final long INFO_OUT_MS = 70L;
     private static final long INFO_IN_MS = 150L;
     private static final DecelerateInterpolator DECELERATE = new DecelerateInterpolator(1.5f);
-    /** Where each app's carousel is, so coming back to it shows the next title. Survives the activity. */
-    private static final Map<String, Integer> carousel = new HashMap<>();
 
     private final TopShelfView art;
     private final ShelfInfoView info;
@@ -91,8 +87,28 @@ final class TopShelf implements ShelfSource.Listener {
     private ShelfFeeds.Item showingItem;
     private boolean showingOwnTitle;
     private int infoMode = ShelfInfoView.CONTENT;
+    /**
+     * The focused app's titles while focus is on it, in the order they first showed: titles read again meanwhile
+     * keep their places (see ShelfOrder.merge). Focus coming to an app starts again at the top of its newest list:
+     * what you were watching most recently. Null: none (yet).
+     */
+    private List<ShelfFeeds.Item> titles;
+    /**
+     * Where in {@link #titles} the shelf is: the title showing, or the one Left, Right or the carousel moved to
+     * whose picture is still on its way (it slides in when it arrives); -1 for none.
+     */
+    private int at = -1;
+    /** The way the last move went (1: right, -1: left), when it began, and what made it: for passing over failed
+     * pictures the same way, and for the log. */
+    private int moveDir = 1;
+    private long moveSince;
+    private String moveHow = "carousel";
+    /** The dock app focus was last on, so the pictures nearest it are decoded first. */
+    private int dockAt;
+    private final ShelfOrder.Failed failed = this::failed;
     private final Runnable advance = this::advance;
     private final Runnable preloadDock = this::preloadDock;
+    private final Runnable keepAgain = this::keep;
 
     /** {@code enabled}: config.xml's top_shelf_art; {@code feeds}: its top_shelf_feeds. */
     TopShelf(android.content.Context ctx, TopShelfView art, ShelfInfoView info, TextView action, Host host,
@@ -141,6 +157,7 @@ final class TopShelf implements ShelfSource.Listener {
         resumed = false;
         handler.removeCallbacks(advance);
         handler.removeCallbacks(preloadDock);
+        handler.removeCallbacks(keepAgain);
     }
 
     /** The apps changed (installed, updated): their banners, so their covers, may have too. */
@@ -181,17 +198,19 @@ final class TopShelf implements ShelfSource.Listener {
      * hide). {@code artDone} runs once the art has faded in, or now if there is none to show yet.
      */
     boolean show(ShelfSource.App app, boolean appearing, Runnable artDone) {
-        // Focus coming to an app starts at the top of its list: what you were watching most recently.
-        if (app != null && (current == null || !current.key.equals(app.key))) carousel.remove(app.pkg);
+        boolean visit = app != null && (current == null || !current.key.equals(app.key));
         current = app;
         handler.removeCallbacks(advance);
         if (source == null || app == null) {
             if (artDone != null) artDone.run();
             return false;
         }
+        // Focus coming to an app starts at the top of its list: what you were watching most recently.
+        if (visit) visit(app);
         boolean wasShown = shown;
         shown = true;
         Choice c = choose(app);
+        logFallback(app, c);
         if (appearing || !wasShown) {
             art.animate().cancel();
             info.animate().cancel();
@@ -229,6 +248,10 @@ final class TopShelf implements ShelfSource.Listener {
         if (!shown || tier != CONTENT || showingItem == null || current == null) return false;
         acting = true;
         handler.removeCallbacks(advance);
+        // Left and Right go from the title you see, not from one the carousel was about to bring in.
+        int i = ShelfOrder.indexOf(titles, showingItem);
+        if (i >= 0) at = i;
+        keep();
         labelAction();
         float d = density();
         float rowH = 40 * d;
@@ -256,6 +279,7 @@ final class TopShelf implements ShelfSource.Listener {
                     if (!acting) action.setVisibility(View.INVISIBLE);
                 }).start();
         liftTo(0f);
+        keep();
         if (shown && tier == CONTENT) scheduleCarousel();
     }
 
@@ -315,24 +339,65 @@ final class TopShelf implements ShelfSource.Listener {
         }
     }
 
-    /** Left and Right on the button page through the app's titles, as swiping does on tvOS's Top Shelf. */
+    /**
+     * Left and Right on the button page through the app's titles, as swiping does on tvOS's Top Shelf: always to
+     * the one next to it, so going back retraces your steps. One whose picture is still on its way slides in when
+     * it arrives; pressing on meanwhile moves on from it.
+     */
     private void step(int dir) {
-        if (current == null || tier != CONTENT) return;
-        List<ShelfFeeds.Item> items = source.items(current.pkg);
-        if (items == null || items.size() < 2) return;
-        int at = Math.max(0, items.indexOf(showingItem));
-        for (int k = 1; k < items.size(); k++) {
-            int i = Math.floorMod(at + dir * k, items.size());
-            Choice c = content(current, items.get(i));
-            if (c == null) {
-                loadItem(items.get(i), null);
-                continue;
-            }
-            carousel.put(current.pkg, i);
-            slideTo(c, dir);
-            labelAction();
+        if (current == null || tier != CONTENT || titles == null || at < 0) return;
+        int to = ShelfOrder.step(titles, at, dir, failed);
+        if (to >= 0) move(to, dir, "step");
+    }
+
+    /** Moves to the title at {@code to}: it slides in now if its picture is decoded, else when it arrives. */
+    private void move(int to, int dir, String how) {
+        at = to;
+        moveDir = dir;
+        moveSince = Perf.now();
+        moveHow = how;
+        keep();
+        ShelfFeeds.Item it = titles.get(at);
+        // Back to the title showing, before the one you'd moved to arrived.
+        if (ShelfOrder.same(it, showingItem)) return;
+        Choice c = content(current, it);
+        if (c != null) {
+            slideIn(c);
             return;
         }
+        final ShelfSource.App app = current;
+        loadItem(it, () -> arrived(app));
+    }
+
+    /** Whether a title's picture couldn't be had lately (too small, or no download): it's passed over. */
+    private boolean failed(ShelfFeeds.Item it) {
+        return source.failedLately(it.backdrop);
+    }
+
+    private void slideIn(Choice c) {
+        slideTo(c, moveDir);
+        if (acting) labelAction();
+        logTitle(moveHow, moveSince, current.pkg, titles, at, moveDir);
+    }
+
+    /**
+     * With logging on: focus came to an app with a title to show, but its picture wasn't decoded, so its cover art
+     * (or the glow) shows first and the title replaces it when it arrives.
+     */
+    private void logFallback(ShelfSource.App app, Choice c) {
+        if (!Perf.enabled() || (c != null && c.tier == CONTENT) || titles == null || at < 0) return;
+        Perf.log("shelf_fallback", Perf.now(), "pkg=" + app.pkg + " art=" + (c == null ? "glow" : "cover"));
+    }
+
+    /**
+     * With logging on: a title came on screen, from Left or Right on the button ({@code step}), the carousel, or
+     * after the fallback ({@code arrived}): how long after the move, where it is in the list, and its name.
+     */
+    private static void logTitle(String how, long since, String pkg, List<ShelfFeeds.Item> items, int i, int dir) {
+        if (!Perf.enabled()) return;
+        String title = items.get(i).title.isEmpty() ? "-" : items.get(i).title.replaceAll("\\s+", "_");
+        Perf.log("shelf_" + how, since, "pkg=" + pkg + " i=" + i + " n=" + items.size() + " dir=" + dir
+                + " title=" + title);
     }
 
     /** OK on the button: opens the title in its app, or the app if it can't be opened at the title. */
@@ -377,11 +442,14 @@ final class TopShelf implements ShelfSource.Listener {
         if (!shown) return;
         shown = false;
         current = null;
+        titles = null;
+        at = -1;
         handler.removeCallbacks(advance);
         art.animate().cancel();
         info.animate().cancel();
         art.animate().alpha(0f).setDuration(HIDE_MS).setInterpolator(DECELERATE).start();
         info.animate().alpha(0f).setDuration(HIDE_MS).setInterpolator(DECELERATE).start();
+        keep();
     }
 
     /** Memory is short, or Home is hidden: keeps only the pictures on screen. */
@@ -395,7 +463,16 @@ final class TopShelf implements ShelfSource.Listener {
 
     @Override
     public void onItems(String pkg) {
-        if (current != null && current.pkg.equals(pkg)) want(current);
+        if (shown && current != null && current.pkg.equals(pkg)) {
+            if (tier == CONTENT && titles != null) {
+                // You may be looking through them: the titles you have keep their places, new ones go at the end.
+                titles = ShelfOrder.merge(titles, source.items(pkg));
+            } else {
+                // None of them has shown yet: its newest list, from the top.
+                visit(current);
+            }
+            want(current);
+        }
         for (ShelfSource.App a : dock) {
             if (a.pkg.equals(pkg)) {
                 preloadDock();
@@ -443,18 +520,11 @@ final class TopShelf implements ShelfSource.Listener {
     /** The best art for the app that's ready now, or null. */
     private Choice choose(ShelfSource.App app) {
         if (source == null || !started) return null;
-        List<ShelfFeeds.Item> items = source.items(app.pkg);
-        if (items != null) {
-            // The title the list is at, in its order (what you were watching, then saved, then popular): if it's
-            // still loading the cover art shows meanwhile, rather than a later title jumping the queue. Only a
-            // title whose picture failed is skipped.
-            int start = index(app.pkg, items.size());
-            for (int k = 0; k < items.size(); k++) {
-                ShelfFeeds.Item it = items.get((start + k) % items.size());
-                Choice c = content(app, it);
-                if (c != null) return c;
-                if (!source.failedLately(it.backdrop)) break;
-            }
+        // The title the shelf is at, in its list's order (what you were watching, then saved, then popular): if
+        // it's still loading the cover art shows meanwhile, rather than a later title jumping the queue.
+        if (titles != null && at >= 0 && at < titles.size()) {
+            Choice c = content(app, titles.get(at));
+            if (c != null) return c;
         }
         ShelfSource.Cover cover = source.cover(app.key);
         if (cover != null) return new Choice(COVER, cover.backdrop, cover.logo, null, null, "cover:" + app.key);
@@ -471,34 +541,28 @@ final class TopShelf implements ShelfSource.Listener {
         return new Choice(CONTENT, bg, logo, it, caption, new TopShelfView.Content(it.backdrop));
     }
 
-    private static int index(String pkg, int size) {
-        Integer i = carousel.get(pkg);
-        return i == null || size == 0 ? 0 : Math.floorMod(i, size);
+    /**
+     * Focus came to {@code app} (or its titles arrived before any showed): its newest list, from its first title
+     * whose picture hasn't failed. The same title {@link #keep} decodes for it ahead of time.
+     */
+    private void visit(ShelfSource.App app) {
+        List<ShelfFeeds.Item> l = source.items(app.pkg);
+        titles = l == null ? null : new ArrayList<>(l);
+        at = ShelfOrder.first(titles, failed);
+        moveDir = 1;
+        moveSince = Perf.now();
+        moveHow = "arrived";
+        for (int i = 0; i < dock.size(); i++) {
+            if (dock.get(i).key.equals(app.key)) dockAt = i;
+        }
     }
 
     /** Starts loading what the app's best art needs; it fades in if focus is still there. */
     private void want(final ShelfSource.App app) {
         if (source == null || !started) return;
         source.makeCover(app, c -> arrived(app));
-        loadNext(app);
-    }
-
-    /**
-     * Loads the app's title to show: the one its list is at, or the next whose picture hasn't failed (one that's
-     * too small, or wouldn't download, is passed over), and the one after it for the carousel. When it arrives
-     * and focus is still there, it shows.
-     */
-    private void loadNext(final ShelfSource.App app) {
-        List<ShelfFeeds.Item> items = source.items(app.pkg);
-        if (items == null) return;
-        int i = index(app.pkg, items.size());
-        for (int k = 0; k < items.size(); k++) {
-            ShelfFeeds.Item it = items.get((i + k) % items.size());
-            if (source.failedLately(it.backdrop)) continue;
-            loadItem(it, () -> arrived(app));
-            if (items.size() > 1) loadItem(items.get((i + k + 1) % items.size()), null);
-            return;
-        }
+        if (titles != null && at >= 0) loadItem(titles.get(at), () -> arrived(app));
+        keep();
     }
 
     private void loadItem(ShelfFeeds.Item it, final Runnable done) {
@@ -510,35 +574,64 @@ final class TopShelf implements ShelfSource.Listener {
         if (it.logo != null) source.load(it.logo, false, one);
     }
 
-    /** Something the app's art needed has loaded: shows it if focus is still there and it's better. */
+    /**
+     * Something the app's art needed has loaded: shows it if focus is still there and it's better, or slides in
+     * the title Left, Right or the carousel moved to.
+     */
     private void arrived(ShelfSource.App app) {
         if (!shown || current == null || !current.key.equals(app.key)) return;
+        if (titles != null && at >= 0 && failed.failed(titles.get(at))) {
+            // Its picture can't be had (too small, or no download): on to the next title the same way.
+            at = ShelfOrder.step(titles, at, moveDir, failed);
+            if (at < 0) at = ShelfOrder.indexOf(titles, showingItem);
+            keep();
+            if (at >= 0 && !ShelfOrder.same(titles.get(at), showingItem) && content(app, titles.get(at)) == null) {
+                loadItem(titles.get(at), () -> arrived(app));
+            }
+        }
         Choice c = choose(app);
-        // A title's picture failed (too small, or no download): on to the next one.
-        if ((c == null || c.tier != CONTENT) && source.items(app.pkg) != null) loadNext(app);
-        if (c == null || c.tier < tier || (c.tier == tier && app.key.equals(showingKey))) return;
+        if (c == null) return;
+        if (tier == CONTENT) {
+            if (c.tier == CONTENT && !ShelfOrder.same(c.item, showingItem)) slideIn(c);
+            return;
+        }
+        if (c.tier < tier || (c.tier == tier && app.key.equals(showingKey))) return;
         display(c, ARRIVE_MS, null, true);
+        if (c.tier == CONTENT) logTitle("arrived", moveSince, app.pkg, titles, at, moveDir);
     }
 
-    /** Decodes each dock app's current title (or cover art), so moving along the dock shows it at once. */
+    /** Decodes what each dock app shows when focus comes to it, so moving along the dock shows it at once. */
     private void preloadDock() {
         if (source == null || !started) return;
-        List<String> keep = new ArrayList<>();
-        for (ShelfSource.App a : dock) {
-            List<ShelfFeeds.Item> items = source.items(a.pkg);
-            if (items == null) continue;
-            ShelfFeeds.Item it = items.get(index(a.pkg, items.size()));
-            keep.add(it.backdrop);
-            if (it.logo != null) keep.add(it.logo);
-        }
-        source.pin(keep);
-        for (ShelfSource.App a : dock) preload(a);
+        keep();
+        for (ShelfSource.App a : dock) source.makeCover(a, null);
     }
 
-    private void preload(ShelfSource.App a) {
-        source.makeCover(a, null);
-        List<ShelfFeeds.Item> items = source.items(a.pkg);
-        if (items != null) loadItem(items.get(index(a.pkg, items.size())), null);
+    /**
+     * Keeps decoded what may show next, and decodes it now, nearest first (see ShelfOrder.keep): each dock app's
+     * first title, the one focus coming to it shows; and on the focused app, the title showing and the ones next
+     * to it. Everything else may drop out of memory. A title whose picture can't be had hands its place on.
+     */
+    private void keep() {
+        if (source == null || !started) return;
+        List<List<ShelfFeeds.Item>> lists = new ArrayList<>(dock.size());
+        for (ShelfSource.App a : dock) lists.add(source.items(a.pkg));
+        boolean focused = shown && current != null;
+        List<ShelfFeeds.Item> want = ShelfOrder.keep(lists, dockAt, focused ? titles : null, at, focused && acting,
+                failed);
+        List<String> urls = new ArrayList<>();
+        for (ShelfFeeds.Item it : want) {
+            urls.add(it.backdrop);
+            if (it.logo != null) urls.add(it.logo);
+        }
+        source.pin(urls);
+        for (final ShelfFeeds.Item it : want) {
+            loadItem(it, () -> {
+                if (!source.failedLately(it.backdrop)) return;
+                handler.removeCallbacks(keepAgain);
+                handler.post(keepAgain);
+            });
+        }
     }
 
     // ---- showing -------------------------------------------------------------------------------------------
@@ -561,13 +654,7 @@ final class TopShelf implements ShelfSource.Listener {
                 });
         swapInfo(c, ms);
         if (notify && key != null && showingOwnTitle != hadOwnTitle) host.onShelfArt(key, showingOwnTitle);
-        if (c != null && c.tier == CONTENT) {
-            scheduleCarousel();
-            List<ShelfFeeds.Item> items = source.items(current.pkg);
-            if (items != null && items.size() > 1) {
-                loadItem(items.get((Math.max(0, items.indexOf(c.item)) + 1) % items.size()), null);
-            }
-        }
+        if (c != null && c.tier == CONTENT) scheduleCarousel();
     }
 
     private void swapInfo(final Choice c, long ms) {
@@ -595,11 +682,10 @@ final class TopShelf implements ShelfSource.Listener {
                 }).start();
     }
 
-    /** The carousel's next title: the picture pushes in from the right, its title a little behind it. */
-    private void slideTo(final Choice c) {
-        slideTo(c, 1);
-    }
-
+    /**
+     * The next title (the carousel's or Right's; {@code dir} -1: Left's): the picture pushes in from the side, its
+     * title a little behind it.
+     */
     private void slideTo(final Choice c, int dir) {
         String key = current.key;
         boolean hadOwnTitle = showingOwnTitle;
@@ -621,10 +707,6 @@ final class TopShelf implements ShelfSource.Listener {
                 }).start();
         if (showingOwnTitle != hadOwnTitle) host.onShelfArt(key, showingOwnTitle);
         if (!acting) scheduleCarousel();
-        List<ShelfFeeds.Item> items = source.items(current.pkg);
-        if (items != null && items.size() > 1) {
-            loadItem(items.get((Math.max(0, items.indexOf(c.item)) + 1) % items.size()), null);
-        }
     }
 
     private void scheduleCarousel() {
@@ -632,29 +714,16 @@ final class TopShelf implements ShelfSource.Listener {
         if (resumed && shown && !acting) handler.postDelayed(advance, CAROUSEL_MS);
     }
 
-    /** The carousel: the app's next title, if it's ready; otherwise it loads and the carousel tries again soon. */
+    /**
+     * The carousel: the app's next title. If its picture is still on its way it slides in when it arrives, and the
+     * carousel goes on from there.
+     */
     private void advance() {
-        if (!shown || !resumed || current == null || tier != CONTENT || source == null) return;
-        final ShelfSource.App app = current;
-        List<ShelfFeeds.Item> items = source.items(app.pkg);
-        if (items == null || items.size() < 2) return;
-        int at = Math.max(0, items.indexOf(showingItem));
-        for (int k = 1; k < items.size(); k++) {
-            int i = (at + k) % items.size();
-            Choice c = content(app, items.get(i));
-            if (c == null) {
-                if (source.failedLately(items.get(i).backdrop)) continue;   // no picture: on to the next
-                // Not decoded yet: load it, and look again in a moment.
-                loadItem(items.get(i), null);
-                if (k == 1) {
-                    handler.postDelayed(advance, 1500L);
-                    return;
-                }
-                continue;
-            }
-            carousel.put(app.pkg, i);
-            slideTo(c);
+        if (!shown || !resumed || current == null || tier != CONTENT || source == null || titles == null || at < 0) {
             return;
         }
+        if (!ShelfOrder.same(titles.get(at), showingItem)) return;
+        int to = ShelfOrder.step(titles, at, 1, failed);
+        if (to >= 0) move(to, 1, "carousel");
     }
 }

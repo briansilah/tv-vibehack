@@ -266,6 +266,11 @@ tools/tv.py 'setprop log.tag.TvHomePerf DEBUG'
 tools/tv.py 'logcat -d -s TvHomePerf'
 ```
 
+Besides the timings above, the top shelf logs `shelf_fallback` when focus comes to a dock app whose title isn't
+decoded yet, so its cover art or the glow shows first, and `shelf_step`, `shelf_carousel` and `shelf_arrived` when a
+title comes on screen after Left or Right, the carousel, or a fallback: how long after the move (waiting for its
+picture), its place in the app's list (`i`, `n`) and its name.
+
 ### Trace sections
 
 | Section | Where |
