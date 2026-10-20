@@ -511,6 +511,7 @@ def cmd_run(args):
     if re.search(r"(?<![a-z])main(?![a-z])", args.label.lower()):
         for level, text in provenance.problems(result):
             if level == provenance.MISMATCH:
+                text = text[len(args.label) + 2:] if text.startswith(args.label + ": ") else text
                 log("warning: labelled %s, but it isn't main as it ships: %s" % (args.label, text))
     out = args.out or os.path.join(RESULTS_DIR, re.sub(r"[^\w.-]+", "_", args.label) + ".json")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)

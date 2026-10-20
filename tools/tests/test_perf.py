@@ -427,7 +427,9 @@ class EndToEndTests(unittest.TestCase):
         self.assertTrue(any(line.startswith("measuring main: TCL Smart TV Pro (Android 14), debug build compiled "
                                             "verify, unstamped build") for line in logs))
         self.assertTrue(any("has no provenance stamp" in line for line in logs))
-        self.assertTrue(any(line.startswith("warning: labelled main, but it isn't main as it ships") for line in logs))
+        self.assertIn("warning: labelled main, but it isn't main as it ships: the build has no provenance stamp "
+                      "(built before stamping, or without git), so nothing says what was measured. Rebuild it and "
+                      "measure again", logs)
 
     def test_stamped_build(self):
         result, logs, _ = self.run_perf(FakeTv(debuggable=False, version=STAMPED), "fix", "--scenarios", "mem")
