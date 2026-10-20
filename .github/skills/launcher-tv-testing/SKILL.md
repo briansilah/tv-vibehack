@@ -18,8 +18,8 @@ Go up a step only once the step below says the change is good:
    set `JAVA_HOME` and `ANDROID_HOME` first, unless `java -version` says 17 and `launcher/local.properties` exists.
    For docs or tools that don't talk to a TV, stop here.
 2. **Your own emulator** (below). Check how the change looks, moves and behaves, with D-pad keys and
-   screenshots. Run the `perf.py` scenarios for it there too, `main` and yours back to back, to see which way the
-   numbers move. Fix everything you can here.
+   screenshots. Run the `perf.py` scenarios for it there too, against `main`'s cached baseline (section 2), to see
+   which way the numbers move. Fix everything you can here.
 3. **The TV, once you're confident.** One hold for what only a TV can show: the numbers for the pull request, its
    screenshots or clip, how it feels with the real remote, and anything specific to that TV.
 
@@ -53,24 +53,32 @@ the PID that `pgrep -f -- '[q]emu.*-port 5570'` prints, or `adb -s emulator-5570
 else's.
 
 Its numbers are only relative. Its GPU is software, so its frame times say little about a TV's, and other
-emulators share the CPU with it. Compare `main` and your build measured back to back on the same emulator, and
-never put emulator numbers in a pull request as TV numbers.
+emulators share the CPU with it. Compare `main` and your build on the same emulator (emulators from one AVD share
+`main`'s cached baseline), and never put emulator numbers in a pull request as TV numbers.
 
 ## 2. Before/after: compare against the main that ships
 
 - **Merge the latest `main` into your branch first, and measure once, at the end.** Numbers taken before a merge
   compare against a `main` that no longer exists: baselines taken before a big merge (the new transitions, #12)
   had to be thrown away.
-- **The baseline is `main` as it ships:** a release build compiled with `speed`, in its default configuration.
-  Don't measure retired variants (an older `main`, the old transitions, a branch build from before the merge).
+- **Don't build or measure `main` yourself: take it from the shared cache.** `tools/perf.py baseline ensure` with
+  the options you'll run yours with takes `main`'s numbers on this device from a cache every worktree shares, and
+  measures only what isn't there: a different `launcher/` tree, device, firmware, scenario code or options. A hit
+  costs no device time. It builds `main`'s release APK once per `launcher/` tree and installs it only on a miss,
+  so run it **before** installing yours. Then `tools/perf.py compare --against main <yours>.json` (no device
+  needed) and, at the end, `tools/perf.py baseline install` to put `main` back. `tools/perf.py baseline show` says
+  what's cached, per device, before you ask for the TV. Details: [Reusing main's
+  baseline](../../../docs/performance.md#reusing-mains-baseline).
+- **The baseline is `main` as it ships:** its release build in its default configuration. Don't measure retired
+  variants (an older `main`, the old transitions, a branch build from before the merge).
 - **Measure a variant only when your change adds or changes it.** For example, `liquid_glass_blur=false` or
   `--ez glass_test_art true` are for changes to the glass or the top shelf's art.
 - **Use the same conditions for A and B:** the same TV, the same background app (`--other-app`), the same
-  `perf.py` options, and about a minute's wait after each install. `perf.py compare` warns when the devices,
-  background apps or build types differ. It doesn't warn when ART compiled them differently: both notes must say
-  `compiled speed`. To install an APK you built earlier (for example `main`'s, from a second worktree):
-  `adb install -r <apk>`, then `adb shell cmd package compile -m speed -f com.gathin.tvhome`, as
-  `launcher/build-and-install.sh` does.
+  `perf.py` options, and about a minute's wait after each install. `compare --against` refuses a baseline taken
+  with other options, on another device or compiled differently by ART (the default Home app gets `verify`, so
+  on an emulator both are `verify`; on the Google TV both are `speed`).
+- **When a difference is within the noise**, or `compare` says the baseline is days old, measure `main` again
+  right before or after yours: `tools/perf.py baseline refresh` with the same options.
 
 ## 3. Measure only what you changed
 
@@ -97,9 +105,11 @@ request.
 
 ## 4. On the TV: one hold, once you're confident
 
-- Build every APK you need (`main`'s and yours) before you take the TV.
-- Write one script with every step: install, settle, screenshots, clips, perf runs, traces, and putting the
-  previous build back. Dry-run it on your emulator first.
+- Build your APK before you take the TV, and `tools/perf.py baseline apk` for `main`'s (cached). Check with
+  `tools/perf.py baseline show` whether `main` is already cached for the TV with your scenarios and options: then
+  your hold needs no `main` at all.
+- Write one script with every step: `baseline ensure`, install, settle, screenshots, clips, perf runs, traces, and
+  putting `main` back (`baseline install`). Dry-run it on your emulator first.
 - If a step fails on the TV, stop and give the TV back. Fix the problem off the TV.
 - The emulator is where you iterate, but its numbers never stand in for the TV's. When a result needs the TV and
   the TV is in use, ask whoever is using it for a slot.
