@@ -8,7 +8,8 @@ See docs/performance.md for the method and what each number means.
     perf.py run --label main                    all scenarios: cold, warm, jank, mem
     perf.py run --label fix --scenarios warm,jank --runs 5
     perf.py run --label fix --scenarios dock    moving between two dock apps: top shelf latency and frames
-    perf.py compare tools/perf-results/main.json tools/perf-results/fix.json
+    perf.py run --label fix --scenarios dock --variant '--ez glass_test_art true'   a variant (main's too)
+    perf.py compare tools/perf-results/main.json tools/perf-results/fix.json    refuses results that would mislead
     perf.py trace --seconds 15 --action keys    Perfetto trace while it presses D-pad keys
     perf.py trace --action dock                 ... while it moves between the first two dock apps
     perf.py summarize trace.perfetto-trace      slowest launcher trace sections, frames and key latency (pip install perfetto)
@@ -39,6 +40,11 @@ ACTIVITY = PKG + "/.MainActivity"
 # the saved choice, which stays saved; no stand-in art. Every start passes it, since a cold start is a new process.
 DEFAULT_CONFIG = "--ez default_config"
 START = "am start -W -n %s %s true" % (ACTIVITY, DEFAULT_CONFIG)
+RESTORE = "am start -W -n %s %s false" % (ACTIVITY, DEFAULT_CONFIG)
+# --variant: only these, which last as long as the process with default_config on.
+_VARIANT = re.compile(r"^(?:--ez glass_test_art (?:true|false)|--ei liquid_glass -?\d+)"
+                      r"(?: (?:--ez glass_test_art (?:true|false)|--ei liquid_glass -?\d+))*$")
+_variant = ""   # this command's --variant, appended to every start (see launch())
 ANIMATION_SCALES = (("window_animation_scale", "window"), ("transition_animation_scale", "transition"),
                     ("animator_duration_scale", "animator"))
 PERF_TAG = "TvHomePerf"
@@ -290,7 +296,7 @@ def scenario_cold(sh, runs, settle, other, log):
         kill_launcher(sh, log)
         time.sleep(settle)
         t = device_epoch(sh)
-        s = parse_am_start(sh.shell(START))
+        s = parse_am_start(sh.shell(launch()))
         time.sleep(settle * 2)   # entrance animation, focus restore, logs
         s.update(launcher_logs(sh, t))
         if s.get("launch_state") not in (None, "COLD"):
@@ -302,7 +308,7 @@ def scenario_cold(sh, runs, settle, other, log):
 
 
 def scenario_warm(sh, runs, settle, via_home, other, log):
-    sh.shell(START)
+    sh.shell(launch())
     time.sleep(settle * 2)
     samples = []
     for i in range(runs):
@@ -310,7 +316,7 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
         time.sleep(settle)
         sh.shell("dumpsys gfxinfo %s reset" % PKG)
         t = device_epoch(sh)
-        s = parse_am_start(sh.shell(HOME_INTENT if via_home else START))
+        s = parse_am_start(sh.shell(HOME_INTENT if via_home else launch()))
         time.sleep(settle)
         s.update(launcher_logs(sh, t))
         g = parse_gfxinfo(sh.shell("dumpsys gfxinfo " + PKG))
@@ -327,7 +333,7 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
 
 
 def scenario_jank(sh, rounds, keys, interval, log):
-    sh.shell(START)
+    sh.shell(launch())
     time.sleep(2.5)
     n = len(keys.split())
     samples = []
@@ -346,7 +352,7 @@ def scenario_dock(sh, rounds, moves, interval, log):
     """The top shelf: moves focus back and forth between the first two dock apps, one press every
     `interval` seconds so each change can finish, and records how long the shelf takes to show the new
     app (the launcher's `shelf` timing lines) and the frames drawn meanwhile."""
-    sh.shell(START)
+    sh.shell(launch())
     time.sleep(2.5)
     sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
     time.sleep(1.5)
@@ -376,7 +382,7 @@ def scenario_dock(sh, rounds, moves, interval, log):
 
 
 def scenario_mem(sh, samples_n, log):
-    sh.shell(START)
+    sh.shell(launch())
     time.sleep(3.0)
     samples = []
     for i in range(samples_n):
@@ -409,6 +415,22 @@ def apk_size(sh):
         return None
 
 
+def set_variant(text):
+    """Checks --variant and makes every start pass it after default_config. Returns it, or None."""
+    global _variant
+    v = " ".join((text or "").split())
+    if v and not _VARIANT.match(v):
+        sys.exit("--variant takes the launcher's per-process extras: --ez glass_test_art true, --ei liquid_glass "
+                 "<0-100>, or both")
+    _variant = " " + v if v else ""
+    return v or None
+
+
+def launch():
+    """The command that starts the launcher: in the shipped configuration (START), plus --variant's extras."""
+    return START + _variant
+
+
 def animation_scales(sh):
     """The system animation scales, {"window", "transition", "animator"}; unset is 1. They decide which of the
     launcher's transitions run (Transitions, HomeMotion)."""
@@ -422,17 +444,29 @@ def animation_scales(sh):
 
 
 def launcher_config(sh, shipped=True):
-    """Starts the launcher with --ez default_config true (or false: back to the saved choices) and returns the
-    configuration it reports in its "config" log line, or None for a build that doesn't. Logging must be on."""
+    """Starts the launcher with --ez default_config true and --variant (or false: back to the saved choices) and
+    returns the configuration it reports in its "config" log line, or None for a build that doesn't (or with logging
+    off)."""
     sh.shell("am start -W -n " + ACTIVITY)   # a fresh task gets an intent without extras (it outlives the process)
     t = device_epoch(sh)
-    sh.shell("am start -W -n %s %s %s" % (ACTIVITY, DEFAULT_CONFIG, "true" if shipped else "false"))
+    sh.shell(launch() if shipped else RESTORE)
     time.sleep(1.0)
     e = parse_events(sh.shell("logcat -d -v epoch -s %s:D" % PERF_TAG), "config", t)
     if not e:
         return None
     e[-1].pop("config_ms", None)
     return {k: int(v) if isinstance(v, float) and v.is_integer() else v for k, v in e[-1].items()}
+
+
+def restore_config(sh, log):
+    """Back to the saved choices: --ez default_config false. Says so when the launcher reports it."""
+    try:
+        back = launcher_config(sh, shipped=False)
+    except tv.TvError as e:
+        log("warning: couldn't put the launcher back to its saved configuration (%s); run: adb shell %s" % (e, RESTORE))
+        return
+    if back:
+        log("launcher back to its saved configuration (Liquid Glass %s)" % back.get("glass"))
 
 
 def check_measured(result, log):
@@ -450,7 +484,8 @@ def check_measured(result, log):
         log("note: this build doesn't report its configuration (it predates default_config); a saved Liquid Glass "
             "choice or stand-in art may be in effect")
     elif v:
-        log("warning: not the configuration the launcher ships with: " + ", ".join(v))
+        log(("note: measuring a variant: " if result["params"].get("variant")
+             else "warning: not the configuration the launcher ships with: ") + ", ".join(v))
 
 
 def cmd_run(args):
@@ -458,6 +493,7 @@ def cmd_run(args):
     bad = [s for s in scenarios if s not in ALL_SCENARIOS]
     if bad:
         sys.exit("unknown scenario(s): %s" % ", ".join(bad))
+    variant = set_variant(args.variant)
     sh = args.shell or connect(args)
     log = args.log or (lambda msg: print(msg, flush=True))
     try:
@@ -469,7 +505,7 @@ def cmd_run(args):
             "created": datetime.datetime.now().isoformat(timespec="seconds"),
             "device": device_facts(sh),
             "build": dict(pkg, apk_bytes=apk_size(sh)),
-            "params": {"runs": args.runs, "rounds": args.rounds, "settle_s": args.settle},
+            "params": {"runs": args.runs, "rounds": args.rounds, "settle_s": args.settle, "variant": variant},
         }
         other = None
         if "cold" in scenarios or "warm" in scenarios:
@@ -500,9 +536,7 @@ def cmd_run(args):
                 log("memory")
                 result["mem"] = scenario_mem(sh, 3, log)
         finally:
-            back = launcher_config(sh, shipped=False)
-            if back:
-                log("launcher back to its saved configuration (Liquid Glass %s)" % back.get("glass"))
+            restore_config(sh, log)
             sh.shell("setprop log.tag.%s ''" % PERF_TAG)
             sh.shell(HOME_INTENT)
     finally:
@@ -642,12 +676,14 @@ def perfetto_config(duration_ms):
 
 
 def cmd_trace(args):
+    set_variant(args.variant)
     sh = args.shell or connect(args)
     log = args.log or (lambda msg: print(msg, flush=True))
     try:
+        sh.shell("am start -W -n " + ACTIVITY)   # a fresh task gets an intent without extras (it outlives the process)
         other = resolve_other_app(sh, args.other_app, log) if args.action in ("cold", "home") else None
         if args.action != "cold":
-            sh.shell(START)
+            sh.shell(launch())
             time.sleep(2.0)
         if args.action == "dock":
             sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
@@ -663,7 +699,7 @@ def cmd_trace(args):
             open_other_app(sh, other)
             time.sleep(1.0)
             kill_launcher(sh, log)
-            sh.shell(START)
+            sh.shell(launch())
         elif args.action == "home":
             open_other_app(sh, other)
             time.sleep(2.0)
@@ -683,8 +719,8 @@ def cmd_trace(args):
         local = args.out or "tvhome-%s.perfetto-trace" % datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         sh.pull(TRACE_REMOTE, local)
         log("saved %s: open it at https://ui.perfetto.dev, or run `perf.py summarize %s`" % (local, local))
-        sh.shell("am start -n %s %s false" % (ACTIVITY, DEFAULT_CONFIG))   # back to the saved choices
     finally:
+        restore_config(sh, log)
         if not args.shell:
             sh.close()
 
@@ -829,6 +865,9 @@ def build_parser():
     r.add_argument("--via-home", action="store_true",
                    help="warm start with the HOME intent instead of starting MainActivity directly "
                         "(needs the launcher as the default home app)")
+    r.add_argument("--variant", help="measure a variant, only when your change adds or changes it: the launcher's "
+                                     "per-process extras, e.g. '--ez glass_test_art true' or '--ei liquid_glass 50'. "
+                                     "Measure main with the same one")
     r.add_argument("--out", help="result file (default tools/perf-results/<label>.json)")
     r.set_defaults(func=cmd_run)
 
@@ -848,6 +887,7 @@ def build_parser():
                    help="keys: --keys; dock: Right/Left between the first two dock apps")
     t.add_argument("--keys", default=DEFAULT_KEYS)
     t.add_argument("--key-interval", type=float, help="seconds between keys (default 0.35; 1.2 for dock)")
+    t.add_argument("--variant", help="as for run")
     t.add_argument("--out", help="local file (default tvhome-<time>.perfetto-trace)")
     t.set_defaults(func=cmd_trace)
 

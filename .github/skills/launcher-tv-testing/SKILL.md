@@ -64,8 +64,9 @@ never put emulator numbers in a pull request as TV numbers.
 - **The baseline is `main` as it ships:** a release build compiled with `speed`, in its default configuration,
   with the TV's animation scales at 1. Don't measure retired variants (an older `main`, the old transitions, a
   branch build from before the merge).
-- **Measure a variant only when your change adds or changes it.** For example, `liquid_glass_blur=false` or
-  `--ez glass_test_art true` are for changes to the glass or the top shelf's art.
+- **Measure a variant only when your change adds or changes it,** with the same variant for `main` and yours: for
+  changes to the glass or the top shelf's art, `perf.py run --variant '--ez glass_test_art true'` (stand-in art) or
+  `--variant '--ei liquid_glass 50'`, or a build with `liquid_glass_blur=false`.
 - **Every build says what it is.** Gradle stamps each APK's `versionName` with its commit and `launcher/` tree
   (`2.0+commit-<sha>.launcher-<tree>[.dirty]`). `perf.py run` records that, the animation scales and the
   launcher's own configuration, and measures with `--ez default_config true`: `config.xml`'s Liquid Glass for that

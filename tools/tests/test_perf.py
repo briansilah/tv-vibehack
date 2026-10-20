@@ -4,6 +4,7 @@
 """
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -288,12 +289,21 @@ class FakeTv:
         self.survives_kill = False
         self.reports_config = reports_config   # a build from before default_config doesn't
         self.default_config = False
+        self.glass, self.test_art = 70, True     # the owner's saved choice; stand-in art left on
         self.scales = scales or {}
 
     def shell(self, cmd, timeout=120):
         self.commands.append(cmd)
         if self.reports_config and cmd.startswith("am start") and perf.DEFAULT_CONFIG in cmd:
-            self.default_config = cmd.endswith(" true")
+            on = perf.DEFAULT_CONFIG + " true" in cmd
+            art = re.search(r"--ez glass_test_art (true|false)", cmd)
+            if on != self.default_config and not art:
+                self.test_art = False
+            self.default_config = on
+            if art:
+                self.test_art = art.group(1) == "true"
+            glass = re.search(r"--ei liquid_glass (\d+)", cmd)
+            self.glass = int(glass.group(1)) if glass else 0 if on else 70
         if cmd.startswith("settings get global "):
             return self.scales.get(cmd.split()[-1], "null") + "\n"
         if cmd.startswith("dumpsys package"):
@@ -330,8 +340,8 @@ class FakeTv:
         if cmd.startswith("logcat"):
             t = self.clock + 0.5
             config = ("  %.3f  4400  4400 D TvHomePerf: config ms=0.0 default_config=%d glass=%d glass_default=0 "
-                      "glass_saved=70 glass_tier=lens test_art=0\n"
-                      % (t, self.default_config, 0 if self.default_config else 70)) if self.reports_config else ""
+                      "glass_saved=70 glass_tier=lens test_art=%d\n"
+                      % (t, self.default_config, self.glass, self.test_art)) if self.reports_config else ""
             return (config +
                     "  %.3f  4400  4400 D TvHomePerf: reload ms=400.0 apps=37 query_ms=30.0 load_ms=350.0\n"
                     "  %.3f  4400  4400 D TvHomePerf: resume ms=420.0\n"
@@ -416,11 +426,12 @@ class EndToEndTests(unittest.TestCase):
             "launcher": {"default_config": 1, "glass": 0, "glass_default": 0, "glass_saved": 70, "glass_tier": "lens",
                          "test_art": 0}})
         starts = [c for c in tv.commands if c.startswith("am start") and perf.ACTIVITY in c]
-        self.assertTrue(all(c in (perf.START, "am start -W -n " + perf.ACTIVITY) or c.endswith("default_config false")
-                            for c in starts), starts)
+        self.assertTrue(all(c in (perf.START, perf.RESTORE, "am start -W -n " + perf.ACTIVITY) for c in starts), starts)
         self.assertGreaterEqual(starts.count(perf.START), 3 + 1 + 3 + 1 + 1 + 1)
-        self.assertTrue(starts[-1].endswith("--ez default_config false"))
+        self.assertEqual(starts[-1], perf.RESTORE)
         self.assertFalse(tv.default_config)
+        self.assertFalse(tv.test_art)
+        self.assertIsNone(result["params"]["variant"])
         self.assertIn("launcher back to its saved configuration (Liquid Glass 70)", logs)
         self.assertFalse(any("liquid_glass" in c or "glass_test_art" in c for c in tv.commands))
         self.assertNotIn("glass", result["cold"]["samples"][0])
@@ -430,6 +441,50 @@ class EndToEndTests(unittest.TestCase):
         self.assertIn("warning: labelled main, but it isn't main as it ships: the build has no provenance stamp "
                       "(built before stamping, or without git), so nothing says what was measured. Rebuild it and "
                       "measure again", logs)
+
+    def test_variant(self):
+        tv = FakeTv(debuggable=False, version=STAMPED)
+        variant = "--ez glass_test_art true  --ei liquid_glass 50"
+        result, logs, _ = self.run_perf(tv, "fix-art", "--scenarios", "warm,mem", "--variant", variant)
+        self.assertEqual(result["params"]["variant"], "--ez glass_test_art true --ei liquid_glass 50")
+        self.assertEqual((result["config"]["launcher"]["glass"], result["config"]["launcher"]["test_art"]), (50, 1))
+        self.assertIn("note: measuring a variant: Liquid Glass at 50 (ships at 0), stand-in top shelf art "
+                      "(glass_test_art)", logs)
+        starts = [c for c in tv.commands if c.startswith("am start") and perf.DEFAULT_CONFIG + " true" in c]
+        self.assertEqual(set(starts), {perf.START + " --ez glass_test_art true --ei liquid_glass 50"})
+        self.assertEqual([c for c in tv.commands if perf.ACTIVITY in c][-1], perf.RESTORE)
+        self.assertEqual((tv.glass, tv.test_art), (70, False))   # back to the owner's choice, no stand-in art
+        perf.set_variant(None)
+        self.assertEqual(perf.launch(), perf.START)
+
+    def test_variant_takes_only_the_launchers_extras(self):
+        for bad in ("--ei liquid_glass 50; reboot", "--es default_config false", "--ei liquid_glass"):
+            tv = FakeTv()
+            with self.assertRaises(SystemExit):
+                self.run_perf(tv, "bad", "--variant", bad)
+            self.assertEqual(tv.commands, [])
+
+    def test_trace_starts_clean_and_restores(self):
+        tv = FakeTv()
+        pulls = []
+        tv.pull = lambda remote, local: pulls.append(remote)
+        with mock.patch("builtins.print"):
+            perf.main(["trace", "--seconds", "1", "--action", "dock", "--out", os.path.join(self.tmp, "t")],
+                      shell=tv, log=lambda m: None)
+        starts = [c for c in tv.commands if c.startswith("am start") and perf.ACTIVITY in c]
+        self.assertEqual(starts[0], "am start -W -n " + perf.ACTIVITY)   # the task's own intent has no extras
+        self.assertEqual(starts[1], perf.START)
+        self.assertEqual(starts[-1], perf.RESTORE)
+        self.assertEqual(pulls, [perf.TRACE_REMOTE])
+
+        def lost(remote, local):
+            raise perf.tv.TvError("connection lost")
+        tv = FakeTv()
+        tv.pull = lost
+        with self.assertRaises(SystemExit):
+            perf.main(["trace", "--seconds", "1", "--action", "keys"], shell=tv, log=lambda m: None)
+        self.assertIn(perf.RESTORE, tv.commands)
+        self.assertFalse(tv.default_config)
 
     def test_stamped_build(self):
         result, logs, _ = self.run_perf(FakeTv(debuggable=False, version=STAMPED), "fix", "--scenarios", "mem")

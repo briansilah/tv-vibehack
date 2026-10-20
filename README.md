@@ -222,8 +222,8 @@ and the default, 5 is Apple TV's Clear, 95 is Tinted).
   it; OK keeps it. To try looks from a computer:
   `adb shell am start -n com.gathin.tvhome/.MainActivity --ei liquid_glass 50` saves 50 as the
   choice (`-1` forgets it and goes back to `config.xml`'s). `--ez default_config true` shows
-  `config.xml`'s until the launcher restarts (or `false`), keeping the choice: `tools/perf.py` measures
-  with it.
+  `config.xml`'s until the launcher restarts (or `false`), keeping the choice, and meanwhile
+  `--ei liquid_glass` isn't saved: `tools/perf.py` measures with it.
 
 To arrange several apps in one go, select **Arrange apps** at the end of the grid: OK picks an app up
 and puts it down, and Back (or the tile, now **Done**) finishes. While arranging, the top of the screen

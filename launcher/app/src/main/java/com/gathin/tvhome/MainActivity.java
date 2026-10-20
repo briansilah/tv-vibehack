@@ -96,7 +96,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     /**
      * {@code --ez default_config true}: the launcher as it ships, for tools/perf.py, until the process ends or
      * {@code --ez default_config false}: config.xml's Liquid Glass instead of the saved choice (which stays saved), and
-     * no stand-in art.
+     * no stand-in art. Meanwhile {@code --ei liquid_glass} isn't saved either, so a variant can be measured.
      */
     static final String EXTRA_DEFAULT_CONFIG = "default_config";
     /** Static, so it lasts exactly as long as the process. */
@@ -776,29 +776,43 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         if (save) prefs.edit().putInt(PREF_GLASS, backdrop.look().value).apply();
     }
 
-    /** The glass to show: the saved choice, or config.xml's when there is none or with {@link #EXTRA_DEFAULT_CONFIG}. */
+    /** The glass to show: the saved choice, or config.xml's without one or with {@link #EXTRA_DEFAULT_CONFIG}. */
     private int glassChoice() {
         int shipped = getResources().getInteger(R.integer.liquid_glass);
         return defaultConfig ? shipped : prefs.getInt(PREF_GLASS, shipped);
     }
 
     /**
-     * The adb extras: {@code --ez default_config true} (see {@link #EXTRA_DEFAULT_CONFIG}), {@code --ei liquid_glass 50}
-     * (-1 for config.xml's value), {@code --ez glass_test_art true}. With tools/perf.py's logging on, an intent with any
-     * of them logs what's in effect after it ("config").
+     * The adb extras: {@code --ez default_config true} (see {@link #EXTRA_DEFAULT_CONFIG}),
+     * {@code --ei liquid_glass 50} (-1 for config.xml's value; saved, except with default_config on, when it lasts as
+     * long as the process), {@code --ez glass_test_art true}. With tools/perf.py's logging on, an intent with any of
+     * them logs what's in effect after it ("config"). perf.py passes them on every start: only what changes is redone,
+     * since a new look re-records the glass.
      */
     private void applyAdbExtras(Intent intent) {
         if (intent == null) return;
-        boolean adb = intent.hasExtra(EXTRA_DEFAULT_CONFIG) || intent.hasExtra(EXTRA_GLASS)
-                || intent.hasExtra(GlassTestArt.EXTRA);
-        if (intent.hasExtra(EXTRA_DEFAULT_CONFIG)) {
-            defaultConfig = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
-            if (defaultConfig) showTestArt(false);
-            // Only when it changes: perf.py passes it on every start, and a new look re-records the glass.
-            if (backdrop.look().value != glassChoice()) setGlass(glassChoice(), false);
+        boolean art = intent.hasExtra(GlassTestArt.EXTRA);
+        boolean config = intent.hasExtra(EXTRA_DEFAULT_CONFIG);
+        Integer glassExtra = glassExtra(intent);
+        if (config) {
+            boolean on = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
+            // Into or out of the shipped configuration: the stand-in art goes, unless this intent asks for it.
+            if (on != defaultConfig && !art) showTestArt(false);
+            defaultConfig = on;
         }
-        applyGlassExtra(intent);
-        if (adb && Perf.enabled()) {
+        if (art) showTestArt(intent.getBooleanExtra(GlassTestArt.EXTRA, false));
+        if (config || glassExtra != null) {
+            int shipped = getResources().getInteger(R.integer.liquid_glass);
+            boolean save = glassExtra != null && !defaultConfig;
+            if (save && glassExtra < 0) prefs.edit().remove(PREF_GLASS).apply();
+            int glass = glassExtra == null ? glassChoice() : glassExtra < 0 ? shipped : glassExtra;
+            if (save && glassExtra >= 0) {
+                setGlass(glass, true);
+            } else if (glass != backdrop.look().value) {
+                setGlass(glass, false);
+            }
+        }
+        if ((art || config || glassExtra != null) && Perf.enabled()) {
             String[] tiers = {"flat", "blur", "lens"};
             Perf.log("config", Perf.now(), "default_config=" + (defaultConfig ? 1 : 0)
                     + " glass=" + backdrop.look().value
@@ -809,21 +823,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         }
     }
 
-    private void applyGlassExtra(Intent intent) {
-        if (intent.hasExtra(GlassTestArt.EXTRA)) showTestArt(intent.getBooleanExtra(GlassTestArt.EXTRA, false));
-        if (!intent.hasExtra(EXTRA_GLASS)) return;
-        Object extra = intent.getExtras() != null ? intent.getExtras().get(EXTRA_GLASS) : null;
-        int value;
+    /** {@code --ei liquid_glass N} (or a string), or null. */
+    private static Integer glassExtra(Intent intent) {
+        if (!intent.hasExtra(EXTRA_GLASS) || intent.getExtras() == null) return null;
+        Object extra = intent.getExtras().get(EXTRA_GLASS);
         try {
-            value = extra instanceof Number ? ((Number) extra).intValue() : Integer.parseInt(String.valueOf(extra).trim());
+            return extra instanceof Number ? (Integer) ((Number) extra).intValue()
+                    : Integer.valueOf(String.valueOf(extra).trim());
         } catch (NumberFormatException e) {
-            return;
-        }
-        if (value < 0) {
-            prefs.edit().remove(PREF_GLASS).apply();
-            setGlass(getResources().getInteger(R.integer.liquid_glass), false);
-        } else {
-            setGlass(value, true);
+            return null;
         }
     }
 

@@ -68,7 +68,8 @@ took in the `:home` process (Android 12+).
 `run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem`,
 `--runs` (cold/warm repeats, default 10), `--rounds` (jank rounds, default 3), `--keys` (the D-pad
 sequence), `--dock-moves` and `--dock-interval` (the dock scenario), `--via-home` (warm start through
-the HOME intent, like pressing Home), `--other-app` (see below).
+the HOME intent, like pressing Home), `--other-app` (see below), `--variant` (see
+[Measure the main that ships](#measure-the-main-that-ships)).
 
 **Right after an install** the first warm (Home) numbers can come out up to about 10 ms slower; on the TCL TV a
 second `run --scenarios warm --runs 15` of the same build matched the build before. Re-run when a Home
@@ -96,9 +97,10 @@ before #12), or your branch from before it had `main`'s latest changes.
 - **Merge the latest `main` into your branch, then measure once, at the end.** Numbers taken before the
   merge compare against a `main` that no longer exists: on 2026-10-19 two branches measured `main` with
   the old transitions in the morning, merged the new ones at noon, and had to measure everything again.
-- **Measure a variant only when your change adds or changes it**: another Liquid Glass look,
-  `liquid_glass_blur=false`, or stand-in art (`--ez glass_test_art true`) for changes to the glass or
-  the top shelf's art.
+- **Measure a variant only when your change adds or changes it**: another Liquid Glass look or stand-in
+  art for changes to the glass or the top shelf's art, with the same `--variant` for `main` and yours:
+  `run --variant '--ez glass_test_art true'` or `--variant '--ei liquid_glass 50'`. A build with
+  `liquid_glass_blur=false` is a variant too.
 
 **Every APK says what it was built from.** The Gradle build adds a stamp to `versionName`:
 `2.0+commit-<sha>.launcher-<tree>[.dirty]`, where `<tree>` is the git tree hash of `launcher/` as it
@@ -116,10 +118,11 @@ and when a result labelled `main` isn't the current `origin/main` as it ships.
 
 **The shipped configuration, without losing the TV owner's.** `run` and `trace` start the launcher
 with `--ez default_config true`: for that process only, it shows `config.xml`'s Liquid Glass instead
-of the slider's saved choice, which stays saved, and drops stand-in art. Every start passes it (a cold
-start is a new process), and the run ends with `--ez default_config false`, back to the saved choice.
-Don't reset a TV with `--ei liquid_glass`: it saves the value as the owner's choice, and `-1` forgets
-it.
+of the slider's saved choice, which stays saved, and drops stand-in art. Meanwhile `--ei liquid_glass`
+isn't saved either, which is how `--variant` measures another look. Every start passes it (a cold
+start is a new process), and the run ends with `--ez default_config false`, back to the saved choice
+without stand-in art. Don't reset a TV with `--ei liquid_glass` on its own: it saves the value as the
+owner's choice, and `-1` forgets it.
 
 **`compare` refuses results that would mislead.** The first file is the baseline. It checks the
 results against each other, and with git against `origin/main` as of your last `git fetch` (`--main`
