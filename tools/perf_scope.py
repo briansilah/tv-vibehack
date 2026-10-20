@@ -66,7 +66,8 @@ FILE_RULES = [
      E(check="none", why="the launcher's own icon and banner, which other launchers show")),
     # Tools: local tests; the ones that talk to a TV are tried on an emulator.
     (("tools/tests/*",), E(why="the tools' offline tests")),
-    (("tools/perf.py", "tools/perf_scope.py", "tools/tv.py", "tools/b64push.py"),
+    (("tools/perf.py", "tools/perf_scope.py", "tools/perf_baseline.py", "tools/provenance.py", "tools/tv.py",
+      "tools/b64push.py"),
      E(check="emulator", why="tools that talk to a TV: run them against your emulator; a harness change makes "
                              "numbers from before it incomparable, so re-measure both sides")),
     (("tools/*.sh", "tools/*.ps1"), E(check="emulator", why="scripts that change a TV's settings: your emulator only")),
@@ -209,7 +210,11 @@ MEMBER_RULES = {
         (("focusTile", "focusTarget", "deferredFocus", "onTileKey"),
          E("warm jank", keys="grid", trace="keys", why="moving focus to a tile (also when Home comes "
                                                                "back)")),
-        (("setGlass", "applyGlassExtra", "PREF_GLASS", "EXTRA_GLASS"), E("dock", trace="dock", why="the glass's look")),
+        (("setGlass", "applyGlassExtra", "PREF_GLASS", "EXTRA_GLASS", "glassChoice", "glassExtra"),
+         E("jank dock", keys="default corner", trace="dock", why="the glass's look")),
+        (("applyAdbExtras", "defaultConfig", "EXTRA_DEFAULT_CONFIG"),
+         E("jank dock", keys="default corner", trace="dock",
+           why="the configuration perf.py starts it in (default_config, the glass look) and reports")),
         (("showTestArt", "testArt"), E(check="emulator", art="dock", why="stand-in art behind the glass")),
         (("showGlassSlider", "hideGlassSlider", "glassLabel", "glassPanel", "GLASS_PANEL_*"),
          E(check="emulator", why="the Liquid Glass slider: look at it on your emulator")),
@@ -733,7 +738,7 @@ class Planner:
                 effect = file_rule(JAVA + ident + ".java")
             if effect is not None:
                 effects.append(effect)
-                if effect.scenarios or effect.check != "local":
+                if (effect.scenarios or effect.check != "local") and ident not in named:
                     named.append(ident)
                 recognized = True
         if not recognized:
