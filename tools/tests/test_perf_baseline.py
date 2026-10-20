@@ -445,7 +445,7 @@ class EnsureTests(Base):
         with self.assertRaises(SystemExit) as e:
             self.perf(None, "compare", "--against", "main", mine)
         self.assertIn("compiled speed, yours verify", str(e.exception))
-        self.assertIn("Install yours with launcher/build-and-install.sh", str(e.exception))
+        self.assertIn("Install yours again with launcher/build-and-install.sh", str(e.exception))
 
     def test_refresh_reinstalls_main_even_when_it_is_installed(self):
         dev = FakeDevice()

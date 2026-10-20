@@ -707,13 +707,11 @@ def compare_against(name, path, force=False, root=None):
     if differ and not force:
         theirs = "/".join(sorted({str(compiled[s]) for s in differ}))
         refresh = ensure_command(mine, [(s, None) for s in differ], "refresh")
-        if b.get("compiler_filter") != "speed":
-            fix = ("Install yours with launcher/build-and-install.sh, which compiles it with speed, and measure it "
-                   "again. If it comes out %s again, ART overrides the compile on this device (it does for the "
-                   "default Home app): then measure main the same way with\n  %s" % (b.get("compiler_filter"), refresh))
-        else:
-            fix = ("Main's was recompiled after its install (ART does that to the default Home app, and in "
-                   "background dexopt). This reinstalls and compiles main as the install scripts do:\n  " + refresh)
+        # Reinstalling yours first converges whichever side is odd: the device compiles it the way it now compiles
+        # main (e.g. `verify` once the launcher is the default Home app, `speed` when an install skipped the compile).
+        fix = ("Install yours again with launcher/build-and-install.sh and measure it again: the device then compiles "
+               "it as it compiled main. If they still differ, main's was recompiled since (background dexopt), and "
+               "this reinstalls it:\n  %s" % refresh)
         raise BaselineError("main's baseline for %s was compiled %s, yours %s: not comparable. %s\n(--force compares "
                             "anyway)" % (", ".join(differ), theirs, b.get("compiler_filter"), fix))
     baseline = assemble(found, ref, commit, tree)

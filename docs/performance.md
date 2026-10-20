@@ -135,7 +135,7 @@ picks another ref):
 |---|---|
 | A build without a stamp | nothing says what was measured |
 | A baseline whose `launcher/` isn't `origin/main`'s, or with uncommitted changes | `main` has moved since it was measured, or it isn't `main`: measure `main` again. `main` moving only outside `launcher/` is fine |
-| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships |
+| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships. Compiled otherwise with the other build compiled the same is only a note: ART compiles the default Home app its own way (an emulator, TVs other than Google TV) |
 | A build that doesn't contain the baseline's `main` | merge `main`, rebuild and measure again; otherwise the change column mixes `main`'s own changes (say, new transitions) into yours |
 | Different devices, build types, compiler filters, background apps, animation scales, `--settle`, D-pad keys, or configurations | the change would come from the difference |
 
@@ -179,7 +179,8 @@ is older than `--max-age` days (7). `baseline show` lists what's cached for `mai
 
 `compare --against main` looks the baseline up from your result's device, options and scenario code. When it isn't
 cached, it says what differs and prints the `ensure` command. Then it makes the same checks as `compare` (above),
-with `--force` the same way, and also refuses when ART compiled `main` and yours differently. ART compiles the device's default Home app with `speed-profile`, which is `verify` until there's a
+with `--force` the same way, and also refuses when ART compiled `main` and yours differently: install yours again
+with `launcher/build-and-install.sh` and measure it again, which compiles it the way the device now compiles `main`. ART compiles the device's default Home app with `speed-profile`, which is `verify` until there's a
 profile, whatever the install asks for: on an Android TV emulator, and on TVs other than Google TV, the launcher is
 the default Home, so both come out `verify` there. On Google TV the stock home stays the default, and both are
 `speed`.
