@@ -263,11 +263,14 @@ cut off (YouTube's thumbnails are fetched at 1280 x 720; the small ones the apps
 used), or the title is passed over for the next. A title logo too small to read well gives way to
 the title in text.
 
-**Up** from a dock app showing a title moves to a button under it: **Resume** or **Play** opens it in
-the app (with the link the app published), **Open in …** opens a catalogue title in its app (a
-Stremio title's page, or a search for it in Netflix or Apple TV). Left and Right page through the
-titles; Down or Back returns to the dock, and Up again opens the top right corner. Apps don't let
-other apps add to their watchlists, so there's no such button.
+**Up** from a dock app showing a title moves to a button under it, which says what OK will do with
+that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue
+watching resumes only what you've started); **Open in …** opens the title's page in its app (a
+Stremio title, or one the app published without playing it); **Search in …** searches the app for a
+catalogue title by its name, where the app can't be opened at the title (Netflix, Apple TV); and
+**Open …** opens just the app when there's no link it accepts (`top_shelf_links` in `config.xml`).
+Left and Right page through the titles; Down or Back returns to the dock, and Up again opens the top
+right corner. Apps don't let other apps add to their watchlists, so there's no such button.
 
 **The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
 the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept

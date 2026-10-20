@@ -210,9 +210,9 @@ final class ShelfSource {
 
     private final Map<String, List<ShelfFeeds.Item>> combined = new HashMap<>();
 
-    /** What opens a title in its app: the link the app published, else one from config.xml's top_shelf_links. */
-    String link(String pkg, ShelfFeeds.Item it) {
-        return it.link != null ? it.link : ShelfFeeds.link(links.get(pkg), it);
+    /** The app's link for a feed's titles, from config.xml's top_shelf_links, or null. See {@link ShelfAction}. */
+    String template(String pkg) {
+        return links.get(pkg);
     }
 
     String caption(String pkg) {

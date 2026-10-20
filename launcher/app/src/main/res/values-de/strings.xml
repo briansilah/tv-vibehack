@@ -49,7 +49,10 @@
     <!-- Top shelf: the button under a suggested title (Up from the dock). -->
     <string name="shelf_play">Abspielen</string>
     <string name="shelf_resume">Fortsetzen</string>
-    <string name="shelf_open">Öffnen</string>
-    <!-- %1$s: the app, e.g. Netflix. -->
+    <!-- %1$s: the app, e.g. Netflix. Opens the title's page in the app. -->
     <string name="shelf_open_in">In %1$s öffnen</string>
+    <!-- %1$s: the app. Opens the app's search for the title, where it can't be opened at the title itself. -->
+    <string name="shelf_search_in">In %1$s suchen</string>
+    <!-- %1$s: the app. Opens the app, not the title. -->
+    <string name="shelf_open_app">%1$s öffnen</string>
 </resources>
