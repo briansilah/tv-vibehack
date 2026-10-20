@@ -5,8 +5,11 @@ Each `run` repeats every scenario and saves medians plus raw samples to tools/pe
 (git-ignored). `compare` turns two result files into a Markdown table for a pull request.
 See docs/performance.md for the method and what each number means.
 
-    perf.py run --label main                    all scenarios: cold, warm, jank, mem
-    perf.py run --label fix --scenarios warm,jank --runs 5
+    perf.py plan                                which scenarios this branch's diff needs, and why
+    perf.py run --label fix --scenarios auto    just those (an explicit --scenarios or --keys overrides it)
+    perf.py run --label main                    all scenarios: cold, warm, jank, dock, mem
+    perf.py run --label fix --scenarios warm,jank --quick    5 starts, 2 rounds: enough on an emulator
+    perf.py run --label fix --scenarios jank --keys corner   named D-pad keys: default, grid, dock, corner
     perf.py run --label fix --scenarios dock    moving between two dock apps: top shelf latency and frames
     perf.py run --label fix --scenarios dock --variant '--ez glass_test_art true'   a variant (main's too)
     perf.py compare tools/perf-results/main.json tools/perf-results/fix.json    refuses results that would mislead
@@ -33,6 +36,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.modules.setdefault("perf", sys.modules[__name__])   # one module, also when run as a script
 import tv  # noqa: E402
+import perf_scope  # noqa: E402
 import provenance  # noqa: E402
 import perf_baseline as baseline  # noqa: E402
 
@@ -66,6 +70,21 @@ DEFAULT_KEYS = "RIGHT RIGHT RIGHT LEFT LEFT LEFT DOWN RIGHT RIGHT DOWN LEFT LEFT
 # dock's first app.
 TO_FIRST_DOCK_APP = " ".join(["UP"] * 14 + ["BACK"] + ["LEFT"] * 4)
 DOCK_TRACE_KEYS = "RIGHT LEFT RIGHT LEFT RIGHT LEFT RIGHT LEFT"
+# Named D-pad sequences for jank and `trace --action keys` (--keys corner, or several in turn: --keys default,corner).
+# Each starts and ends on the first dock app, where jank puts focus first. perf_scope.py picks them from a diff.
+KEY_PRESETS = {
+    "default": DEFAULT_KEYS,
+    # Three rows down the grid and back, scrolling the page (needs 16 apps).
+    "grid": "DOWN DOWN DOWN RIGHT RIGHT RIGHT UP UP UP LEFT LEFT LEFT DOWN DOWN DOWN UP UP UP",
+    # Along the dock and back, twice, faster than the dock scenario: the shelf and the glass change on every move.
+    "dock": "RIGHT RIGHT RIGHT LEFT LEFT LEFT RIGHT RIGHT RIGHT LEFT LEFT LEFT",
+    # Up into the top right (via the top shelf's button when it shows one), along its buttons, Back to the dock; twice.
+    "corner": "UP UP RIGHT LEFT LEFT LEFT LEFT RIGHT RIGHT BACK UP UP LEFT LEFT RIGHT RIGHT BACK",
+    # Down to the Arrange apps tile (the last one; up to 32 apps), arrange: pick up the first app, move it around and
+    # back, then Back twice, which puts it back and stops without saving. Never end on CENTER on a shared TV: putting
+    # an app down saves the order.
+    "arrange": " ".join(["DOWN"] * 7 + ["RIGHT"] * 3) + " CENTER CENTER RIGHT RIGHT DOWN LEFT UP LEFT BACK BACK",
+}
 ALL_SCENARIOS = ("cold", "warm", "jank", "dock", "mem")
 TRACE_REMOTE = "/data/misc/perfetto-traces/tvhome.perfetto-trace"
 TRACE_CONFIG_REMOTE = "/data/local/tmp/tvhome-perfetto.pbtx"
@@ -339,6 +358,9 @@ def scenario_warm(sh, runs, settle, via_home, other, log):
 def scenario_jank(sh, rounds, keys, interval, log):
     sh.shell(launch())
     time.sleep(2.5)
+    # The keys start from the first dock app, wherever the launcher was left.
+    sh.shell(key_loop(TO_FIRST_DOCK_APP, 0.15), timeout=60)
+    time.sleep(1.5)
     n = len(keys.split())
     samples = []
     for i in range(rounds):
@@ -419,6 +441,57 @@ def apk_size(sh):
         return None
 
 
+def resolve_keys(value):
+    """The D-pad sequence for --keys: key names (UP DOWN LEFT RIGHT CENTER BACK), or presets (KEY_PRESETS) separated
+    by commas, pressed in turn. None: the default keys."""
+    if value is None:
+        return DEFAULT_KEYS
+    names = [v.strip() for v in value.split(",") if v.strip()]
+    if names and all(n in KEY_PRESETS for n in names):
+        return " ".join(KEY_PRESETS[n] for n in names)
+    bad = [k for k in value.split() if k.upper() not in KEYCODES]
+    if bad or not names:
+        sys.exit("--keys %r: neither keys (%s) nor presets (%s)" % (value, " ".join(KEYCODES), ", ".join(KEY_PRESETS)))
+    return value
+
+
+def resolve_run_args(args, log=None):
+    """Fills in run's measuring options in place: --scenarios auto becomes the scenarios (and jank keys) this
+    branch's diff needs (tools/perf_scope.py; "" when it needs none), --quick and the defaults set --runs and --rounds,
+    and --keys becomes a D-pad sequence. `baseline` calls it too, so both measure the same. Returns the plan for
+    --scenarios auto, else None."""
+    log = log or (lambda msg: print(msg, flush=True))
+    plan = None
+    if args.scenarios.strip() == "auto":
+        try:
+            plan = perf_scope.plan(getattr(args, "base", None) or "origin/main", getattr(args, "head", None), HERE)
+        except (RuntimeError, OSError) as e:
+            sys.exit("--scenarios auto: %s" % e)
+        # with --variant, the plan's runs with that variant; its runs as the launcher ships otherwise
+        want = " ".join((getattr(args, "variant", None) or "").split())
+        runs = {"": (plan["scenarios"], plan["keys"])}
+        runs.update({" ".join(v["variant"].split()): (v["scenarios"], v["keys"]) for v in plan.get("variants", [])})
+        if want and want not in runs:
+            log("note: the plan has no runs with --variant '%s'; measuring its scenarios with it anyway" % want)
+        scenarios, keys = runs.get(want, runs[""])
+        args.scenarios = ",".join(scenarios)
+        if args.keys is None and keys:
+            args.keys = ",".join(keys)
+        what = ", ".join(scenarios) + (" (keys: %s)" % args.keys if "jank" in scenarios else "") if scenarios \
+            else "nothing to measure on a TV"
+        also = ["%s: %s" % ("--variant '%s'" % v if v else "as it ships", ",".join(s))
+                for v, (s, _) in runs.items() if v != want and s]
+        log("scope of %s...%s (merge base %s): %s%s; `perf.py plan` says why" % (
+            plan["base"], plan["head"], plan["merge_base"], what, "; also " + "; ".join(also) if also else ""))
+    quick = getattr(args, "quick", False)
+    if args.runs is None:
+        args.runs = 5 if quick else 10
+    if args.rounds is None:
+        args.rounds = 2 if quick else 3
+    args.keys = resolve_keys(args.keys)
+    return plan
+
+
 def set_variant(text):
     """Checks --variant and makes every start pass it after default_config. Returns it, or None."""
     global _variant
@@ -493,13 +566,17 @@ def check_measured(result, log):
 
 
 def cmd_run(args):
+    log = args.log or (lambda msg: print(msg, flush=True))
+    plan = resolve_run_args(args, log)
     scenarios = [s.strip() for s in args.scenarios.split(",") if s.strip()]
     bad = [s for s in scenarios if s not in ALL_SCENARIOS]
     if bad:
         sys.exit("unknown scenario(s): %s" % ", ".join(bad))
+    if not scenarios:
+        log("no scenario to run")
+        return None
     variant = set_variant(args.variant)
     sh = args.shell or connect(args)
-    log = args.log or (lambda msg: print(msg, flush=True))
     try:
         pkg = parse_package(sh.shell("dumpsys package " + PKG))
         if not pkg:
@@ -518,6 +595,8 @@ def cmd_run(args):
             "params": baseline.run_params(args, other),
             "harness": {s: baseline.harness(s) for s in scenarios},
         }
+        if plan:
+            result["scope"] = {k: plan[k] for k in ("base", "merge_base", "head", "scenarios", "keys")}
         if pkg["debuggable"]:
             log("note: the installed launcher is a debuggable build; it runs slower than a release build. "
                 "Compare like with like.")
@@ -716,7 +795,7 @@ def cmd_trace(args):
             time.sleep(2.0)
             sh.shell(HOME_INTENT)
         elif args.action == "keys":
-            sh.shell(key_loop(args.keys, args.key_interval or 0.35), timeout=120)
+            sh.shell(key_loop(resolve_keys(args.keys), args.key_interval or 0.35), timeout=120)
         elif args.action == "dock":
             sh.shell(key_loop(DOCK_TRACE_KEYS, args.key_interval or 1.2), timeout=120)
         remaining = args.seconds - (time.time() - start) + 2.0
@@ -851,12 +930,32 @@ def cmd_summarize(args):
 
 # ---- command line ------------------------------------------------------------------------------
 
+def cmd_plan(args):
+    try:
+        plan = perf_scope.plan(args.base, args.head, HERE)
+    except (RuntimeError, OSError) as e:
+        sys.exit("perf.py plan: %s" % e)
+    if args.json:
+        print(json.dumps(plan, indent=2))
+    else:
+        keys = resolve_keys(",".join(plan["keys"])) if plan["keys"] else DEFAULT_KEYS
+        print(perf_scope.render(plan, n_keys=len(keys.split()), runs=5 if args.quick else 10,
+                                rounds=2 if args.quick else 3, verbose=args.verbose))
+    return plan
+
+
 def add_run_options(p):
     """The options that decide what `run` measures; `baseline ensure` takes the same ones."""
-    p.add_argument("--scenarios", default="cold,warm,jank,dock,mem")
-    p.add_argument("--runs", type=int, default=10, help="cold and warm starts (default 10)")
-    p.add_argument("--rounds", type=int, default=3, help="D-pad rounds for jank and dock (default 3)")
-    p.add_argument("--keys", default=DEFAULT_KEYS, help="D-pad sequence for jank (UP DOWN LEFT RIGHT)")
+    p.add_argument("--scenarios", default="cold,warm,jank,dock,mem",
+                   help="comma-separated, or auto: the ones this branch's diff needs (see `perf.py plan`)")
+    p.add_argument("--base", default="origin/main", help="what --scenarios auto diffs against (default origin/main)")
+    p.add_argument("--quick", action="store_true",
+                   help="5 cold and warm starts and 2 rounds, unless --runs or --rounds say otherwise: enough to see "
+                        "which way a number moves on an emulator; use the defaults for a pull request's TV numbers")
+    p.add_argument("--runs", type=int, help="cold and warm starts (default 10)")
+    p.add_argument("--rounds", type=int, help="D-pad rounds for jank and dock (default 3)")
+    p.add_argument("--keys", help="D-pad sequence for jank (UP DOWN LEFT RIGHT CENTER BACK), or presets: "
+                                  + ", ".join(KEY_PRESETS) + " (several: corner,grid). Default: default")
     p.add_argument("--key-interval", type=float, default=0.35, help="seconds between key presses")
     p.add_argument("--dock-moves", type=int, default=8, help="moves between the first two dock apps per round")
     p.add_argument("--dock-interval", type=float, default=1.2, help="seconds between dock moves")
@@ -906,11 +1005,19 @@ def build_parser():
     t.add_argument("--seconds", type=float, default=12.0)
     t.add_argument("--action", choices=("keys", "dock", "cold", "home", "none"), default="keys",
                    help="keys: --keys; dock: Right/Left between the first two dock apps")
-    t.add_argument("--keys", default=DEFAULT_KEYS)
+    t.add_argument("--keys", help="keys or presets, as for run (default: default)")
     t.add_argument("--key-interval", type=float, help="seconds between keys (default 0.35; 1.2 for dock)")
     t.add_argument("--variant", help="as for run")
     t.add_argument("--out", help="local file (default tvhome-<time>.perfetto-trace)")
     t.set_defaults(func=cmd_trace)
+
+    pl = sub.add_parser("plan", help="which scenarios a diff needs, and why (no TV needed)")
+    pl.add_argument("--base", default="origin/main", help="diff from the merge base with this (default origin/main)")
+    pl.add_argument("--head", help="to this commit (default: the working tree, with uncommitted and new files)")
+    pl.add_argument("--quick", action="store_true", help="time estimates for run --quick")
+    pl.add_argument("--json", action="store_true", help="the plan as JSON")
+    pl.add_argument("-v", "--verbose", action="store_true", help="every reason, not the first few")
+    pl.set_defaults(func=cmd_plan)
 
     s = sub.add_parser("summarize", help="slowest launcher slices in a trace")
     s.add_argument("trace")
