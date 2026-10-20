@@ -76,24 +76,39 @@ never put emulator numbers in a pull request as TV numbers.
 
 Each scenario costs TV time. With the defaults, `cold` takes about 70 s, `warm` about 40 s, `jank` about 30 s,
 `dock` about a minute and `mem` about 10 s. A full `run` takes about 4 minutes, plus installs and settling.
-Pick the scenarios from what your diff touches:
+
+Let `tools/perf.py plan` pick them. It reads your branch's diff against `origin/main` (commits, uncommitted
+changes and new files) and prints the scenarios, D-pad keys and traces it needs, why, and the command.
+`run --scenarios auto` runs exactly that:
+
+```bash
+python3 tools/perf.py plan                                           # -v: every reason
+python3 tools/perf.py run --label my-fix --scenarios auto --quick    # your emulator: 5 starts, 2 rounds
+python3 tools/perf.py run --label my-fix --scenarios auto            # the TV, for the pull request's table
+```
+
+It goes by file, and in `MainActivity`, `AppAdapter`, `TopShelf`, `activity_main.xml`, `styles.xml`, `config.xml`
+and the manifest by the method, field, view or resource you changed (`onCreate` statement by statement). Code
+without a rule gets what the code using it gets, else everything. It also says what no scenario measures and what to
+do instead. An explicit `--scenarios` or `--keys` overrides it. If a plan looks wrong, fix the map in
+`tools/perf_scope.py` and its tests rather than working around it. [docs/performance.md](../../../docs/performance.md#measure-only-what-you-changed)
+has the details and the key presets. The map follows this table:
 
 | You changed | Scenarios | Trace if a number moves |
 |---|---|---|
-| Start-up: `MainActivity.onCreate`, app loading in `AppAdapter`, layouts, fonts, styles | `cold`, `mem` | `trace --action cold` |
+| Start-up: `MainActivity.onCreate`, app loading in `AppAdapter`, layouts, fonts, styles | `cold`, `mem`, plus what each `onCreate` statement sets up | `trace --action cold` |
 | Coming back to Home: `onResume`, `comeBackFromApp`, `HomeMotion.fallBack`, `Transitions`' Home options | `warm` | `trace --action home` (on Google TV it goes through the stock home first) |
 | Opening an app: `onLaunchApp`, `HomeMotion.push`, `AppAdapter.Holder.press`, `Transitions`' launch options | none of them | `trace --action keys --keys CENTER --seconds 6` (Select on the focused tile; the `tvhome:launch` section) |
-| The Home button on Google TV: `HomeButtonService` | none: `warm` starts the launcher directly, and `adb shell input` keys skip the service. It's off on an Android TV emulator, so this needs the TV | `trace --action home` (the hand-over from the stock home); for its key handling, `trace --action none --seconds 30` while someone presses the real remote ([docs/performance.md](../../../docs/performance.md)) |
-| Focus and scrolling: `GridScroller`, `AppAdapter.Holder`, `DockDecoration` | `jank` | `trace --action keys` |
-| Arranging apps: `Rearranger`, `MoveMarks`, `AppOrder` (JVM tests) | `jank` with `--keys` that reach the Arrange apps tile, pick an app up with `CENTER`, move it and end with `BACK BACK`, which puts it back unsaved. Never end with `CENTER` on a shared TV: putting the app down saves the order | `trace --action keys` with the same keys |
-| The top shelf and the dock: `TopShelf*`, `Shelf*`, `CoverArt`, `AmbientColor`, `LiquidGlass`, `GlassSlider` | `dock`, `mem`; add `jank` for `LiquidGlass`, which redraws on every frame of a scroll | `trace --action dock` |
-| The top right: `ProfileCorner`, `TopBarButton`, `QuickSettings`, `top_bar.xml` | `jank` with `--keys` that go up into the corner and along it | `trace --action keys` |
+| The Home button on Google TV: `HomeButtonService` | none: `warm` starts the launcher directly, and `adb shell input` keys skip the service. It's off on an Android TV emulator, so this needs the TV | `trace --action home` (the hand-over from the stock home); for its key handling, `trace --action none --seconds 30` while someone presses the real remote |
+| Focus and scrolling: `GridScroller`, `AppAdapter.Holder`, `DockDecoration` | `jank --keys grid` (`dock` too for `DockDecoration`) | `trace --action keys --keys grid` |
+| Arranging apps: `Rearranger`, `MoveMarks`, `AppOrder` (JVM tests) | `jank --keys arrange`: to the Arrange apps tile, picks the first app up, moves it, then `BACK BACK`, which puts it back unsaved. Never end your own keys with `CENTER` on a shared TV: putting an app down saves the order | `trace --action keys --keys arrange` |
+| The top shelf and the dock: `TopShelf*`, `Shelf*`, `CoverArt`, `AmbientColor`, `LiquidGlass` | `dock`, `mem`; `LiquidGlass` also `jank --keys default,corner`, as it redraws on every frame of a scroll | `trace --action dock` |
+| What opens on request: the Inputs menu, an app's actions, the Liquid Glass slider (`GlassSlider`) | none: look at them on your emulator | – |
+| The top right: `ProfileCorner`, `TopBarButton`, `QuickSettings`, `top_bar.xml` | `jank --keys corner` | `trace --action keys --keys corner` |
 | The screensaver: `ClockDream` | none of them | `trace --action none` while it runs |
-| `build.gradle`, ProGuard rules, the manifest, dependencies | all of them | – |
+| `build.gradle`, ProGuard rules, dependencies, the manifest (but its top shelf permissions: `dock`, `mem`) | all of them | – |
 
-For example: `python3 tools/perf.py run --label my-fix --scenarios dock,mem`. On the emulator, fewer repeats
-(`--runs 5 --rounds 2`) are enough to see a direction. Use the defaults on the TV, for the table in the pull
-request.
+Use the defaults on the TV, for the table in the pull request; `--quick` only shows a direction.
 
 ## 4. On the TV: one hold, once you're confident
 
