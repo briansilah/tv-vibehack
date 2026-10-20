@@ -52,4 +52,5 @@
     <string name="shelf_open">Öffnen</string>
     <!-- %1$s: the app, e.g. Netflix. -->
     <string name="shelf_open_in">In %1$s öffnen</string>
+    <string name="shelf_open_app">%1$s öffnen</string>
 </resources>

@@ -20,7 +20,8 @@ import java.util.List;
  * <ol>
  *   <li><b>Suggested content</b>, each title a full-screen backdrop with its logo or name, a few seconds each: what
  *   the app itself publishes on the TV (what you were watching, its recommendations), then its feed's titles
- *   (config.xml, top_shelf_feeds; e.g. Netflix's Top 10 in the TV's country). See {@link ShelfSource}.</li>
+ *   (config.xml, top_shelf_feeds; e.g. Netflix's Top 10 in the TV's country). See {@link ShelfSource}. An app with a
+ *   static image (top_shelf_images; YouTube's, as on tvOS) shows that instead, as its cover art.</li>
  *   <li><b>Cover art</b>: the app's own logo, cut out of its banner, on soft shapes in its colours, as tvOS shows an
  *   app's static Top Shelf image.</li>
  *   <li>Neither (yet): the ambient glow and the app's name, which MainActivity draws as before.</li>
@@ -112,12 +113,12 @@ final class TopShelf implements ShelfSource.Listener {
 
     /** {@code enabled}: config.xml's top_shelf_art; {@code feeds}: its top_shelf_feeds. */
     TopShelf(android.content.Context ctx, TopShelfView art, ShelfInfoView info, TextView action, Host host,
-             boolean enabled, String[] feeds, String[] links, String[] logos) {
+             boolean enabled, String[] feeds, String[] links, String[] logos, String[] images) {
         this.art = art;
         this.info = info;
         this.action = action;
         this.host = host;
-        this.source = enabled ? new ShelfSource(ctx, feeds, links, logos, this) : null;
+        this.source = enabled ? new ShelfSource(ctx, feeds, links, logos, images, this) : null;
         action.setOnClickListener(v -> act());
         action.setOnKeyListener(this::onActionKey);
         // Grows from its left edge, which stays in line with the title above it.
@@ -245,7 +246,10 @@ final class TopShelf implements ShelfSource.Listener {
      * Resume, Open in the app), and the carousel holds still. Returns false if there's nothing to act on.
      */
     boolean enterActions() {
-        if (!shown || tier != CONTENT || showingItem == null || current == null) return false;
+        if (!shown || current == null) return false;
+        // An app with a static image (config.xml, top_shelf_images) has one too: it opens the app.
+        boolean opensApp = tier == COVER && source.staticImage(current.pkg);
+        if (!opensApp && (tier != CONTENT || showingItem == null)) return false;
         acting = true;
         handler.removeCallbacks(advance);
         // Left and Right go from the title you see, not from one the carousel was about to bring in.
@@ -302,7 +306,13 @@ final class TopShelf implements ShelfSource.Listener {
     /** The button says what it does with the title showing. */
     private void labelAction() {
         ShelfFeeds.Item it = showingItem;
-        if (it == null || current == null) return;
+        if (current == null) return;
+        if (it == null) {
+            action.setText(action.getResources().getString(R.string.shelf_open_app, current.label));
+            action.setContentDescription(action.getText());
+            action.setTag(null);
+            return;
+        }
         String link = source.link(current.pkg, it);
         int res = it.resume ? R.string.shelf_resume
                 : it.link != null ? (it.link.contains("autoPlay=false") ? R.string.shelf_open : R.string.shelf_play)
@@ -504,8 +514,16 @@ final class TopShelf implements ShelfSource.Listener {
         final ShelfFeeds.Item item;
         final String caption;
         final Object tag;
+        /** A static image: the app's logo is in the picture. */
+        final boolean image;
 
         Choice(int tier, Bitmap backdrop, Bitmap logo, ShelfFeeds.Item item, String caption, Object tag) {
+            this(tier, backdrop, logo, item, caption, tag, false);
+        }
+
+        Choice(int tier, Bitmap backdrop, Bitmap logo, ShelfFeeds.Item item, String caption, Object tag,
+               boolean image) {
+            this.image = image;
             this.tier = tier;
             this.backdrop = backdrop;
             this.logo = logo;
@@ -516,7 +534,7 @@ final class TopShelf implements ShelfSource.Listener {
 
         /** Shows its own title or logo, so the app's name isn't needed. */
         boolean ownTitle() {
-            return tier == CONTENT || logo != null;
+            return tier == CONTENT || logo != null || image;
         }
     }
 
@@ -530,7 +548,9 @@ final class TopShelf implements ShelfSource.Listener {
             if (c != null) return c;
         }
         ShelfSource.Cover cover = source.cover(app.key);
-        if (cover != null) return new Choice(COVER, cover.backdrop, cover.logo, null, null, "cover:" + app.key);
+        if (cover != null) {
+            return new Choice(COVER, cover.backdrop, cover.logo, null, null, "cover:" + app.key, cover.image);
+        }
         return null;
     }
 

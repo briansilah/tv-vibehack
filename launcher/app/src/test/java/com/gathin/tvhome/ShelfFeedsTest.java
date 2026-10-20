@@ -134,6 +134,22 @@ public class ShelfFeedsTest {
     }
 
     @Test
+    public void staticImagesFromConfig() {
+        Map<String, String> images = ShelfFeeds.parseImages(new String[]{
+                "com.google.android.youtube.tv",
+                " com.plexapp.android | https://example.com/plex.jpg ",
+                "com.netflix.ninja | http://example.com/plain-http.jpg",
+                "com.stremio.one | https://a | https://b",
+                "not a package",
+                null,
+        });
+        assertEquals(2, images.size());
+        assertEquals("", images.get("com.google.android.youtube.tv"));
+        assertEquals("https://example.com/plex.jpg", images.get("com.plexapp.android"));
+        assertTrue(ShelfFeeds.parseImages(null).isEmpty());
+    }
+
+    @Test
     public void picksALandscapePicture() {
         // TvContract aspect ratios: 0 16:9, 1 3:2, 2 4:3, 3 1:1, 4 2:3, 5 movie poster.
         assertEquals("https://thumb", ShelfFeeds.backdrop("https://thumb", 0, "https://poster", 5));
