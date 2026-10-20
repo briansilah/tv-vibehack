@@ -128,8 +128,8 @@ the default Home, so both come out `verify` there. On Google TV the stock home s
 
 **When to measure `main` again.** A TV drifts over days: apps update, memory fills up. `compare` says how old the
 baseline is. When a difference is within the noise, measure `main` again right before or after yours with
-`tools/perf.py baseline refresh` and the same options. Do the same on an emulator, whose numbers move with
-whatever else the computer is running.
+`tools/perf.py baseline refresh` and the same options: it reinstalls `main` and measures those scenarios again,
+cached or not. Do the same on an emulator, whose numbers move with whatever else the computer is running.
 
 ## What is measured
 

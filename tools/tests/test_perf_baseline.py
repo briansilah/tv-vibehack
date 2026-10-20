@@ -405,6 +405,35 @@ class EnsureTests(Base):
         _, _, table = self.perf(None, "compare", "--against", "main", verify)
         self.assertIn("| Metric (median) | main | verify | change |", table)
 
+    def test_yours_compiled_differently_says_to_reinstall_yours(self):
+        self.ensure(FakeDevice(), "--scenarios", "jank")   # main: speed
+        dev = FakeDevice()
+        dev.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # yours: `adb install -r` without the compile
+        mine = self.run_mine(dev, "mine", "--scenarios", "jank")
+        with self.assertRaises(SystemExit) as e:
+            self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("compiled speed, yours verify", str(e.exception))
+        self.assertIn("Install yours with launcher/build-and-install.sh", str(e.exception))
+
+    def test_refresh_reinstalls_main_even_when_it_is_installed(self):
+        dev = FakeDevice()
+        self.ensure(dev, "--scenarios", "jank")
+        self.assertEqual(dev.installs, 1)
+        dev.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # ART recompiled it since: verify
+        result, logs, _ = self.ensure(dev, "--scenarios", "jank")
+        self.assertIn("nothing to measure: every scenario is cached for this device", logs)
+        self.perf(dev, "baseline", "refresh", "--scenarios", "jank", "--rounds", "2",
+                  "--out", os.path.join(self.tmp, "r.json"))
+        self.assertEqual(dev.installs, 2)
+        with open(os.path.join(self.tmp, "r.json")) as f:
+            self.assertEqual(json.load(f)["build"]["compiler_filter"], "speed")
+
+    def test_out_can_be_a_bare_file_name(self):
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.tmp)
+        self.perf(FakeDevice(), "baseline", "ensure", "--scenarios", "mem", "--out", "bare.json")
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "bare.json")))
+
     def test_cache_problem(self):
         ident = {"id": "d", "state": {"animation_scales": {"window": "1.0"}}}
         ok = {"build": {"debuggable": False, "compiler_filter": "speed", "apk_sha256": "aa"},

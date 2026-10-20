@@ -269,8 +269,9 @@ def _entry_path(cache, material):
 
 
 def _write_json(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    folder = os.path.dirname(os.path.abspath(path))
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, suffix=".tmp")
     with os.fdopen(fd, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)   # atomic: sessions read and write the cache at the same time
@@ -544,9 +545,9 @@ def cmd_ensure(args):
             log("measuring main: %s (%s)" % (", ".join(need), "; ".join("%s %s" % (s, why.get(s, "measured with mem"))
                                                                        for s in need)))
             apk, sha = ensure_apk(cache, commit, tree, log, root=root)
-            if installed_apk_sha256(sh) == sha:
+            if installed_apk_sha256(sh) == sha and not args.refresh:
                 log("main's release build is already installed")
-            else:
+            else:   # refresh reinstalls it anyway: ART may have recompiled the one there since
                 log("installing main's release build (%s)" % apk)
                 install_apk(sh, apk, log)
                 if args.install_wait > 0:
@@ -707,12 +708,17 @@ def compare_against(name, path, force=False, root=None):
     compiled = {s: (e.get("build") or {}).get("compiler_filter") for s, e in found.items()}
     differ = sorted((s for s, f in compiled.items() if f != b.get("compiler_filter")), key=scenarios.index)
     if differ:
-        raise BaselineError(
-            "main's baseline for %s was compiled %s, yours %s: ART compiles the default Home app with speed-profile "
-            "(verify until it has a profile), so it depends on how each was installed. Measure main again the way "
-            "yours was installed:\n  %s" % (", ".join(differ), "/".join(sorted({str(compiled[s]) for s in differ})),
-                                           b.get("compiler_filter"),
-                                           ensure_command(mine, [(s, None) for s in differ], "refresh")))
+        theirs = "/".join(sorted({str(compiled[s]) for s in differ}))
+        refresh = ensure_command(mine, [(s, None) for s in differ], "refresh")
+        if b.get("compiler_filter") != "speed":
+            fix = ("Install yours with launcher/build-and-install.sh, which compiles it with speed, and measure it "
+                   "again. If it comes out %s again, ART overrides the compile on this device (it does for the "
+                   "default Home app): then measure main the same way with\n  %s" % (b.get("compiler_filter"), refresh))
+        else:
+            fix = ("Main's was recompiled after its install (ART does that to the default Home app, and in "
+                   "background dexopt). This reinstalls and compiles main as the install scripts do:\n  " + refresh)
+        raise BaselineError("main's baseline for %s was compiled %s, yours %s: not comparable. %s"
+                            % (", ".join(differ), theirs, b.get("compiler_filter"), fix))
     baseline = assemble(found, ref, commit, tree)
     notes = []
     provenance = sys.modules.get("provenance")
