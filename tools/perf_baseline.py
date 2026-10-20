@@ -462,6 +462,7 @@ def install_apk(sh, apk, log):
     if "Success" not in out:
         raise BaselineError("pm install -r failed: %s" % out.strip())
     sh.shell("cmd package compile -m speed -f %s >/dev/null 2>&1; echo compiled" % perf.PKG, timeout=600)
+    perf.emulator_speed(sh, log)
     for perm in ("ACCESS_FINE_LOCATION", "READ_TV_LISTINGS"):
         sh.shell("pm grant %s android.permission.%s 2>/dev/null; echo granted" % (perf.PKG, perm))
     if "package:" in sh.shell("pm path " + GOOGLE_TV_LAUNCHER):
