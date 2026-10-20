@@ -74,6 +74,8 @@ just wireless debugging. `tools/tests` covers both offline:
 ## Pull requests
 
 - One topic per PR. Small is fine.
+- Keep the description short, in three parts: **Why** (the problem), **What** (the fix) and **How tested**
+  (with screenshots). [.github/skills/pull-requests](.github/skills/pull-requests/SKILL.md) has the details.
 - CI (`.github/workflows/ci.yml`) must pass. On every PR it builds the launcher (debug and
   release), runs its unit tests, and checks the Python tools and shell scripts. The debug APK is
   attached to each run as the `tvhome-debug-apk` artifact.
