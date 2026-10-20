@@ -67,6 +67,8 @@ final class TopShelf implements ShelfSource.Listener {
     private final ShelfInfoView info;
     /** The button under a suggested title, with focus after Up from the dock. */
     private final TextView action;
+    /** Its ▶, shown only when OK plays (Play, Resume); taken from the layout when first labelled. */
+    private android.graphics.drawable.Drawable playIcon;
     /** Focus is on the button. */
     private boolean acting;
     /** How far the title is lifted to make room for the button, in pixels, and how far the page has moved. */
@@ -242,8 +244,9 @@ final class TopShelf implements ShelfSource.Listener {
     }
 
     /**
-     * Up from the dock: focus goes to the button under the title showing, if it has something to open (Play,
-     * Resume, Open in the app), and the carousel holds still. Returns false if there's nothing to act on.
+     * Up from the dock: focus goes to the button under the title showing (Resume, Play, Open in the app, Search in
+     * the app, or Open the app: see {@link ShelfAction}), and the carousel holds still. Returns false if there's
+     * nothing to act on.
      */
     boolean enterActions() {
         if (!shown || current == null) return false;
@@ -303,25 +306,55 @@ final class TopShelf implements ShelfSource.Listener {
         return action.getResources().getDisplayMetrics().density;
     }
 
-    /** The button says what it does with the title showing. */
+    /**
+     * The button says what OK will do with the title showing. Cheap enough to call whenever that title changes
+     * while the button is up; OK itself asks again ({@link #act}), so it never opens anything else.
+     */
     private void labelAction() {
-        ShelfFeeds.Item it = showingItem;
         if (current == null) return;
-        if (it == null) {
-            action.setText(action.getResources().getString(R.string.shelf_open_app, current.label));
-            action.setContentDescription(action.getText());
-            action.setTag(null);
-            return;
+        ShelfFeeds.Item it = showingItem;
+        ShelfAction a = actionFor(it);
+        android.content.res.Resources r = action.getResources();
+        String text;
+        switch (a.kind) {
+            case ShelfAction.RESUME:
+                text = r.getString(R.string.shelf_resume);
+                break;
+            case ShelfAction.PLAY:
+                text = r.getString(R.string.shelf_play);
+                break;
+            case ShelfAction.OPEN:
+                text = r.getString(R.string.shelf_open_in, current.label);
+                break;
+            case ShelfAction.SEARCH:
+                text = r.getString(R.string.shelf_search_in, current.label);
+                break;
+            default:
+                text = r.getString(R.string.shelf_open_app, current.label);
+                break;
         }
-        String link = source.link(current.pkg, it);
-        int res = it.resume ? R.string.shelf_resume
-                : it.link != null ? (it.link.contains("autoPlay=false") ? R.string.shelf_open : R.string.shelf_play)
-                : 0;
-        action.setText(res != 0 ? action.getResources().getString(res)
-                : action.getResources().getString(R.string.shelf_open_in, current.label));
-        action.setContentDescription(it.title.isEmpty() ? action.getText()
-                : action.getText() + ", " + it.title);
-        action.setTag(link);
+        action.setText(text);
+        action.setContentDescription(it == null || it.title.isEmpty() ? text : text + ", " + it.title);
+        boolean play = a.plays();
+        android.graphics.drawable.Drawable icon = action.getCompoundDrawablesRelative()[0];
+        if (playIcon == null) playIcon = icon;
+        if ((icon != null) != play) {
+            float d = density();
+            action.setCompoundDrawablesRelative(play ? playIcon : null, null, null, null);
+            // Without the ▶, the text sits in the middle of the pill.
+            action.setPaddingRelative(Math.round((play ? 18 : 22) * d), action.getPaddingTop(),
+                    action.getPaddingEnd(), action.getPaddingBottom());
+        }
+    }
+
+    /** What OK does with this title in the focused app, by the links the app has an activity for. */
+    private ShelfAction actionFor(ShelfFeeds.Item it) {
+        final String pkg = current.pkg;
+        final PackageManager pm = action.getContext().getPackageManager();
+        return ShelfAction.of(it, source.template(pkg), link -> {
+            Intent i = intentFor(link, pkg);
+            return i != null && i.resolveActivity(pm) != null;
+        });
     }
 
     private boolean onActionKey(View v, int keyCode, KeyEvent event) {
@@ -409,13 +442,15 @@ final class TopShelf implements ShelfSource.Listener {
                 + " title=" + title);
     }
 
-    /** OK on the button: opens the title in its app, or the app if it can't be opened at the title. */
+    /**
+     * OK on the button: what {@link ShelfAction} says for the title showing now (not whichever showed when the
+     * button was labelled): the title's link, or the app.
+     */
     private void act() {
         if (current == null) return;
-        Object tag = action.getTag();
-        Intent i = intentFor(tag instanceof String ? (String) tag : null, current.pkg);
-        PackageManager pm = action.getContext().getPackageManager();
-        if (i == null || i.resolveActivity(pm) == null) i = pm.getLeanbackLaunchIntentForPackage(current.pkg);
+        ShelfAction a = actionFor(showingItem);
+        Intent i = a.link != null ? intentFor(a.link, current.pkg) : null;
+        if (i == null) i = action.getContext().getPackageManager().getLeanbackLaunchIntentForPackage(current.pkg);
         if (i == null) return;
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         host.onShelfAction(i);

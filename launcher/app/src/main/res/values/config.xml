@@ -84,9 +84,6 @@
         <item>com.stremio.one | Popular on Stremio | https://cinemeta-catalogs.strem.io/top/catalog/movie/top.json | https://cinemeta-catalogs.strem.io/top/catalog/series/top.json</item>
     </string-array>
 
-    <!-- What the top shelf's button opens for a feed's title (Up from the dock, then OK): "package | link", with
-         {id} (its IMDb id), {type} (movie or series) and {title} (its name). Titles an app publishes itself open
-         with the app's own link. Without a line here, the button opens the app. -->
     <!-- Cover art's logo, sharp at any size: a vector logo from Simple Icons (simpleicons.org, CC0), fetched once
          and kept on the TV: "package | icon | brand colour (RRGGBB) [| wordmark]", the icon's name as on
          simpleicons.org; wordmark: the icon is the app's name, so it isn't written beside it. Apps not listed (or
@@ -101,9 +98,16 @@
         <item>com.wbd.stream | hbomax | FFFFFF | wordmark</item>
     </string-array>
 
+    <!-- What the top shelf's button opens for a feed's title (Up from the dock, then OK): "package | link", with
+         {id} (its IMDb id), {type} (movie or series) and {title} (its name). A link with {title} but no {id} can
+         only search for the title, and the button says so ("Search in Netflix"). Use a link the app declares in
+         its manifest (adb shell dumpsys package <package>): one it has no activity for only opens the app, and the
+         button then says "Open Netflix". Titles an app publishes itself open with the app's own link. Without a
+         line here, the button opens the app. -->
     <string-array name="top_shelf_links" translatable="false">
         <item>com.stremio.one | stremio:///detail/{type}/{id}</item>
-        <item>com.netflix.ninja | https://www.netflix.com/search?q={title}</item>
+        <!-- Netflix's TV app takes https://www.netflix.com only for /title and /watch, which need Netflix's own ids. -->
+        <item>com.netflix.ninja | nflx://www.netflix.com/search?q={title}</item>
         <item>com.apple.atve.androidtv.appletv | https://tv.apple.com/search?term={title}</item>
     </string-array>
 </resources>
