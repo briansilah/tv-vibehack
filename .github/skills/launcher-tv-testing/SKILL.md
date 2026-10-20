@@ -62,21 +62,33 @@ emulators share the CPU with it. Compare `main` and your build on the same emula
   compare against a `main` that no longer exists: baselines taken before a big merge (the new transitions, #12)
   had to be thrown away.
 - **Don't build or measure `main` yourself: take it from the shared cache.** `tools/perf.py baseline ensure` with
-  the options you'll run yours with takes `main`'s numbers on this device from a cache every worktree shares, and
-  measures only what isn't there: a different `launcher/` tree, device, firmware, scenario code or options. A hit
-  costs no device time. It builds `main`'s release APK once per `launcher/` tree and installs it only on a miss,
-  so run it **before** installing yours. Then `tools/perf.py compare --against main <yours>.json` (no device
-  needed) and, at the end, `tools/perf.py baseline install` to put `main` back. `tools/perf.py baseline show` says
-  what's cached, per device, before you ask for the TV. Details: [Reusing main's
+  the options you'll run yours with (`--variant` included) takes `main`'s numbers on this device from a cache every
+  worktree shares, and measures only what isn't there: a different `launcher/` tree, device, firmware, scenario code
+  or options. A hit costs no device time. It builds `main`'s release APK once per `launcher/` tree and installs it
+  only on a miss, so run it **before** installing yours. Then `tools/perf.py compare --against main <yours>.json`
+  (no device needed) and, at the end, `tools/perf.py baseline install` to put `main` back. `tools/perf.py baseline
+  show` says what's cached, per device, before you ask for the TV. Details: [Reusing main's
   baseline](../../../docs/performance.md#reusing-mains-baseline).
-- **The baseline is `main` as it ships:** its release build in its default configuration. Don't measure retired
-  variants (an older `main`, the old transitions, a branch build from before the merge).
-- **Measure a variant only when your change adds or changes it.** For example, `liquid_glass_blur=false` or
-  `--ez glass_test_art true` are for changes to the glass or the top shelf's art.
+- **The baseline is `main` as it ships:** a release build compiled with `speed`, in its default configuration,
+  with the TV's animation scales at 1. Don't measure retired variants (an older `main`, the old transitions, a
+  branch build from before the merge).
+- **Measure a variant only when your change adds or changes it,** with the same variant for `main` and yours: for
+  changes to the glass or the top shelf's art, `perf.py run --variant '--ez glass_test_art true'` (stand-in art) or
+  `--variant '--ei liquid_glass 50'`, or a build with `liquid_glass_blur=false`. `baseline ensure` takes the same
+  `--variant` and caches it apart from the plain baseline.
+- **Every build says what it is.** Gradle stamps each APK's `versionName` with its commit and `launcher/` tree
+  (`2.0+commit-<sha>.launcher-<tree>[.dirty]`). `perf.py run` records that, the animation scales and the
+  launcher's own configuration, and measures with `--ez default_config true`: `config.xml`'s Liquid Glass for that
+  process only, the TV owner's saved choice untouched. Never reset a TV with `--ei liquid_glass`: it overwrites
+  that choice.
+- **`perf.py compare` refuses comparisons that would mislead**, with or without `--against`: an unstamped build; a
+  baseline whose `launcher/` isn't `origin/main`'s (`git fetch` first), or that isn't release, `speed` and the
+  shipped configuration; a branch build without the baseline's `main` merged; A and B measured differently (device,
+  build type, compiler filter, background app, animation scales, options, configuration). Fix the cause and measure
+  again; `--force` is only for tables you won't present as a before/after.
+  [docs/performance.md](../../../docs/performance.md#measure-the-main-that-ships) has the full list.
 - **Use the same conditions for A and B:** the same TV, the same background app (`--other-app`), the same
-  `perf.py` options, and about a minute's wait after each install. `compare --against` refuses a baseline taken
-  with other options, on another device or compiled differently by ART (the default Home app gets `verify`, so
-  on an emulator both are `verify`; on the Google TV both are `speed`).
+  `perf.py` options, and about a minute's wait after each install.
 - **When a difference is within the noise**, or `compare` says the baseline is days old, measure `main` again
   right before or after yours: `tools/perf.py baseline refresh` with the same options.
 

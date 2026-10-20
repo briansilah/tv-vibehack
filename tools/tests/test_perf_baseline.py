@@ -22,18 +22,32 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import perf  # noqa: E402
 import perf_baseline as baseline  # noqa: E402
+import provenance  # noqa: E402
 from test_perf import DUMPSYS_PACKAGE, FakeTv  # noqa: E402
 
-RELEASE_SPEED = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "").replace("[status=verify]", "[status=speed]")
 OTHER_APP = "com.netflix.ninja/.MainActivity"
 
 
+def package(compiled="speed", version="2.0", debuggable=False):
+    """`dumpsys package` for an installed launcher."""
+    out = DUMPSYS_PACKAGE if debuggable else DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")
+    return out.replace("[status=verify]", "[status=%s]" % compiled).replace("versionName=2.0", "versionName=" + version)
+
+
+def stamp(repo, ref="HEAD"):
+    """The versionName Gradle gives a clean build of `ref` (tools/provenance.py)."""
+    return "2.0+commit-%s.launcher-%s" % (git(repo, "rev-parse", ref), git(repo, "rev-parse", ref + ":launcher"))
+
+
 class FakeDevice(FakeTv):
-    """FakeTv plus what the baseline needs: identity props, settings, push, pm install and the installed APK."""
+    """FakeTv plus what the baseline needs: identity props, settings, push, pm install and the installed APK, whose
+    versionName is its build's stamp. It starts with "the branch build" installed, stamped like main (Base sets it)."""
+    branch_version = "2.0"
 
     def __init__(self, fingerprint="TCL/G17/G17:14/UKR1/1:user/release-keys", serialno="8C00F07E0160CF00F", avd=""):
         super().__init__(debuggable=False)
-        self.package = RELEASE_SPEED
+        self.version = FakeDevice.branch_version
+        self.package = package("speed", self.version)
         self.props = {"ro.product.manufacturer": "TCL", "ro.product.model": "Smart TV Pro", "ro.product.device": "G17",
                       "ro.build.version.release": "14", "ro.build.version.sdk": "34",
                       "ro.build.fingerprint": fingerprint, "ro.serialno": serialno, "ro.boot.qemu.avd_name": avd}
@@ -55,11 +69,12 @@ class FakeDevice(FakeTv):
         if cmd.startswith("pm install -r"):
             self.commands.append(cmd)
             self.installed, self.installs = self.pushed, self.installs + 1
-            self.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # at `verify` until compiled
+            self.version = self.pushed.split(b"|")[-1].decode()
+            self.package = package("verify", self.version)   # at `verify` until compiled
             return "Success\n"
         if cmd.startswith("cmd package compile -m speed"):
             self.commands.append(cmd)
-            self.package = RELEASE_SPEED
+            self.package = package("speed", self.version)
             return "compiled\n"
         return super().shell(cmd, timeout)
 
@@ -92,13 +107,13 @@ def commit(repo, path, text, msg):
 
 
 def fake_build(launcher_dir, log):
-    """Stands in for Gradle: an "APK" whose bytes follow launcher/'s contents."""
+    """Stands in for Gradle: an "APK" whose bytes follow launcher/'s contents, ending with its stamp."""
     with open(os.path.join(launcher_dir, "app.txt")) as f:
         src = f.read()
     out = os.path.join(launcher_dir, "app", "build", "outputs", "apk", "release", "app-release.apk")
     os.makedirs(os.path.dirname(out))
     with open(out, "wb") as f:
-        f.write(b"APK " + src.encode())
+        f.write(b"APK " + src.encode() + b"|" + stamp(os.path.dirname(launcher_dir)).encode())
     fake_build.count += 1
     return out
 
@@ -116,7 +131,8 @@ class Base(unittest.TestCase):
         self.main1 = commit(self.repo, "launcher/app.txt", "launcher v1", "launcher")
         self.cache = os.path.join(self.tmp, "cache")
         for target, attr, value in ((perf.time, "sleep", lambda s: None), (baseline, "ROOT", self.repo),
-                                    (baseline, "build_release", fake_build), (perf, "RESULTS_DIR", self.tmp)):
+                                    (provenance, "ROOT", self.repo), (baseline, "build_release", fake_build),
+                                    (perf, "RESULTS_DIR", self.tmp), (FakeDevice, "branch_version", stamp(self.repo))):
             p = mock.patch.object(target, attr, value)
             p.start()
             self.addCleanup(p.stop)
@@ -124,6 +140,10 @@ class Base(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
         fake_build.count = 0
+
+    def main_apk(self):
+        with open(os.path.join(self.cache, "apks", baseline.launcher_tree("HEAD", root=self.repo) + ".apk"), "rb") as f:
+            return f.read()
 
     def perf(self, dev, *argv):
         logs = []
@@ -210,6 +230,12 @@ class HarnessTests(unittest.TestCase):
         with mock.patch.object(baseline, "HARNESS_EPOCH", baseline.HARNESS_EPOCH + 1):
             self.assertNotEqual(baseline.harness("cold"), before)
 
+    def test_ignores_this_runs_variant(self):
+        """perf._variant is the current command's --variant (keyed as a parameter), not measuring code."""
+        before = baseline.harness("cold")
+        with mock.patch.object(perf, "_variant", " --ez glass_test_art true"):
+            self.assertEqual(baseline.harness("cold"), before)
+
 
 class KeyTests(unittest.TestCase):
     RESULT = {"device": {"id": "dev1", "state": {"animation_scales": {"window": "1.0"}, "tv_apps": {"hash": "a"}}},
@@ -267,12 +293,17 @@ class EnsureTests(Base):
         first, logs, _ = self.ensure(dev)
         self.assertEqual(fake_build.count, 1)
         self.assertEqual(dev.installs, 1)
-        self.assertEqual(dev.installed, b"APK launcher v1")
+        self.assertEqual(dev.installed, b"APK launcher v1|" + stamp(self.repo).encode())
+        self.assertEqual(dev.installed, self.main_apk())
         self.assertEqual(dev.cold_runs, 3)
         self.assertIn("waiting 60 s for the device to settle after the install", logs)
         self.assertEqual(first["baseline"]["launcher_tree"], baseline.launcher_tree("HEAD", root=self.repo))
         self.assertEqual(set(first["baseline"]["scenarios"]), set(perf.ALL_SCENARIOS))
-        self.assertEqual(first["build"]["apk_sha256"], hashlib.sha256(b"APK launcher v1").hexdigest())
+        self.assertEqual(first["build"]["apk_sha256"], hashlib.sha256(self.main_apk()).hexdigest())
+        # what `run` records travels with the cache: the stamp, the shipped configuration, the animation scales
+        self.assertEqual(first["build"]["provenance"]["commit"], self.main1)
+        self.assertEqual(first["config"]["launcher"]["default_config"], 1)
+        self.assertEqual(first["config"]["animation_scales"], {"window": 1.0, "transition": 1.0, "animator": 1.0})
         self.assertEqual(first["cold"]["summary"]["total_ms"]["median"], 1234)
         self.assertFalse(any(c.startswith("am force-stop") for c in dev.commands))
         # no git worktree is left behind
@@ -289,7 +320,7 @@ class EnsureTests(Base):
     def test_only_missing_scenarios_are_measured(self):
         self.ensure(FakeDevice(), "--scenarios", "cold,jank")
         dev = FakeDevice()
-        dev.installed = b"APK launcher v1"   # main's build is still installed: no need to install it again
+        dev.installed = self.main_apk()   # main's build is still installed: no need to install it again
         result, logs, _ = self.ensure(dev, "--scenarios", "cold,warm,jank")
         self.assertEqual(dev.installs, 0)
         self.assertIn("main's release build is already installed", logs)
@@ -337,7 +368,7 @@ class EnsureTests(Base):
         result, _, _ = self.ensure(dev, "--scenarios", "cold")
         self.assertEqual(dev.cold_runs, 3)
         self.assertEqual(fake_build.count, 2)
-        self.assertEqual(dev.installed, b"APK launcher v2")
+        self.assertTrue(dev.installed.startswith(b"APK launcher v2|"))
         self.assertEqual(result["baseline"]["commit"], git(self.repo, "rev-parse", "HEAD"))
 
     def test_emulators_from_one_avd_share_a_baseline(self):
@@ -378,7 +409,8 @@ class EnsureTests(Base):
         dev = FakeDevice()
         dev.shell = (lambda orig: lambda cmd, timeout=120: (
             "compiled\n" if cmd.startswith("cmd package compile") else
-            DUMPSYS_PACKAGE if cmd.startswith("dumpsys package") and dev.installs else orig(cmd, timeout)))(dev.shell)
+            package("speed", dev.version, debuggable=True) if cmd.startswith("dumpsys package") and dev.installs
+            else orig(cmd, timeout)))(dev.shell)
         with self.assertRaises(SystemExit) as e:
             self.ensure(dev, "--scenarios", "cold")
         self.assertIn("debuggable", str(e.exception))
@@ -400,7 +432,7 @@ class EnsureTests(Base):
         self.assertIn("main's baseline for jank was compiled verify, yours speed", str(e.exception))
         self.assertIn("tools/perf.py baseline refresh --scenarios jank", str(e.exception))
         dev = FakeDevice()
-        dev.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # a fresh install as Home: verify
+        dev.package = package("verify", dev.version)   # a fresh install as Home: verify
         verify = self.run_mine(dev, "verify", "--scenarios", "jank")
         _, _, table = self.perf(None, "compare", "--against", "main", verify)
         self.assertIn("| Metric (median) | main | verify | change |", table)
@@ -408,7 +440,7 @@ class EnsureTests(Base):
     def test_yours_compiled_differently_says_to_reinstall_yours(self):
         self.ensure(FakeDevice(), "--scenarios", "jank")   # main: speed
         dev = FakeDevice()
-        dev.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # yours: `adb install -r` without the compile
+        dev.package = package("verify", dev.version)   # yours: `adb install -r` without the compile
         mine = self.run_mine(dev, "mine", "--scenarios", "jank")
         with self.assertRaises(SystemExit) as e:
             self.perf(None, "compare", "--against", "main", mine)
@@ -419,7 +451,7 @@ class EnsureTests(Base):
         dev = FakeDevice()
         self.ensure(dev, "--scenarios", "jank")
         self.assertEqual(dev.installs, 1)
-        dev.package = DUMPSYS_PACKAGE.replace("DEBUGGABLE ", "")   # ART recompiled it since: verify
+        dev.package = package("verify", dev.version)   # ART recompiled it since: verify
         result, logs, _ = self.ensure(dev, "--scenarios", "jank")
         self.assertIn("nothing to measure: every scenario is cached for this device", logs)
         self.perf(dev, "baseline", "refresh", "--scenarios", "jank", "--rounds", "2",
@@ -435,7 +467,7 @@ class EnsureTests(Base):
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "bare.json")))
 
     def test_cache_problem(self):
-        ident = {"id": "d", "state": {"animation_scales": {"window": "1.0"}}}
+        ident = {"id": "d", "state": {"animation_scales": {"window": 1.0}}}
         ok = {"build": {"debuggable": False, "compiler_filter": "speed", "apk_sha256": "aa"},
               "device": {"id": "d", "state": ident["state"]}}
         self.assertIsNone(baseline.cache_problem(ok, ident, "aa", "t"))
@@ -447,9 +479,11 @@ class EnsureTests(Base):
         stamped = json.loads(json.dumps(ok))
         stamped["build"]["provenance"] = {"launcher_tree": "u" * 40}
         self.assertIn("built from launcher/", baseline.cache_problem(stamped, ident, "aa", "t" * 40))
-        custom = dict(ok, config={"launcher": {"default_config": False}})
-        self.assertIn("default configuration", baseline.cache_problem(custom, ident, "aa", "t"))
-        scaled = dict(ok, config={"launcher": {"default_config": True}, "animation_scales": {"window": 0.5}})
+        custom = dict(ok, config={"launcher": {"default_config": 0}})   # as the launcher's config line reports it
+        self.assertIn("shipped configuration", baseline.cache_problem(custom, ident, "aa", "t"))
+        older = dict(ok, config={"launcher": None})   # a main from before default_config: compare's checks decide
+        self.assertIsNone(baseline.cache_problem(older, ident, "aa", "t"))
+        scaled = dict(ok, config={"launcher": {"default_config": 1}, "animation_scales": {"window": 0.5}})
         self.assertIn("animation scales", baseline.cache_problem(scaled, ident, "aa", "t"))
 
     def test_run_records_what_the_cache_keys_on(self):
@@ -459,8 +493,7 @@ class EnsureTests(Base):
         self.assertEqual(len(r["device"]["id"]), 16)
         self.assertNotIn("8C00F07E0160CF00F", json.dumps(r))   # the serial number is only kept hashed
         self.assertEqual(r["device"]["state"]["tv_apps"]["count"], 2)   # the launcher itself doesn't count
-        self.assertEqual(r["device"]["state"]["animation_scales"], {"window": "1.0", "transition": "1.0",
-                                                                    "animator": "1.0"})
+        self.assertEqual(r["device"]["state"]["animation_scales"], {"window": 1.0, "transition": 1.0, "animator": 1.0})
         self.assertEqual(r["harness"], {"jank": baseline.harness("jank"), "mem": baseline.harness("mem")})
         self.assertEqual(r["params"]["scenarios"], ["jank", "mem"])
         self.assertEqual(r["params"]["keys"], perf.DEFAULT_KEYS)
@@ -497,7 +530,7 @@ class CompareAgainstTests(Base):
     def test_refuses_a_debug_build_and_an_old_result(self):
         self.ensure(FakeDevice(), "--scenarios", "jank")
         dev = FakeDevice()
-        dev.package = DUMPSYS_PACKAGE
+        dev.package = package("speed", dev.version, debuggable=True)
         mine = self.run_mine(dev, "debug", "--scenarios", "jank")
         with self.assertRaises(SystemExit) as e:
             self.perf(None, "compare", "--against", "main", mine)
@@ -519,6 +552,73 @@ class CompareAgainstTests(Base):
             _, _, table = self.perf(None, "compare", "--against", "main", mine)
         self.assertIn("jank measured 2 days ago", table)
         self.assertIn("perf.py baseline refresh", table)
+
+    def test_a_variant_is_keyed_apart_from_the_plain_baseline(self):
+        variant = "--ez glass_test_art true"
+        self.addCleanup(perf.set_variant, None)
+        self.ensure(FakeDevice(), "--scenarios", "dock")
+        mine = self.run_mine(FakeDevice(), "art", "--scenarios", "dock", "--variant", variant)
+        with self.assertRaises(SystemExit) as e:   # never against the plain baseline
+            self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("--variant '%s'" % variant, str(e.exception))
+        dev = FakeDevice()
+        result, _, _ = self.ensure(dev, "--scenarios", "dock", "--variant", variant)
+        self.assertTrue(any(c.startswith("for k in") for c in dev.measured()))   # a miss: measured
+        self.assertTrue(any(c.endswith(perf.START + " " + variant) for c in dev.commands))   # with the variant
+        self.assertEqual(result["params"]["variant"], variant)
+        self.assertTrue(result["config"]["launcher"]["test_art"])
+        dev = FakeDevice()
+        self.ensure(dev, "--scenarios", "dock", "--variant", variant)
+        self.assertEqual(dev.measured(), [])
+        _, _, table = self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("both measured with stand-in top shelf art", table)
+
+    def test_goes_through_the_provenance_checks(self):
+        self.ensure(FakeDevice(), "--scenarios", "jank")
+        # a branch that doesn't contain this main: its own commit off an older history
+        git(self.repo, "checkout", "-q", "--orphan", "old")
+        old = commit(self.repo, "launcher/app.txt", "launcher v0", "an old branch")
+        git(self.repo, "update-ref", "refs/remotes/origin/main", self.main1)
+        FakeDevice.branch_version = stamp(self.repo, old)
+        mine = self.run_mine(FakeDevice(), "old", "--scenarios", "jank")
+        with self.assertRaises(SystemExit) as e:
+            self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("doesn't contain the baseline", str(e.exception))
+        _, _, table = self.perf(None, "compare", "--against", "main", "--force", mine)
+        self.assertIn("doesn't contain the baseline", table)
+        self.assertIn("| Metric (median) | main | old | change |", table)
+
+    def test_refuses_an_unstamped_main(self):
+        """A main from before stamping (today's) is cached, but compare refuses it without --force."""
+        with mock.patch.object(baseline, "build_release", lambda d, log: fake_unstamped(d)):
+            self.ensure(FakeDevice(), "--scenarios", "jank")
+        mine = self.run_mine(FakeDevice(), "mine", "--scenarios", "jank")
+        with self.assertRaises(SystemExit) as e:
+            self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("main: the build has no provenance stamp", str(e.exception))
+        _, _, table = self.perf(None, "compare", "--against", "main", "--force", mine)
+        self.assertIn("**main: the build has no provenance stamp", table)
+
+    def test_both_verify_on_an_emulator(self):
+        def home_app(dev):   # ART keeps the default Home app at verify whatever the install asks
+            dev.shell = (lambda orig: lambda cmd, timeout=120: (
+                "compiled\n" if cmd.startswith("cmd package compile") else orig(cmd, timeout)))(dev.shell)
+            return dev
+        self.ensure(home_app(FakeDevice(avd="tvperf")), "--scenarios", "jank")
+        dev = FakeDevice(avd="tvperf")
+        dev.package = package("verify", dev.version)
+        mine = self.run_mine(dev, "mine", "--scenarios", "jank")
+        _, _, table = self.perf(None, "compare", "--against", "main", mine)
+        self.assertIn("so was the other, as ART does for the default Home app", table)
+
+
+def fake_unstamped(launcher_dir):
+    out = fake_build(launcher_dir, None)
+    with open(out, "rb") as f:
+        data = f.read()
+    with open(out, "wb") as f:
+        f.write(data.split(b"|")[0] + b"|2.0")
+    return out
 
 
 class ShowTests(Base):
@@ -544,7 +644,7 @@ class ShowTests(Base):
     def test_install_puts_main_back(self):
         dev = FakeDevice()
         self.perf(dev, "baseline", "install")
-        self.assertEqual(dev.installed, b"APK launcher v1")
+        self.assertEqual(dev.installed, self.main_apk())
         self.assertIn("am start -n " + perf.ACTIVITY, dev.commands)
         self.perf(dev, "baseline", "install")
         self.assertEqual(dev.installs, 1)

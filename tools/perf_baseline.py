@@ -47,8 +47,9 @@ sys.path.insert(0, HERE)
 CACHE_ENV = "TVHOME_PERF_CACHE"
 DEFAULT_REF = "origin/main"
 # Bump to invalidate every cached measurement when `perf.py run` changes how it runs scenarios outside their own
-# functions: their order, what happens between them, mem's sample count.
-HARNESS_EPOCH = 1
+# functions: their order, what happens between them, mem's sample count. 2: runs start the launcher in its shipped
+# configuration (default_config) and put it back after.
+HARNESS_EPOCH = 2
 # Main's baseline is always its release build. The compiler filter is recorded, not keyed: install scripts compile
 # with `speed`, but ART compiles the device's default Home app with speed-profile (`verify` until it has a profile),
 # which the launcher is on TVs other than Google TV and on emulators. `compare --against` checks that both match.
@@ -60,8 +61,6 @@ INSTALL_WAIT_S = 60.0
 MAX_AGE_DAYS = 7.0
 # A baseline older than this gets a note in `compare`: a TV drifts (app updates, memory pressure).
 OLD_HOURS = 24.0
-ANIMATION_SCALES = (("window", "window_animation_scale"), ("transition", "transition_animation_scale"),
-                    ("animator", "animator_duration_scale"))
 
 
 class BaselineError(Exception):
@@ -84,13 +83,8 @@ def git(*args, root=None):
     return p.stdout.strip() if p.returncode == 0 else None
 
 
-try:
-    from provenance import launcher_tree   # the shared helper, from "Measure the main that ships"
-except ImportError:
-    def launcher_tree(ref="HEAD", root=None):
-        """Full hash of launcher/'s tree at `ref`, or None without git or for an unknown ref."""
-        out = git("rev-parse", "--verify", "--quiet", "%s:launcher" % ref, root=root)
-        return out if out and re.fullmatch(r"[0-9a-f]{40}", out) else None
+from provenance import launcher_tree  # noqa: E402
+import provenance  # noqa: E402
 
 
 def resolve_ref(name, root=None):
@@ -156,7 +150,8 @@ def harness(scenario, module=None):
                      if isinstance(n, ast.Name) and n.id in g and n.id not in seen]
         elif isinstance(obj, re.Pattern):
             parts[name] = [obj.pattern, obj.flags]
-        elif isinstance(obj, (str, int, float, bool, tuple, list, dict)) and not name.startswith("__"):
+        elif isinstance(obj, (str, int, float, bool, tuple, list, dict)) and name.strip("_").isupper():
+            # constants only: perf.py's lowercase globals (e.g. _variant) are this run's state, keyed elsewhere
             parts[name] = repr(obj)
     blob = json.dumps([HARNESS_EPOCH, sorted(parts.items())], sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:12]
@@ -175,10 +170,7 @@ def device_identity(sh):
                                              ("fingerprint", "ro.build.fingerprint"))}
     avd = _getprop(sh, "ro.boot.qemu.avd_name") or _getprop(sh, "ro.kernel.qemu.avd_name")
     unit = ("avd:" + avd) if avd else _getprop(sh, "ro.serialno")
-    scales = {}
-    for k, setting in ANIMATION_SCALES:
-        v = sh.shell("settings get global " + setting).strip()
-        scales[k] = v if v and v != "null" else "1.0"   # unset means the default, 1
+    scales = perf.animation_scales(sh)
     apps = sorted(c for c in perf.parse_components(sh.shell(perf.LEANBACK_APPS)) if not c.startswith(perf.PKG + "/"))
     unit_hash = hashlib.sha256(unit.encode()).hexdigest()[:12]
     ident = "|".join([facts["manufacturer"], facts["model"], facts["device"], facts["fingerprint"], unit_hash])
@@ -210,6 +202,7 @@ def run_params(args, other_app):
     return {"runs": args.runs, "rounds": args.rounds, "settle_s": args.settle, "other_app": other_app,
             "via_home": bool(args.via_home), "keys": " ".join(args.keys.split()), "key_interval_s": args.key_interval,
             "dock_moves": args.dock_moves, "dock_interval_s": args.dock_interval,
+            "variant": " ".join((getattr(args, "variant", None) or "").split()) or None,
             "scenarios": [s for s in perf.ALL_SCENARIOS if s in scenarios]}
 
 
@@ -229,7 +222,11 @@ def scenarios_in(result):
 
 def scenario_params(result, scenario):
     """The parameters that `scenario`'s numbers depend on, from a result (older results keep some of them in the
-    scenario's own section)."""
+    scenario's own section). --variant changes every scenario's."""
+    return dict(_own_params(result, scenario), variant=result.get("params", {}).get("variant"))
+
+
+def _own_params(result, scenario):
     p = result.get("params", {})
     sec = result.get(scenario) if isinstance(result.get(scenario), dict) else {}
     if scenario == "cold":
@@ -335,7 +332,8 @@ def assemble(entries, ref, commit, tree):
     entries = sorted(entries.items(), key=lambda kv: kv[1].get("created") or "")
     newest = entries[-1][1]
     result = {"label": "main", "created": newest.get("created"), "device": newest.get("device"),
-              "build": newest.get("build"), "config": newest.get("config"), "params": {},
+              "build": newest.get("build"), "config": newest.get("config"),
+              "params": dict(newest.get("params") or {}),   # then each scenario's own, from its run
               "baseline": {"ref": ref, "commit": commit, "launcher_tree": tree, "scenarios": {}}}
     for s, e in entries:
         if s != "mem":
@@ -591,12 +589,10 @@ def cache_problem(result, ident, sha, tree):
     if result.get("device", {}).get("id") != ident["id"] or result["device"].get("state") != ident["state"]:
         return "the device changed while it was measured"
     cfg = result.get("config") or {}
-    if cfg:
-        if (cfg.get("launcher") or {}).get("default_config") is not True:
-            return "the launcher did not run in its default configuration"
-        scales = cfg.get("animation_scales")
-        if scales and {k: str(v) for k, v in scales.items()} != ident["state"]["animation_scales"]:
-            return "the animation scales changed while it was measured"
+    if cfg.get("launcher") is not None and not cfg["launcher"].get("default_config"):   # None: a build from before it
+        return "the launcher did not run in its shipped configuration"
+    if cfg.get("animation_scales") and cfg["animation_scales"] != ident["state"]["animation_scales"]:
+        return "the animation scales changed while it was measured"
     return None
 
 
@@ -673,6 +669,7 @@ def cmd_install(args):
 def compare_against(name, path, force=False, root=None):
     """Markdown table of main's cached baseline against a result file, for the same device and parameters."""
     perf = _perf()
+    root = root or ROOT
     with open(path) as f:
         mine = json.load(f)
     ref, commit, tree = resolve_ref(name, root)
@@ -707,7 +704,7 @@ def compare_against(name, path, force=False, root=None):
         raise BaselineError("\n".join(lines))
     compiled = {s: (e.get("build") or {}).get("compiler_filter") for s, e in found.items()}
     differ = sorted((s for s, f in compiled.items() if f != b.get("compiler_filter")), key=scenarios.index)
-    if differ:
+    if differ and not force:
         theirs = "/".join(sorted({str(compiled[s]) for s in differ}))
         refresh = ensure_command(mine, [(s, None) for s in differ], "refresh")
         if b.get("compiler_filter") != "speed":
@@ -717,17 +714,16 @@ def compare_against(name, path, force=False, root=None):
         else:
             fix = ("Main's was recompiled after its install (ART does that to the default Home app, and in "
                    "background dexopt). This reinstalls and compiles main as the install scripts do:\n  " + refresh)
-        raise BaselineError("main's baseline for %s was compiled %s, yours %s: not comparable. %s"
-                            % (", ".join(differ), theirs, b.get("compiler_filter"), fix))
+        raise BaselineError("main's baseline for %s was compiled %s, yours %s: not comparable. %s\n(--force compares "
+                            "anyway)" % (", ".join(differ), theirs, b.get("compiler_filter"), fix))
     baseline = assemble(found, ref, commit, tree)
+    problems = provenance.problems(baseline, mine, main_ref=ref, root=root)
+    mismatches = [t for level, t in problems if level == provenance.MISMATCH]
+    if mismatches and not force:
+        raise BaselineError("these results would mislead:\n%s\n\nMeasure again (docs/performance.md, \"Measure the main "
+                            "that ships\"), or pass --force for the table with these warnings under it."
+                            % "\n".join("- " + t for t in mismatches))
     notes = []
-    provenance = sys.modules.get("provenance")
-    problems = getattr(provenance, "problems", None) if provenance else None
-    if problems:
-        for level, text in problems(baseline, mine, main_ref=ref):
-            if level == "mismatch" and not force:
-                raise BaselineError(text + " (--force compares anyway)")
-            notes.append(text)
     ages = {s: age_hours(e.get("created")) for s, e in found.items()}
     by_age = {}
     for s in scenarios:
@@ -740,7 +736,7 @@ def compare_against(name, path, force=False, root=None):
     if (mine.get("build", {}).get("apk_sha256") and baseline.get("build", {}).get("apk_sha256")
             == mine["build"]["apk_sha256"]):
         notes.append("Your result measured main's own build.")
-    table = perf.render_table([baseline, mine])
+    table = perf.render_table([baseline, mine], problems)
     return table + "".join("\n- " + n for n in notes)
 
 
@@ -759,6 +755,8 @@ def ensure_command(result, missing, verb="ensure"):
         cmd += ["--keys", "'%s'" % p["keys"]]
     if p.get("via_home"):
         cmd.append("--via-home")
+    if p.get("variant"):
+        cmd += ["--variant", "'%s'" % p["variant"]]
     return " ".join(cmd)
 
 
