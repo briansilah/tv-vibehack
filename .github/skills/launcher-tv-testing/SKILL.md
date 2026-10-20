@@ -101,7 +101,8 @@ python3 tools/perf.py run --label my-fix --scenarios auto            # the TV, f
 It goes by file, and in `MainActivity`, `AppAdapter`, `TopShelf`, `activity_main.xml`, `styles.xml`, `config.xml`
 and the manifest by the method, field, view or resource you changed (`onCreate` statement by statement). Code
 without a rule gets what the code using it gets, else everything. It also says what no scenario measures and what to
-do instead. An explicit `--scenarios` or `--keys` overrides it. If a plan looks wrong, fix the map in
+do instead, and which runs to add over stand-in art (`--scenarios auto --variant '--ez glass_test_art true'`).
+An explicit `--scenarios` or `--keys` overrides it. If a plan looks wrong, fix the map in
 `tools/perf_scope.py` and its tests rather than working around it. [docs/performance.md](../../../docs/performance.md#measure-only-what-you-changed)
 has the details and the key presets. The map follows this table:
 
