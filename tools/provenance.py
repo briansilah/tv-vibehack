@@ -172,8 +172,11 @@ def _baseline(base, cand, main_ref, root, add):
     if b.get("debuggable"):
         add(MISMATCH, "%s: a debug build; main ships as a release build" % n)
     elif b.get("compiler_filter") not in (None, "speed"):
-        add(MISMATCH, "%s: compiled `%s`; main ships compiled `speed` (launcher/build-and-install.sh)"
-            % (n, b.get("compiler_filter")))
+        # ART compiles the default Home app its own way whatever the install asks (an emulator, TVs other than Google
+        # TV): with the candidate compiled the same, the pair is fair, only not the TV's absolute numbers.
+        same = cand is not None and (cand.get("build") or {}).get("compiler_filter") == b.get("compiler_filter")
+        add(NOTE if same else MISMATCH, "%s: compiled `%s`; main ships compiled `speed` (launcher/build-and-install.sh)"
+            % (n, b.get("compiler_filter")) + ("; so was the other, as ART does for the default Home app" if same else ""))
     s = scales(base)
     if s and any(x != 1 for x in s.values()):
         add(MISMATCH, "%s: animation scales %s; main's transitions run at 1" % (n, _scales_text(s)))

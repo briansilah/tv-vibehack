@@ -10,6 +10,8 @@ See docs/performance.md for the method and what each number means.
     perf.py run --label fix --scenarios dock    moving between two dock apps: top shelf latency and frames
     perf.py run --label fix --scenarios dock --variant '--ez glass_test_art true'   a variant (main's too)
     perf.py compare tools/perf-results/main.json tools/perf-results/fix.json    refuses results that would mislead
+    perf.py baseline ensure --scenarios dock    main's numbers on this device, measured only if not cached yet
+    perf.py compare --against main tools/perf-results/fix.json    against main's cached baseline
     perf.py trace --seconds 15 --action keys    Perfetto trace while it presses D-pad keys
     perf.py trace --action dock                 ... while it moves between the first two dock apps
     perf.py summarize trace.perfetto-trace      slowest launcher trace sections, frames and key latency (pip install perfetto)
@@ -29,8 +31,10 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.modules.setdefault("perf", sys.modules[__name__])   # one module, also when run as a script
 import tv  # noqa: E402
 import provenance  # noqa: E402
+import perf_baseline as baseline  # noqa: E402
 
 RESULTS_DIR = os.path.join(HERE, "perf-results")
 
@@ -500,18 +504,20 @@ def cmd_run(args):
         pkg = parse_package(sh.shell("dumpsys package " + PKG))
         if not pkg:
             sys.exit("%s is not installed; run launcher/build-and-install.sh first" % PKG)
-        result = {
-            "label": args.label,
-            "created": datetime.datetime.now().isoformat(timespec="seconds"),
-            "device": device_facts(sh),
-            "build": dict(pkg, apk_bytes=apk_size(sh)),
-            "params": {"runs": args.runs, "rounds": args.rounds, "settle_s": args.settle, "variant": variant},
-        }
         other = None
         if "cold" in scenarios or "warm" in scenarios:
             other = resolve_other_app(sh, args.other_app, log)
-            result["params"]["other_app"] = other
             log("background app: %s" % (other or "Settings"))
+        # The device's identity, every option and each scenario's code hash: what tools/perf_baseline.py keys
+        # main's cached baseline on.
+        result = {
+            "label": args.label,
+            "created": datetime.datetime.now().isoformat(timespec="seconds"),
+            "device": dict(device_facts(sh), **baseline.device_identity(sh)),
+            "build": dict(pkg, apk_bytes=apk_size(sh), apk_sha256=baseline.installed_apk_sha256(sh)),
+            "params": baseline.run_params(args, other),
+            "harness": {s: baseline.harness(s) for s in scenarios},
+        }
         if pkg["debuggable"]:
             log("note: the installed launcher is a debuggable build; it runs slower than a release build. "
                 "Compare like with like.")
@@ -642,6 +648,11 @@ def render_table(results, problems=None):
 
 
 def cmd_compare(args):
+    if args.against:
+        if len(args.files) != 1:
+            sys.exit("compare --against takes one result file: yours")
+        print(baseline.compare_against(args.against, args.files[0], force=getattr(args, "force", False)))
+        return
     results = []
     for path in args.files:
         with open(path) as f:
@@ -840,6 +851,24 @@ def cmd_summarize(args):
 
 # ---- command line ------------------------------------------------------------------------------
 
+def add_run_options(p):
+    """The options that decide what `run` measures; `baseline ensure` takes the same ones."""
+    p.add_argument("--scenarios", default="cold,warm,jank,dock,mem")
+    p.add_argument("--runs", type=int, default=10, help="cold and warm starts (default 10)")
+    p.add_argument("--rounds", type=int, default=3, help="D-pad rounds for jank and dock (default 3)")
+    p.add_argument("--keys", default=DEFAULT_KEYS, help="D-pad sequence for jank (UP DOWN LEFT RIGHT)")
+    p.add_argument("--key-interval", type=float, default=0.35, help="seconds between key presses")
+    p.add_argument("--dock-moves", type=int, default=8, help="moves between the first two dock apps per round")
+    p.add_argument("--dock-interval", type=float, default=1.2, help="seconds between dock moves")
+    p.add_argument("--settle", type=float, default=1.5, help="seconds to wait between steps")
+    p.add_argument("--via-home", action="store_true",
+                   help="warm start with the HOME intent instead of starting MainActivity directly "
+                        "(needs the launcher as the default home app)")
+    p.add_argument("--variant", help="measure a variant, only when your change adds or changes it: the launcher's "
+                                     "per-process extras, e.g. '--ez glass_test_art true' or '--ei liquid_glass 50'. "
+                                     "Measure main with the same one")
+
+
 def build_parser():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -854,31 +883,23 @@ def build_parser():
     r = sub.add_parser("run", help="measure and save a result file")
     conn(r)
     r.add_argument("--label", required=True, help="name for this run, e.g. main or the branch")
-    r.add_argument("--scenarios", default="cold,warm,jank,dock,mem")
-    r.add_argument("--runs", type=int, default=10, help="cold and warm starts (default 10)")
-    r.add_argument("--rounds", type=int, default=3, help="D-pad rounds for jank and dock (default 3)")
-    r.add_argument("--keys", default=DEFAULT_KEYS, help="D-pad sequence for jank (UP DOWN LEFT RIGHT)")
-    r.add_argument("--key-interval", type=float, default=0.35, help="seconds between key presses")
-    r.add_argument("--dock-moves", type=int, default=8, help="moves between the first two dock apps per round")
-    r.add_argument("--dock-interval", type=float, default=1.2, help="seconds between dock moves")
-    r.add_argument("--settle", type=float, default=1.5, help="seconds to wait between steps")
-    r.add_argument("--via-home", action="store_true",
-                   help="warm start with the HOME intent instead of starting MainActivity directly "
-                        "(needs the launcher as the default home app)")
-    r.add_argument("--variant", help="measure a variant, only when your change adds or changes it: the launcher's "
-                                     "per-process extras, e.g. '--ez glass_test_art true' or '--ei liquid_glass 50'. "
-                                     "Measure main with the same one")
+    add_run_options(r)
     r.add_argument("--out", help="result file (default tools/perf-results/<label>.json)")
     r.set_defaults(func=cmd_run)
 
     c = sub.add_parser("compare", help="Markdown table of result files (change is relative to the first, the "
                                        "baseline); refuses results that would mislead")
     c.add_argument("files", nargs="+")
+    c.add_argument("--against", metavar="REF",
+                   help="compare one result file against REF's (e.g. main) cached baseline for the same device and "
+                        "options; `baseline ensure` measures it")
     c.add_argument("--main", default=provenance.MAIN_REF,
                    help="the git ref the baseline must match (default %(default)s, as of your last fetch)")
     c.add_argument("--force", action="store_true",
                    help="print the table even when the results would mislead, with the reasons under it")
     c.set_defaults(func=cmd_compare)
+
+    baseline.add_arguments(sub, conn, add_run_options)
 
     t = sub.add_parser("trace", help="record a Perfetto trace while doing something")
     conn(t)
@@ -904,6 +925,8 @@ def main(argv=None, shell=None, log=None):
     try:
         return args.func(args)
     except tv.TvError as e:
+        sys.exit("perf.py: %s" % e)
+    except baseline.BaselineError as e:
         sys.exit("perf.py: %s" % e)
 
 

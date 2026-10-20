@@ -12,7 +12,8 @@ sends no telemetry (CONTRIBUTING.md); its only network use is the top shelf's pi
 | | What it gives you |
 |---|---|
 | `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank, dock moves (top shelf latency) and memory, each repeated, saved as JSON with medians. |
-| `tools/perf.py compare` | A Markdown before/after table for a pull request. |
+| `tools/perf.py compare` | A Markdown before/after table for a pull request; `--against main` takes `main`'s side from the shared cache. |
+| `tools/perf.py baseline` | `main`'s numbers, measured once per change to what affects them and shared by every worktree ([below](#reusing-mains-baseline)). |
 | `tools/perf.py trace` | A [Perfetto](https://perfetto.dev) trace of a cold start, a Home press, D-pad moves, or moves between two dock apps. |
 | `tools/perf.py summarize` | The slowest slices on the launcher's main thread and RenderThread in a trace, its `tvhome:*` sections that span frames, its frames by jank type, and how long keys took to reach it. |
 | Trace sections in the app | `tvhome:*` slices (below) show where the launcher's own code spends time. |
@@ -42,9 +43,11 @@ two measure that hand-over rather than the launcher alone. Use the default warm 
 1. **Same conditions for A and B.** Same TV, same installed apps, same build type (a debug build is
    much slower than a release build; `perf.py` records which one it measured and warns), screensaver
    off, nothing downloading. After installing, wait a minute for the TV to settle.
-2. **Baseline.** Install `main` and run `tools/perf.py run --label main`.
+2. **Baseline.** `tools/perf.py baseline ensure` with the options you'll measure yours with: it takes `main`'s
+   numbers on this TV from the cache, or measures them when nothing that changes them has been measured yet
+   (see [Reusing main's baseline](#reusing-mains-baseline)).
 3. **Change one thing**, install that build and run `tools/perf.py run --label my-fix`.
-4. **Compare:** `tools/perf.py compare tools/perf-results/main.json tools/perf-results/my-fix.json`
+4. **Compare:** `tools/perf.py compare --against main tools/perf-results/my-fix.json` (or two result files)
    and paste the table into the pull request. It refuses results that would mislead
    ([Measure the main that ships](#measure-the-main-that-ships)). Medians of 10 runs; treat changes smaller than about
    10 %, or within the min-max spread in the JSON, as noise and re-run.
@@ -132,7 +135,7 @@ picks another ref):
 |---|---|
 | A build without a stamp | nothing says what was measured |
 | A baseline whose `launcher/` isn't `origin/main`'s, or with uncommitted changes | `main` has moved since it was measured, or it isn't `main`: measure `main` again. `main` moving only outside `launcher/` is fine |
-| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships |
+| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships. Compiled otherwise with the other build compiled the same is only a note: ART compiles the default Home app its own way (an emulator, TVs other than Google TV) |
 | A build that doesn't contain the baseline's `main` | merge `main`, rebuild and measure again; otherwise the change column mixes `main`'s own changes (say, new transitions) into yours |
 | Different devices, build types, compiler filters, background apps, animation scales, `--settle`, D-pad keys, or configurations | the change would come from the difference |
 
@@ -140,6 +143,52 @@ picks another ref):
 the table: a build with uncommitted changes (commit what you measured), the same `launcher/` in two
 configurations (a variant comparison), and what git couldn't check (a commit that isn't in your
 clone: `git fetch`).
+
+### Reusing main's baseline
+
+`main`'s numbers on a device only change when something that changes them does, so `perf.py` keeps them in a cache
+that every worktree on the computer shares (`$(git rev-parse --git-common-dir)/tvhome-perf`, never committed;
+`TVHOME_PERF_CACHE` moves it), and measures `main` only for what isn't in it:
+
+```bash
+tools/perf.py baseline ensure --scenarios dock,mem   # main on this device: from the cache, or measured now
+launcher/build-and-install.sh                        # then your build
+tools/perf.py run --label my-fix --scenarios dock,mem
+tools/perf.py compare --against main tools/perf-results/my-fix.json   # no device needed
+tools/perf.py baseline install                       # main's release build back on the device
+```
+
+Run `ensure` before you install your build: when something isn't cached, it installs `main`. Each scenario's
+numbers are cached under:
+
+| | |
+|---|---|
+| `main`'s `launcher/` | its tree, `git rev-parse origin/main:launcher`: merges of docs or tools keep the baseline, any change in `launcher/` measures it again |
+| The device | its model, build fingerprint (an update measures again) and unit: the serial number, kept hashed, or an emulator's AVD, so emulators started from one AVD share a baseline. Also its animation scales and its set of TV apps, which the launcher loads at every start |
+| The scenario's code | a hash of its function in `perf.py` and every function and constant it uses, comments and docstrings left out: a change to how `jank` measures measures `jank` again, not `cold` |
+| Its options | `cold`: `--runs`, `--settle`, the background app; `warm`: the same and `--via-home`; `jank`: `--rounds`, `--keys`, `--key-interval`; `dock`: `--rounds`, `--dock-moves`, `--dock-interval`; `mem`: the scenarios that ran before it, which leave pictures in memory. `--variant` for all of them: a variant never comes from the plain baseline |
+| The build | `main`'s release build, built once per `launcher/` tree in a temporary worktree and cached too (`baseline apk`) |
+
+`ensure` takes `run`'s options. A hit installs and measures nothing. For what's missing (with `mem`, also the
+scenarios before it), it builds `main`'s APK unless a session already has, installs it over the launcher
+(`install -r`, compiled like the install scripts do), waits `--install-wait` seconds (60), measures with `run`, and
+caches what `run` recorded, stamp and configuration included. It doesn't cache a measurement of another APK than
+main's (by its sha256 and stamp) or of the launcher outside its shipped configuration. It also measures again what
+is older than `--max-age` days (7). `baseline show` lists what's cached for `main`'s
+`launcher/` on each device, `baseline list` the whole cache.
+
+`compare --against main` looks the baseline up from your result's device, options and scenario code. When it isn't
+cached, it says what differs and prints the `ensure` command. Then it makes the same checks as `compare` (above),
+with `--force` the same way, and also refuses when ART compiled `main` and yours differently: install yours again
+with `launcher/build-and-install.sh` and measure it again, which compiles it the way the device now compiles `main`. ART compiles the device's default Home app with `speed-profile`, which is `verify` until there's a
+profile, whatever the install asks for: on an Android TV emulator, and on TVs other than Google TV, the launcher is
+the default Home, so both come out `verify` there. On Google TV the stock home stays the default, and both are
+`speed`.
+
+**When to measure `main` again.** A TV drifts over days: apps update, memory fills up. `compare` says how old the
+baseline is. When a difference is within the noise, measure `main` again right before or after yours with
+`tools/perf.py baseline refresh` and the same options: it reinstalls `main` and measures those scenarios again,
+cached or not. Do the same on an emulator, whose numbers move with whatever else the computer is running.
 
 ## What is measured
 
