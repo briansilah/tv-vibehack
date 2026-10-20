@@ -441,6 +441,58 @@ def apk_size(sh):
         return None
 
 
+HOME_QUERY = "-a android.intent.action.MAIN -c android.intent.category.HOME"
+
+
+def is_emulator(sh):
+    return "1" in (sh.shell("getprop ro.kernel.qemu").strip(), sh.shell("getprop ro.boot.qemu").strip())
+
+
+def home_package(sh):
+    """The device's Home app: the HOME role's holder (Android 10+, what ART goes by), else what HOME resolves to."""
+    held = [l.strip() for l in sh.shell("cmd role get-role-holders android.app.role.HOME").splitlines()
+            if re.match(r"^[A-Za-z][\w.]*$", l.strip())]
+    if held:
+        return held[0]
+    home = parse_components(sh.shell("cmd package resolve-activity --brief " + HOME_QUERY))
+    return home[-1].split("/")[0] if home else None
+
+
+def emulator_speed(sh, log, keep_home=False):
+    """On an emulator, makes sure the launcher is compiled `speed`, as the install scripts leave it on a TV.
+
+    Android 14 compiles the default Home app `speed-profile` whatever `cmd package compile -m speed` asks, which without
+    a profile is `verify`. launcher/build-and-install.sh makes the launcher Home on an Android TV emulator, so emulators
+    that ran it measure a slower build than those that didn't, and their shared cached baseline for main flips
+    between the two. Here the emulator's stock launcher becomes Home again and the launcher is compiled `speed`.
+    Real TVs are left as they are: what the install scripts leave there is what ships. `keep_home` (for --via-home,
+    which needs the launcher as Home) only warns. Returns whether it changed anything."""
+    pkg = parse_package(sh.shell("dumpsys package " + PKG)) or {}
+    if pkg.get("compiler_filter") in (None, "speed") or not is_emulator(sh):
+        return False
+    ours = home_package(sh) == PKG
+    if ours and keep_home:
+        log("note: the launcher is this emulator's Home app, so ART compiled it %s, not speed; measure main the "
+            "same way" % pkg.get("compiler_filter"))
+        return False
+    if ours:
+        stock = [c for c in parse_components(sh.shell("cmd package query-activities --brief " + HOME_QUERY))
+                 if not c.startswith(PKG + "/") and "FallbackHome" not in c]
+        if not stock:
+            log("note: the launcher is this emulator's only Home app, so ART compiled it %s, not speed"
+                % pkg.get("compiler_filter"))
+            return False
+        stock.sort(key=lambda c: "launcher" not in c.lower())
+        sh.shell("cmd package set-home-activity --user 0 " + stock[0])
+        log("emulator: %s is Home again, so ART compiles the launcher speed (it compiles the Home app %s)"
+            % (stock[0], pkg.get("compiler_filter")))
+    sh.shell("cmd package compile -m speed -f %s >/dev/null 2>&1; echo compiled" % PKG, timeout=600)
+    after = (parse_package(sh.shell("dumpsys package " + PKG)) or {}).get("compiler_filter")
+    if after != "speed":
+        log("note: the launcher is still compiled %s on this emulator" % after)
+    return True
+
+
 def resolve_keys(value):
     """The D-pad sequence for --keys: key names (UP DOWN LEFT RIGHT CENTER BACK), or presets (KEY_PRESETS) separated
     by commas, pressed in turn. None: the default keys."""
@@ -581,6 +633,8 @@ def cmd_run(args):
         pkg = parse_package(sh.shell("dumpsys package " + PKG))
         if not pkg:
             sys.exit("%s is not installed; run launcher/build-and-install.sh first" % PKG)
+        if emulator_speed(sh, log, keep_home=args.via_home):
+            pkg = parse_package(sh.shell("dumpsys package " + PKG)) or pkg
         other = None
         if "cold" in scenarios or "warm" in scenarios:
             other = resolve_other_app(sh, args.other_app, log)

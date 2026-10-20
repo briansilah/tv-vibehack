@@ -182,9 +182,12 @@ is older than `--max-age` days (7). `baseline show` lists what's cached for `mai
 cached, it says what differs and prints the `ensure` command. Then it makes the same checks as `compare` (above),
 with `--force` the same way, and also refuses when ART compiled `main` and yours differently: install yours again
 with `launcher/build-and-install.sh` and measure it again, which compiles it the way the device now compiles `main`. ART compiles the device's default Home app with `speed-profile`, which is `verify` until there's a
-profile, whatever the install asks for: on an Android TV emulator, and on TVs other than Google TV, the launcher is
-the default Home, so both come out `verify` there. On Google TV the stock home stays the default, and both are
-`speed`.
+profile, whatever the install asks for. On TVs other than Google TV the launcher is the default Home, so both come
+out `verify` there; on Google TV the stock home stays the default, and both are `speed`. **On an emulator** `run`
+and `baseline` give Home back to the emulator's stock launcher (from the HOME role, which
+`launcher/build-and-install.sh` gives the launcher there) and compile it `speed` first, so every emulator measures
+the same build and their shared baseline doesn't flip between `verify` and `speed`; `--via-home` keeps the launcher
+as Home and only notes it.
 
 **When to measure `main` again.** A TV drifts over days: apps update, memory fills up. `compare` says how old the
 baseline is. When a difference is within the noise, measure `main` again right before or after yours with
