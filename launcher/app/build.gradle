@@ -2,6 +2,55 @@ plugins {
     id 'com.android.application'
 }
 
+/** Runs git in dir; its trimmed output, or null when git is missing or fails. */
+def git(File dir, List<String> args, Map<String, String> env = [:]) {
+    try {
+        def out = providers.exec {
+            workingDir dir
+            commandLine(['git'] + args)
+            environment env
+            ignoreExitValue true
+        }
+        return out.result.get().exitValue == 0 ? out.standardOutput.asText.get().trim() : null
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+/**
+ * What the APK is built from, for tools/perf.py (docs/performance.md, "Measure the main that ships"): the commit, the
+ * launcher/ tree as it is on disk (with uncommitted changes, so the same files always give the same hash), and
+ * whether that differs from the commit. As semver build metadata in versionName, which `dumpsys package` shows:
+ * "+commit-<sha>.launcher-<tree>[.dirty]". Empty without git (a source zip); a shallow clone is fine.
+ */
+def buildStamp() {
+    File dir = rootProject.projectDir
+    String commit = git(dir, ['rev-parse', '--verify', 'HEAD^{commit}'])
+    String prefix = git(dir, ['rev-parse', '--show-prefix'])
+    if (!commit || prefix == null) return ''
+    String sub = prefix.replaceAll('/+$', '')
+    String tree = git(dir, ['rev-parse', '--verify', "HEAD:${sub}".toString()])
+    String status = git(dir, ['status', '--porcelain', '--untracked-files=all', '--', '.'])
+    if (!tree || status == null) return ''
+    boolean dirty = !status.isEmpty()
+    if (dirty) {
+        // The tree as it would be committed now, through a scratch index; the real one is left alone.
+        File index = File.createTempFile('tvhome-stamp', '.index')
+        index.delete()
+        try {
+            Map<String, String> env = [GIT_INDEX_FILE: index.absolutePath]
+            String top = git(dir, ['rev-parse', '--show-toplevel'])
+            boolean ok = top && git(new File(top), ['read-tree', 'HEAD'], env) != null &&
+                    git(dir, ['add', '-A', '--', '.'], env) != null
+            tree = ok ? git(new File(top), ['write-tree', "--prefix=${prefix}".toString()], env) : null
+        } finally {
+            index.delete()
+        }
+        if (!tree) return ''
+    }
+    return "+commit-${commit}.launcher-${tree}${dirty ? '.dirty' : ''}".toString()
+}
+
 android {
     namespace 'com.gathin.tvhome'
     compileSdk 34
@@ -11,7 +60,7 @@ android {
         minSdk 26
         targetSdk 29
         versionCode 2
-        versionName '2.0'
+        versionName '2.0' + buildStamp()
     }
 
     buildTypes {
