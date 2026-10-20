@@ -56,11 +56,19 @@
     <!-- Top shelf art: with focus on a dock app, the space above the dock shows, best first,
          1. what the app suggests: what it publishes on the TV for the home screen (what you were watching, its
             recommendations; needs READ_TV_LISTINGS, which build-and-install.sh grants), then the titles of its
-            feed below;
+            feed below; or, for an app in top_shelf_images, its static image instead;
          2. its cover art: its logo, cut out of its banner, on shapes in its colours;
          3. otherwise the ambient glow and its name.
          false: always the glow and name, with no network use. -->
     <bool name="top_shelf_art">true</bool>
+
+    <!-- Apps whose top shelf is one static image, as tvOS shows YouTube's, instead of suggestions: "package [| URL]".
+         The image is the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's
+         home screen), else one fetched once from the https URL and kept on the TV. Until it has one, the app shows
+         its cover art. Up from the app moves to a button that opens it. -->
+    <string-array name="top_shelf_images" translatable="false">
+        <item>com.google.android.youtube.tv</item>
+    </string-array>
 
     <!-- Public catalogues of suggested titles, per app: "package | caption | URL | URL ...", each URL a Stremio
          catalogue (JSON with "metas": id, name, background, logo). {country} in a URL becomes the TV's country (ke, us, ...):

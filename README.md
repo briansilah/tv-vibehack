@@ -80,7 +80,8 @@ A home screen that is yours again:
   it suggests: what you were watching first (with **Resume** a press of Up away), then your watchlist,
   then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
   Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
-  in every 10 seconds. An app without suggestions shows cover art: its logo on shapes in its own
+  in every 10 seconds. YouTube shows one picture instead, as on Apple TV: its Apple TV Top Shelf image,
+  once you've put it on the TV. An app without suggestions shows cover art: its logo on shapes in its own
   colours. Otherwise, its name over an ambient glow in its colour. See [The top shelf](#the-top-shelf).
 - **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
   the dock row moves to the top, the time and profile picture scroll away with the page, and the rows
@@ -158,6 +159,7 @@ tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt        # undo it and resto
 | [`tools/tv.py`](tools/tv.py) | Runs commands on the TV: shell, batch, push, pull. Every script goes through it. Uses the `adb` binary, or the pure-Python `adb_shell` client where that binary is blocked. |
 | [`tools/b64push.py`](tools/b64push.py) | Uploads larger files such as APKs and verifies the checksum: `adb push` with the adb binary, base64 chunks through the shell with `adb_shell`. |
 | [`tools/disable.sh`](tools/disable.sh) / [`tools/restore.sh`](tools/restore.sh) | Apply or undo a debloat list. PowerShell versions sit next to them. |
+| [`tools/top_shelf_image.py`](tools/top_shelf_image.py) | Puts an app's Apple TV Top Shelf image on the TV, from a screenshot of an Apple TV's home screen. See [The top shelf](#the-top-shelf). |
 
 ### Connecting
 
@@ -252,6 +254,8 @@ Apple TV's Top Shelf does:
      which need no account or key: Stremio's Cinemeta, and the open-source
      [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
      come from Stremio's image service (metahub).
+   - **Or one static image**, for the apps in `top_shelf_images` in `config.xml` (YouTube): the
+     picture Apple TV shows for them, full screen, instead of suggestions. Below.
 2. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
    on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
    in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
@@ -262,6 +266,29 @@ Apple TV's Top Shelf does:
 cut off (YouTube's thumbnails are fetched at 1280 x 720; the small ones the apps publish are never
 used), or the title is passed over for the next. A title logo too small to read well gives way to
 the title in text.
+
+**Static images.** On Apple TV, YouTube has no Top Shelf content of its own: it shows one picture, its
+logo on bright shapes, full screen behind the dock. The launcher shows the same for each app in
+`top_shelf_images`. That picture is Google's, so it isn't in this repository: you put it on your TV
+yourself, from a screenshot of your Apple TV. Pair the Apple TV with Xcode on a Mac (on the Apple TV:
+Settings → Remotes and Devices → Remote App and Devices), put YouTube in its top row and focus it, then
+in Xcode: Window → Devices and Simulators → your Apple TV → Take Screenshot. Then:
+
+```bash
+python3 tools/top_shelf_image.py ~/Desktop/Screenshot.png                     # YouTube's
+python3 tools/top_shelf_image.py Screenshot.png --package <package>           # another app in top_shelf_images
+python3 tools/top_shelf_image.py --remove                                     # back to YouTube's cover art
+```
+
+It keeps the part of the screen above the dock, paints over the time and profile picture from what's
+around them, scales it to the TV's 1920 pixels across and puts it on the TV (in the launcher's own
+storage, so clearing the launcher's storage removes it), then shows Home, which picks it up. The
+launcher draws it as tvOS does (measured with a test pattern in the tvOS Simulator): from the top of
+the screen down to where tvOS's dock starts, nothing drawn over it, its bottom edge carrying on behind
+the dock, mirrored and blurred. An app's own 2320 x 720 Top Shelf Image (Wide) goes up as it is with
+`--whole`, losing its sides as on tvOS; a line
+`package | https://...` in `top_shelf_images` fetches one from a URL instead, once. Until an app has
+its image, it shows its cover art. Up from it moves to **Open YouTube**.
 
 **Up** from a dock app showing a title moves to a button under it, which says what OK will do with
 that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue

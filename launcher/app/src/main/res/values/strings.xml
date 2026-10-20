@@ -55,6 +55,6 @@
     <string name="shelf_open_in">Open in %1$s</string>
     <!-- %1$s: the app. Opens the app's search for the title, where it can't be opened at the title itself. -->
     <string name="shelf_search_in">Search in %1$s</string>
-    <!-- %1$s: the app. Opens the app, not the title. -->
+    <!-- %1$s: the app. Opens the app, not the title (also under an app's static top shelf image). -->
     <string name="shelf_open_app">Open %1$s</string>
 </resources>
