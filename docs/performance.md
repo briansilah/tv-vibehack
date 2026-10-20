@@ -46,7 +46,8 @@ two measure that hand-over rather than the launcher alone. Use the default warm 
 2. **Baseline.** Install `main` and run `tools/perf.py run --label main`.
 3. **Change one thing**, install that build and run `tools/perf.py run --label my-fix`.
 4. **Compare:** `tools/perf.py compare tools/perf-results/main.json tools/perf-results/my-fix.json`
-   and paste the table into the pull request. Medians of 10 runs; treat changes smaller than about
+   and paste the table into the pull request. It refuses results that would mislead
+   ([Measure the main that ships](#measure-the-main-that-ships)). Medians of 10 runs; treat changes smaller than about
    10 %, or within the min-max spread in the JSON, as noise and re-run.
 5. **Find the cause** of a slow number with a trace:
 
@@ -65,10 +66,81 @@ the keys that reached the launcher by input source (`0x301` is the remote's D-pa
 the key reached the TV until the launcher's main thread took it, and the time `HomeButtonService.onKeyEvent`
 took in the `:home` process (Android 12+).
 
-`run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem` (or `auto`,
-below), `--runs` (cold/warm repeats, default 10), `--rounds` (jank rounds, default 3), `--quick` (5 and 2),
-`--keys` (the D-pad sequence, or presets, below), `--dock-moves` and `--dock-interval` (the dock scenario),
-`--via-home` (warm start through the HOME intent, like pressing Home), `--other-app` (see below).
+`run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem` (or `auto`, see
+[Measure only what you changed](#measure-only-what-you-changed)), `--runs` (cold/warm repeats, default 10),
+`--rounds` (jank rounds, default 3), `--quick` (5 and 2), `--keys` (the D-pad sequence, or presets), `--dock-moves` and `--dock-interval` (the dock scenario),
+`--via-home` (warm start through the HOME intent, like pressing Home), `--other-app` (see below), `--variant` (see
+[Measure the main that ships](#measure-the-main-that-ships)).
+
+**Right after an install** the first warm (Home) numbers can come out up to about 10 ms slower; on the TCL TV a
+second `run --scenarios warm --runs 15` of the same build matched the build before. Re-run when a Home
+number moves by about that much.
+
+**Cold starts use `am kill`, never `am force-stop`.** Force-stopping a package also turns its
+accessibility services off for good (Android removes them from `enabled_accessibility_services`), which
+would switch off `HomeButtonService` on Google TV. `am kill` ends only the launcher's background process;
+the service's own `:home` process stays bound. `perf.py` warns when the launcher's process survives.
+
+**The background app.** Cold and warm starts first open another app so the launcher really goes to
+the background. It must cover the whole screen: TV Settings is see-through, so the launcher would
+stay visible behind it and the system wouldn't time the start (`perf.py` warns when that happens).
+By default `perf.py` uses the first installed TV app by package name and records it; choose one
+with `--other-app <package>` (one that opens without playing video is best) and use the same one
+for A and B: `compare` refuses different ones. On the TCL TV, use `--other-app com.tcl.ui_mediaCenter`.
+
+### Measure the main that ships
+
+A before/after table is only as good as its baseline, and the baseline is the current `main`'s launcher
+as it ships: a release build compiled with `speed`, in the configuration `config.xml` gives it, with the
+TV's animations at their normal speed. Not an older `main`, a retired variant (like the transitions
+before #12), or your branch from before it had `main`'s latest changes.
+
+- **Merge the latest `main` into your branch, then measure once, at the end.** Numbers taken before the
+  merge compare against a `main` that no longer exists: on 2026-10-19 two branches measured `main` with
+  the old transitions in the morning, merged the new ones at noon, and had to measure everything again.
+- **Measure a variant only when your change adds or changes it**: another Liquid Glass look or stand-in
+  art for changes to the glass or the top shelf's art, with the same `--variant` for `main` and yours:
+  `run --variant '--ez glass_test_art true'` or `--variant '--ei liquid_glass 50'`. A build with
+  `liquid_glass_blur=false` is a variant too.
+
+**Every APK says what it was built from.** The Gradle build adds a stamp to `versionName`:
+`2.0+commit-<sha>.launcher-<tree>[.dirty]`, where `<tree>` is the git tree hash of `launcher/` as it
+was on disk, uncommitted changes included, and `.dirty` says there were some. A clean build's tree is
+`git rev-parse HEAD:launcher`; `tools/provenance.py` computes both. It works in a shallow clone; without
+git (a source zip) the version is a plain `2.0`. See what a TV has installed with
+`adb shell dumpsys package com.gathin.tvhome | grep -E 'versionName|lastUpdateTime'`.
+
+**Every result says what it measured.** `run` records the stamp in `build.provenance` (`commit`,
+`launcher_tree`, `dirty`) and the install time in `build.installed`. Under `config` it records the
+system animation scales (`window`, `transition`, `animator`), which decide which transitions run, and
+what the launcher reports about itself: the Liquid Glass look in effect and `config.xml`'s, the saved
+choice, the glass tier and stand-in art. It warns when the build has no stamp, when a scale isn't 1,
+and when a result labelled `main` isn't the current `origin/main` as it ships.
+
+**The shipped configuration, without losing the TV owner's.** `run` and `trace` start the launcher
+with `--ez default_config true`: for that process only, it shows `config.xml`'s Liquid Glass instead
+of the slider's saved choice, which stays saved, and drops stand-in art. Meanwhile `--ei liquid_glass`
+isn't saved either, which is how `--variant` measures another look. Every start passes it (a cold
+start is a new process), and the run ends with `--ez default_config false`, back to the saved choice
+without stand-in art. Don't reset a TV with `--ei liquid_glass` on its own: it saves the value as the
+owner's choice, and `-1` forgets it.
+
+**`compare` refuses results that would mislead.** The first file is the baseline. It checks the
+results against each other, and with git against `origin/main` as of your last `git fetch` (`--main`
+picks another ref):
+
+| Refused | Because |
+|---|---|
+| A build without a stamp | nothing says what was measured |
+| A baseline whose `launcher/` isn't `origin/main`'s, or with uncommitted changes | `main` has moved since it was measured, or it isn't `main`: measure `main` again. `main` moving only outside `launcher/` is fine |
+| A baseline that's a debug build, not compiled `speed`, not in its shipped configuration, or measured with an animation scale other than 1 | it isn't `main` as it ships |
+| A build that doesn't contain the baseline's `main` | merge `main`, rebuild and measure again; otherwise the change column mixes `main`'s own changes (say, new transitions) into yours |
+| Different devices, build types, compiler filters, background apps, animation scales, `--settle`, D-pad keys, or configurations | the change would come from the difference |
+
+`--force` prints the table anyway, with the reasons in bold under it. Some things are only noted under
+the table: a build with uncommitted changes (commit what you measured), the same `launcher/` in two
+configurations (a variant comparison), and what git couldn't check (a commit that isn't in your
+clone: `git fetch`).
 
 ### Measure only what you changed
 
@@ -98,6 +170,8 @@ How it decides. The map is `tools/perf_scope.py`, tested in `tools/tests/test_pe
 - **Code without a rule** (a new class, a private helper, a new drawable or style) gets what the code that uses it
   gets. Where nothing uses it, or a statement names nothing it knows, the plan falls back to everything: a missed
   regression costs more than an extra minute.
+- **Variants**: changes to the glass or its stand-in art also get runs over stand-in art, `--variant '--ez
+  glass_test_art true'`. `run --scenarios auto --variant '...'` runs the plan's scenarios for that variant.
 - **What no scenario measures** gets a note instead: the screensaver (a trace while it runs), opening an app (a
   trace of Select on a tile), `HomeButtonService` (the TV and its remote: `warm` doesn't go through it, and it's
   off on an emulator), menus and sheets (look at them on your emulator).
@@ -119,22 +193,6 @@ wrong, fix `tools/perf_scope.py` and its tests.
 On an emulator `--quick` (5 cold and warm starts, 2 rounds) is enough to see which way a number moves. Use the
 defaults on the TV, for the pull request's table.
 
-**Right after an install** the first warm (Home) numbers can come out up to about 10 ms slower; on the TCL TV a
-second `run --scenarios warm --runs 15` of the same build matched the build before. Re-run when a Home
-number moves by about that much.
-
-**Cold starts use `am kill`, never `am force-stop`.** Force-stopping a package also turns its
-accessibility services off for good (Android removes them from `enabled_accessibility_services`), which
-would switch off `HomeButtonService` on Google TV. `am kill` ends only the launcher's background process;
-the service's own `:home` process stays bound. `perf.py` warns when the launcher's process survives.
-
-**The background app.** Cold and warm starts first open another app so the launcher really goes to
-the background. It must cover the whole screen: TV Settings is see-through, so the launcher would
-stay visible behind it and the system wouldn't time the start (`perf.py` warns when that happens).
-By default `perf.py` uses the first installed TV app by package name and records it; choose one
-with `--other-app <package>` (one that opens without playing video is best) and use the same one
-for A and B.
-
 ## What is measured
 
 | Scenario | How | Numbers |
@@ -147,7 +205,8 @@ for A and B.
 
 The JSON also records the device, the Android version, the APK size on the TV, whether the build is
 debuggable, and how ART compiled it (`verify`, `speed-profile`, `speed`), because each of these
-changes every number.
+changes every number; and what the build was built from and how it was configured
+([above](#measure-the-main-that-ships)).
 
 To read the app's timings yourself:
 

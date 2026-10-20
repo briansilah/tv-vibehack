@@ -38,15 +38,18 @@ SCENARIO_PARAMS = {
     "mem": (),
 }
 
-Effect = collections.namedtuple("Effect", "scenarios keys check trace why")
+Effect = collections.namedtuple("Effect", "scenarios keys check trace why variants")
+# perf.py run --variant: stand-in art behind the glass, for changes to the glass over pictures
+ART = "--ez glass_test_art true"
 
 
-def E(scenarios="", keys="", check="local", trace="", why=""):
+def E(scenarios="", keys="", check="local", trace="", why="", art=""):
     """An Effect from short strings: E("jank dock", keys="corner", why=...). scenarios="*" means all of them;
-    jank without keys means the default keys."""
+    jank without keys means the default keys. art: the scenarios to measure again over stand-in art (ART)."""
     s = SCENARIOS if scenarios == "*" else tuple(scenarios.split())
     k = tuple(keys.split()) or (("default",) if "jank" in s else ())
-    return Effect(s, k, check, trace, why)
+    a = tuple(art.split())
+    return Effect(s, k, check, trace, why, ((ART, a, k if "jank" in a else ()),) if a else ())
 
 
 ALL = E("*", trace="cold home keys dock", why="")
@@ -86,13 +89,18 @@ FILE_RULES = [
      E(check="tv", trace="home remote",
        why="the Home button service: no scenario goes through it (warm starts the launcher directly, adb keys skip "
            "it, and it's off on an Android TV emulator), so check it on the TV with the remote")),
-    ((JAVA + "ProfileCorner.java", JAVA + "TopBarButton.java", JAVA + "QuickSettings.java",
-      JAVA + "CornerShade.java"), E("jank", keys="corner", trace="keys:corner", why="the top right corner")),
+    ((JAVA + "ProfileCorner.java", JAVA + "TopBarButton.java", JAVA + "QuickSettings.java"),
+     E("jank", keys="corner", trace="keys:corner", why="the top right corner")),
+    ((JAVA + "CornerShade.java",),
+     E("jank", keys="corner", trace="keys:corner", art="jank", why="the shade behind the top right, for bright "
+                                                                   "pictures")),
     ((JAVA + "GridScroller.java",), E("jank", keys="grid", trace="keys:grid", why="scrolling the grid")),
-    ((JAVA + "DockDecoration.java",), E("jank dock", keys="default dock", trace="dock", why="the dock's panel")),
+    ((JAVA + "DockDecoration.java",),
+     E("jank dock", keys="default dock", trace="dock", why="the dock's panel of glass", art="dock")),
     ((JAVA + "LiquidGlass.java",),
-     E("jank dock mem", keys="default corner", trace="dock",
-       why="Liquid Glass on the dock and the top right, redrawn when the shelf changes or the page scrolls")),
+     E("jank dock mem", keys="default corner", trace="dock", art="dock",
+       why="Liquid Glass on the dock and the top right, redrawn when the shelf changes or the page scrolls; and over "
+           "pictures (stand-in art)")),
     ((JAVA + "Rearranger.java",),
      E("jank", keys="default arrange", trace="keys:arrange", why="arranging apps; it also sees every focus change "
                                                                 "and key on a tile")),
@@ -102,8 +110,8 @@ FILE_RULES = [
      E(check="emulator", why="the Liquid Glass slider, on screen only while you choose: look at it on your "
                              "emulator (what it sets is LiquidGlass's)")),
     ((JAVA + "GlassTestArt.java",),
-     E(check="emulator", why="the stand-in art for measuring glass (--ez glass_test_art true); not in the "
-                             "launcher as it ships")),
+     E(check="emulator", art="dock", why="the stand-in art for measuring glass over pictures; not in the launcher "
+                                         "as it ships")),
     ((JAVA + "ClockDream.java", RES + "layout/dream_clock.xml"),
      E(check="emulator", trace="dream",
        why="the screensaver: no run scenario; trace it while it runs (`trace --action none`)")),
@@ -201,8 +209,8 @@ MEMBER_RULES = {
         (("focusTile", "focusTarget", "deferredFocus", "onTileKey"),
          E("warm jank", keys="grid", trace="keys", why="moving focus to a tile (also when Home comes "
                                                                "back)")),
-        (("setGlass", "applyGlassExtra", "showTestArt", "testArt", "PREF_GLASS", "EXTRA_GLASS"),
-         E("dock", trace="dock", why="the glass's look")),
+        (("setGlass", "applyGlassExtra", "PREF_GLASS", "EXTRA_GLASS"), E("dock", trace="dock", why="the glass's look")),
+        (("showTestArt", "testArt"), E(check="emulator", art="dock", why="stand-in art behind the glass")),
         (("showGlassSlider", "hideGlassSlider", "glassLabel", "glassPanel", "GLASS_PANEL_*"),
          E(check="emulator", why="the Liquid Glass slider: look at it on your emulator")),
         (("updateWifiLabel", "networkCallback", "minuteTick", "MINUTE_MS"),
@@ -898,14 +906,26 @@ def _dedupe(hits):
     return out
 
 
-def merge(effects):
-    scen = {s for e in effects for s in e.scenarios}
-    keys = {k for e in effects for k in e.keys}
+def _keys(keys):
+    keys = set(keys)
     if "grid" in keys:
         keys.discard("default")   # grid's keys make the default ones' moves too, along the dock and down the grid
+    return tuple(k for k in PRESETS if k in keys)
+
+
+def merge(effects):
+    scen = {s for e in effects for s in e.scenarios}
     check = max((e.check for e in effects), key=CHECKS.index, default="none")
     trace = " ".join(dict.fromkeys(t for e in effects for t in e.trace.split()))
-    return Effect(tuple(s for s in SCENARIOS if s in scen), tuple(k for k in PRESETS if k in keys), check, trace, "")
+    variants = collections.OrderedDict()
+    for e in effects:
+        for v, vs, vk in e.variants:
+            got = variants.setdefault(v, (set(), set()))
+            got[0].update(vs)
+            got[1].update(vk)
+    return Effect(tuple(s for s in SCENARIOS if s in scen), _keys(k for e in effects for k in e.keys), check, trace,
+                  "", tuple((v, tuple(s for s in SCENARIOS if s in vs), _keys(vk))
+                            for v, (vs, vk) in variants.items()))
 
 
 def build_plan(changes, planner=None, **meta):
@@ -925,15 +945,19 @@ def build_plan(changes, planner=None, **meta):
     plan = dict(meta)
     plan.update({
         "version": 1,
-        "tv": bool(total.scenarios) or total.check == "tv",
+        "tv": bool(total.scenarios or total.variants) or total.check == "tv",
         "check": "tv" if total.scenarios else total.check,
         "scenarios": list(total.scenarios),
         "keys": list(total.keys) if "jank" in total.scenarios else [],
         "traces": total.trace.split(),
+        # runs of their own, with perf.py run --variant: [{variant, scenarios, keys}]
+        "variants": [{"variant": v, "scenarios": list(vs), "keys": list(vk)} for v, vs, vk in total.variants],
         # why each scenario is in the plan ("": what needs none), and where: {scenario: [{why, where}]}
         "reasons": {s: [{"why": w, "where": where} for w, where in g.items()] for s, g in reasons.items()},
         "files": [{"path": h.path, "member": h.member, "scenarios": list(h.effect.scenarios),
-                   "keys": list(h.effect.keys), "check": h.effect.check, "why": h.why} for h in hits],
+                   "keys": list(h.effect.keys), "check": h.effect.check, "why": h.why,
+                   "variants": [{"variant": v, "scenarios": list(vs)} for v, vs, _ in h.effect.variants]}
+                  for h in hits],
     })
     return plan
 
@@ -1128,12 +1152,20 @@ def render(plan, n_keys=16, runs=10, rounds=3, verbose=False, command="python3 t
         for s in scen:
             for i, g in enumerate(groups(s)):
                 lines.append("  %-6s %s" % (s if i == 0 else "", g))
+    elif plan.get("variants"):
+        lines.append("Measure: nothing as the launcher ships.")
     else:
         lines.append({"none": "Nothing to measure or run: nothing here changes what the launcher does.",
                       "local": "Nothing to measure: the build and the unit tests cover it.",
                       "emulator": "Nothing to measure: no perf.py scenario covers what changed. Check it on your "
                                   "emulator.",
                       "tv": "Nothing perf.py measures, but it needs the TV (below)."}[plan["check"]])
+    for v in plan.get("variants", []):
+        lines.append("Also with --variant '%s': %s" % (v["variant"], ", ".join(
+            s + (" (keys: %s)" % ", ".join(v["keys"]) if s == "jank" and v["keys"] != ["default"] else "")
+            for s in v["scenarios"])))
+        where = [f for f in plan["files"] if any(x["variant"] == v["variant"] for x in f.get("variants", []))]
+        lines.append("  for %s" % ", ".join(dict.fromkeys(label(Hit(f["path"], f["member"], None, "")) for f in where)))
     quiet = groups("")
     if quiet:
         lines += ["", "Not measured:"] + ["  " + g for g in quiet]
@@ -1142,12 +1174,17 @@ def render(plan, n_keys=16, runs=10, rounds=3, verbose=False, command="python3 t
         lines.append("First: cd launcher && ./gradlew assembleDebug assembleRelease testDebugUnitTest")
     elif any(f.startswith("tools/") for f in files):
         lines.append("First: python3 -m unittest discover -s tools/tests")
-    if scen:
-        cmd = "--scenarios " + ",".join(scen)
-        if "jank" in scen and plan["keys"] != ["default"]:
-            cmd += " --keys " + ",".join(plan["keys"])
+    runs = ([("", scen, plan["keys"])] if scen else []) + [
+        (v["variant"], v["scenarios"], v["keys"]) for v in plan.get("variants", [])]
+    if runs:
         lines.append("Then on your emulator (with --quick), and once it looks right, on the TV:")
-        lines.append("  %s run --label <name> --scenarios auto      # = %s" % (command, cmd))
+    for variant, sc, keys in runs:
+        cmd = "--scenarios " + ",".join(sc)
+        if "jank" in sc and keys != ["default"]:
+            cmd += " --keys " + ",".join(keys)
+        var = " --variant '%s'" % variant if variant else ""
+        lines.append("  %s run --label <name>%s --scenarios auto%s      # = %s"
+                     % (command, "-art" if variant == ART else "-variant" if variant else "", var, cmd))
     traces = _trace_commands(plan, command)
     if traces:
         lines.append("If a number moves, or for what no scenario measures:")

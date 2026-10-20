@@ -379,6 +379,17 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(p["tv"])
         self.assertIn("--seconds 30", ps.render(p))
 
+    def test_variants(self):
+        p = plan_for(ps.Change(ps.JAVA + "GlassTestArt.java", "a\n", "b\n", [1], [1]))
+        self.assertPlan(p, [])
+        self.assertTrue(p["tv"])
+        self.assertEqual(p["variants"], [{"variant": ps.ART, "scenarios": ["dock"], "keys": []}])
+        self.assertIn("--scenarios auto --variant '%s'" % ps.ART, ps.render(p))
+        p = plan_for(ps.Change(ps.JAVA + "LiquidGlass.java", "a\n", "b\n", [1], [1]),
+                     ps.Change(ps.JAVA + "CornerShade.java", "a\n", "b\n", [1], [1]))
+        self.assertPlan(p, ["jank", "dock", "mem"], ["default", "corner"])
+        self.assertEqual(p["variants"], [{"variant": ps.ART, "scenarios": ["jank", "dock"], "keys": ["corner"]}])
+
     def test_plan_is_json(self):
         p = plan_for(ps.Change(ps.JAVA + "TopShelfView.java", "a\n", "b\n", [1], [1]))
         self.assertEqual(json.loads(json.dumps(p))["reasons"]["dock"][0]["where"], ["TopShelfView"])
@@ -519,6 +530,24 @@ class PerfWiringTests(unittest.TestCase):
             a = self.args("--scenarios", "auto", "--keys", "grid")
             perf.resolve_run_args(a, log=logs.append)
         self.assertEqual(a.keys, perf.KEY_PRESETS["grid"])
+
+    def test_scenarios_auto_with_a_variant(self):
+        fake = {"base": "origin/main", "head": "working tree", "merge_base": "abc", "scenarios": ["jank", "mem"],
+                "keys": ["corner"], "variants": [{"variant": ps.ART, "scenarios": ["dock"], "keys": []}]}
+        logs = []
+        with mock.patch.object(perf.perf_scope, "plan", return_value=fake):
+            a = self.args("--scenarios", "auto", "--variant", " --ez  glass_test_art true")
+            perf.resolve_run_args(a, log=logs.append)
+            self.assertEqual((a.scenarios, a.keys), ("dock", perf.DEFAULT_KEYS))
+            self.assertIn("also as it ships: jank,mem", logs[-1])
+            a = self.args("--scenarios", "auto")
+            perf.resolve_run_args(a, log=logs.append)
+            self.assertEqual(a.scenarios, "jank,mem")
+            self.assertIn("also --variant '%s': dock" % ps.ART, logs[-1])
+            a = self.args("--scenarios", "auto", "--variant", "--ei liquid_glass 50")
+            perf.resolve_run_args(a, log=logs.append)
+            self.assertEqual(a.scenarios, "jank,mem")
+            self.assertIn("no runs with --variant", logs[-2])
 
     def test_run_without_scenarios_does_not_connect(self):
         fake = {"base": "origin/main", "head": "working tree", "merge_base": "abc", "scenarios": [], "keys": []}

@@ -9,6 +9,9 @@ launcher/.gradle/
 launcher/build/
 launcher/app/build/
 launcher/local.properties
+# Android Studio's files: untracked files in launcher/ would mark every build's stamp dirty
+launcher/.idea/
+*.iml
 # your own TV's dumps (serial, android_id, device names) stay local
 backup/
 .DS_Store

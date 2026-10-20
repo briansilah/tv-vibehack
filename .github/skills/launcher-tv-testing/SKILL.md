@@ -61,16 +61,27 @@ never put emulator numbers in a pull request as TV numbers.
 - **Merge the latest `main` into your branch first, and measure once, at the end.** Numbers taken before a merge
   compare against a `main` that no longer exists: baselines taken before a big merge (the new transitions, #12)
   had to be thrown away.
-- **The baseline is `main` as it ships:** a release build compiled with `speed`, in its default configuration.
-  Don't measure retired variants (an older `main`, the old transitions, a branch build from before the merge).
-- **Measure a variant only when your change adds or changes it.** For example, `liquid_glass_blur=false` or
-  `--ez glass_test_art true` are for changes to the glass or the top shelf's art.
+- **The baseline is `main` as it ships:** a release build compiled with `speed`, in its default configuration,
+  with the TV's animation scales at 1. Don't measure retired variants (an older `main`, the old transitions, a
+  branch build from before the merge).
+- **Measure a variant only when your change adds or changes it,** with the same variant for `main` and yours: for
+  changes to the glass or the top shelf's art, `perf.py run --variant '--ez glass_test_art true'` (stand-in art) or
+  `--variant '--ei liquid_glass 50'`, or a build with `liquid_glass_blur=false`.
+- **Every build says what it is.** Gradle stamps each APK's `versionName` with its commit and `launcher/` tree
+  (`2.0+commit-<sha>.launcher-<tree>[.dirty]`). `perf.py run` records that, the animation scales and the
+  launcher's own configuration, and measures with `--ez default_config true`: `config.xml`'s Liquid Glass for that
+  process only, the TV owner's saved choice untouched. Never reset a TV with `--ei liquid_glass`: it overwrites
+  that choice.
+- **`perf.py compare` refuses comparisons that would mislead:** an unstamped build; a baseline whose `launcher/`
+  isn't `origin/main`'s (`git fetch` first), or that isn't release, `speed` and the shipped configuration; a branch
+  build without the baseline's `main` merged; A and B measured differently (device, build type, compiler filter,
+  background app, animation scales, options, configuration). Fix the cause and measure again; `--force` is only for
+  tables you won't present as a before/after. [docs/performance.md](../../../docs/performance.md#measure-the-main-that-ships)
+  has the full list.
 - **Use the same conditions for A and B:** the same TV, the same background app (`--other-app`), the same
-  `perf.py` options, and about a minute's wait after each install. `perf.py compare` warns when the devices,
-  background apps or build types differ. It doesn't warn when ART compiled them differently: both notes must say
-  `compiled speed`. To install an APK you built earlier (for example `main`'s, from a second worktree):
-  `adb install -r <apk>`, then `adb shell cmd package compile -m speed -f com.gathin.tvhome`, as
-  `launcher/build-and-install.sh` does.
+  `perf.py` options, and about a minute's wait after each install. To install an APK you built earlier (for
+  example `main`'s, from a second worktree): `adb install -r <apk>`, then
+  `adb shell cmd package compile -m speed -f com.gathin.tvhome`, as `launcher/build-and-install.sh` does.
 
 ## 3. Measure only what you changed
 
