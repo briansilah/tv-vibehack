@@ -283,8 +283,10 @@ python3 tools/top_shelf_image.py --remove                                     # 
 It keeps the part of the screen above the dock, paints over the time and profile picture from what's
 around them, scales it to the TV's 1920 pixels across and puts it on the TV (in the launcher's own
 storage, so clearing the launcher's storage removes it), then shows Home, which picks it up. The
-launcher draws it from the top of the screen, as tvOS does, and carries its bottom edge on behind
-the dock. A picture that's the art already goes up as it is with `--whole`; a line
+launcher draws it as tvOS does (measured with a test pattern in the tvOS Simulator): from the top of
+the screen down to where tvOS's dock starts, nothing drawn over it, its bottom edge carrying on behind
+the dock, mirrored and blurred. An app's own 2320 x 720 Top Shelf Image (Wide) goes up as it is with
+`--whole`, losing its sides as on tvOS; a line
 `package | https://...` in `top_shelf_images` fetches one from a URL instead, once. Until an app has
 its image, it shows its cover art. Up from it moves to **Open YouTube**.
 

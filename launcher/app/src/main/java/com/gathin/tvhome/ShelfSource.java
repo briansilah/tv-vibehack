@@ -1045,20 +1045,22 @@ final class ShelfSource {
         }
     }
 
-    /** A static image decoded no wider than the screen, in memory the CPU can read (placeImage draws it). */
+    /** A static image decoded no larger than it's drawn (placeImage), in memory the CPU can read. */
     private static Bitmap decodeImage(File f) throws IOException {
         if (Build.VERSION.SDK_INT >= 28) {
             return ImageDecoder.decodeBitmap(ImageDecoder.createSource(f), (decoder, info, src) -> {
                 int w = info.getSize().getWidth(), h = info.getSize().getHeight();
-                if (w > BACKDROP_W) decoder.setTargetSize(BACKDROP_W, Math.max(1, Math.round(h * BACKDROP_W / (float) w)));
+                float s = imageScale(w, h);
+                if (s < 1f) decoder.setTargetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
                 decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
             });
         }
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(f.getPath(), o);
+        float s = imageScale(o.outWidth, o.outHeight);
         int sample = 1;
-        while (o.outWidth / (sample * 2) >= BACKDROP_W) sample *= 2;
+        while (s * sample * 2 <= 1f) sample *= 2;
         o = new BitmapFactory.Options();
         o.inSampleSize = sample;
         Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
@@ -1066,33 +1068,40 @@ final class ShelfSource {
         return b;
     }
 
+    /** How much placeImage scales a w x h image. */
+    private static float imageScale(int w, int h) {
+        return w <= 0 || h <= 0 ? 1f : Math.max(BACKDROP_W / (float) w, BACKDROP_H * IMAGE_AREA / h);
+    }
+
+    /** On tvOS a static image fills the screen down to the dock's glass, 785 of its 1080 points (measured). */
+    static final float IMAGE_AREA = 785f / 1080f;
+
     /**
-     * A static image as the screen shows it, full width from the top, as on tvOS. One shorter than the screen (the
-     * part of a tvOS capture above its dock) carries on below as a blurred reflection of its bottom edge, which shows
-     * only through the dock's glass and under it. Then the covers' scrim, for the dock.
+     * A static image as tvOS shows it: from the top of the screen, scaled to fill the width and to reach the dock
+     * (a wider one, an app's 2320 x 720 Top Shelf Image Wide, loses its sides), with nothing drawn over it. Below
+     * that, behind the dock, its bottom edge carries on mirrored and blurred, as on tvOS.
      */
     static Bitmap placeImage(Bitmap src) {
         int sw = BACKDROP_W, sh = BACKDROP_H, w = src.getWidth(), h = src.getHeight();
         Bitmap out = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
         Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
-        float s = sw / (float) w;
-        int top = Math.round(h * s);
-        if (top >= sh) {
-            // As tall as the screen, or taller: its middle.
-            int y = Math.round((h - sh / s) / 2f);
-            c.drawBitmap(src, new android.graphics.Rect(0, y, w, Math.min(h, y + Math.round(sh / s))),
-                    new android.graphics.Rect(0, 0, sw, sh), p);
-        } else {
-            c.drawBitmap(src, null, new android.graphics.Rect(0, 0, sw, top), p);
-            // The bottom of the image, as tall as what's left of the screen, flipped and shrunk to a sixteenth in
-            // halves (each a 2 x 2 average), then drawn back up to size: a soft blur.
+        float s = imageScale(w, h);
+        // The part of the image across the screen, in its own pixels.
+        int vw = Math.min(w, Math.round(sw / s)), vx = (w - vw) / 2;
+        int top = Math.min(sh, Math.round(h * s));
+        c.drawBitmap(src, new android.graphics.Rect(vx, 0, vx + vw, Math.min(h, Math.round(top / s))),
+                new android.graphics.Rect(0, 0, sw, top), p);
+        if (top < sh) {
+            // The image's bottom, as tall as what's left of the screen, flipped and shrunk to a sixteenth in halves
+            // (each a 2 x 2 average), then drawn back up to size: a soft blur.
             int rest = sh - top, strip = Math.max(1, Math.min(h, Math.round(rest / s)));
             int bw = Math.max(1, sw / 2), bh = Math.max(1, rest / 2);
             Bitmap small = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
             Canvas sc = new Canvas(small);
             sc.scale(1f, -1f, 0f, bh / 2f);
-            sc.drawBitmap(src, new android.graphics.Rect(0, h - strip, w, h), new android.graphics.Rect(0, 0, bw, bh), p);
+            sc.drawBitmap(src, new android.graphics.Rect(vx, h - strip, vx + vw, h),
+                    new android.graphics.Rect(0, 0, bw, bh), p);
             for (int i = 0; i < 3 && bw > 1 && bh > 1; i++) {
                 Bitmap half = Bitmap.createScaledBitmap(small, Math.max(1, bw / 2), Math.max(1, bh / 2), true);
                 small.recycle();
@@ -1104,7 +1113,6 @@ final class ShelfSource {
             small.recycle();
         }
         src.recycle();
-        scrim(c, sw, sh, 0.55f, false);
         return out;
     }
 

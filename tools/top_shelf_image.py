@@ -15,13 +15,14 @@ then in Preview File > New from Clipboard).
     python3 tools/top_shelf_image.py Screenshot.png                  YouTube's image, onto the TV
     python3 tools/top_shelf_image.py Screenshot.png --package PKG    another app's (list it in top_shelf_images)
     python3 tools/top_shelf_image.py Screenshot.png --out shelf.jpg  only write the image, for a look first
-    python3 tools/top_shelf_image.py art.png --whole                 a picture that's the art already: not cropped
+    python3 tools/top_shelf_image.py art.png --whole                 a picture that's the art already (an app's
+                                                                     Top Shelf Image Wide): cut to tvOS's view only
     python3 tools/top_shelf_image.py --remove                        the app goes back to its cover art
 
 From a screenshot it keeps the part above the dock, paints over the time and profile picture in the top right from
 what's around them, and scales it to the width of the TV's screen (1920 pixels). The launcher draws it from the top
-of the screen, as tvOS does, carrying its bottom edge on behind the dock. Then this shows Home again, which picks the
-image up.
+of the screen, as tvOS does, carrying its bottom edge on behind the dock, mirrored and blurred. Then this shows Home
+again, which picks the image up.
 
 Connects to the TV as tools/tv.py does. Needs Pillow: pip install -r tools/requirements.txt.
 """
@@ -47,10 +48,13 @@ TYPES = (".jpg", ".png", ".webp")
 # The launcher draws the top shelf at the screen's size: Android TV draws apps at 1920 x 1080, even on a 4K panel.
 WIDTH = 1920
 
-# tvOS 26's home screen with focus on the top row, as fractions of the screen (1920 x 1080 points). The dock's glass
-# starts at 785 points: keep what's above it, with a margin for its rim. The time and profile picture sit at
-# 1690-1870 x 50-110 points: paint them over, with a margin for their shadow.
-SHELF_BOTTOM = 0.715
+# tvOS's home screen with focus on the top row, as fractions of the screen (1920 x 1080 points), measured with a
+# test pattern in the tvOS 27 Simulator. An app's Top Shelf Image (Wide), 2320 x 720, is scaled to reach the dock's
+# glass at 785 points (x 1.09) and centred, so the middle 1761 x 720 of it shows, from the top of the screen; behind
+# the dock its bottom edge carries on, mirrored and blurred. Keep what's above the glass, with a margin for its rim.
+# The time and profile picture sit at 1690-1870 x 50-110 points: paint them over, with a margin for their shadow.
+SHELF_BOTTOM = 780 / 1080
+SHELF_ASPECT = 1920 / 785
 CLOCK = (0.868, 0.033, 0.986, 0.118)
 # Captures within this of 16:9 (a QuickTime frame may be a few pixels off).
 ASPECT_SLACK = 0.02
@@ -109,13 +113,17 @@ def patch(img, rect):
 
 def make(img, whole=False, width=WIDTH):
     """The top shelf image from an Apple TV screenshot (or, whole, from a picture that's the art already), no wider
-    than width."""
+    than width. A picture wider than the space above tvOS's dock (an app's Top Shelf Image Wide) loses its sides as
+    on tvOS."""
     Image, _ = _pil()
     img = img.convert("RGB")
     if not whole:
         check_capture(img.size)
         img = patch(img, box(img.size, CLOCK))
         img = img.crop(box(img.size, (0, 0, 1, SHELF_BOTTOM)))
+    elif img.width > img.height * SHELF_ASPECT:
+        w = round(img.height * SHELF_ASPECT)
+        img = img.crop(((img.width - w) // 2, 0, (img.width - w) // 2 + w, img.height))
     if img.width > width:
         img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
     return img

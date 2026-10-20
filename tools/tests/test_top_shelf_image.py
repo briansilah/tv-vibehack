@@ -65,11 +65,21 @@ class CropTests(unittest.TestCase):
     def test_a_1080p_capture_is_kept_at_its_size(self):
         self.assertEqual(tsi.make(capture(1920, 1080)).size, (1920, round(1080 * tsi.SHELF_BOTTOM)))
 
+    def test_a_wide_top_shelf_image_shows_its_middle_as_on_tvos(self):
+        img = Image.new("RGB", (2320, 720), (255, 0, 0))
+        ImageDraw.Draw(img).rectangle([280, 0, 2040, 719], fill=(0, 0, 255))
+        out = tsi.make(img, whole=True)
+        # @1x: not scaled up here (the launcher draws it at the screen's width).
+        self.assertEqual(out.size, (1761, 720))
+        px = out.load()
+        for x in (2, out.width // 2, out.width - 3):
+            self.assertTrue(close(px[x, out.height // 2], (0, 0, 255), 40), (x, px[x, out.height // 2]))
+
     def test_a_cropped_picture_needs_whole(self):
         with self.assertRaisesRegex(ValueError, "--whole"):
             tsi.make(Image.new("RGB", (2320, 720)))
-        # tvOS's own wide Top Shelf image, as it is: only scaled to the screen's width.
-        self.assertEqual(tsi.make(Image.new("RGB", (4640, 1440)), whole=True).size, (1920, 596))
+        # An app's Top Shelf Image Wide loses its sides as on tvOS: the middle 1761 x 720 of 2320 x 720.
+        self.assertEqual(tsi.make(Image.new("RGB", (4640, 1440)), whole=True).size, (1920, 785))
         self.assertEqual(tsi.make(Image.new("RGB", (1280, 720)), whole=True).size, (1280, 720))
 
     def test_a_quicktime_frame_a_few_pixels_off_is_fine(self):
