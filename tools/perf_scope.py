@@ -123,6 +123,9 @@ FILE_RULES = [
     ((JAVA + "TopShelfView.java", JAVA + "ShelfSource.java", JAVA + "ShelfFeeds.java", JAVA + "ShelfInfoView.java",
       JAVA + "CoverArt.java", JAVA + "AmbientColor.java"),
      E("dock mem", trace="dock", why="the top shelf: its art, glow and pictures")),
+    ((JAVA + "ShelfOrder.java",),
+     E("dock mem", trace="dock", why="the top shelf: which title shows next, and which pictures stay decoded "
+                                     "(plain logic with JVM tests)")),
     # Resources.
     ((RES + "values/config.xml",), E("*", why="the launcher's configuration")),   # MEMBER_RULES go finer
     ((RES + "layout/activity_main.xml", RES + "values/styles.xml"),     # MEMBER_RULES go finer
