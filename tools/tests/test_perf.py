@@ -368,9 +368,10 @@ class EndToEndTests(unittest.TestCase):
         # the TV is left as it was: logging switched off again and back on Home
         self.assertIn("setprop log.tag.TvHomePerf DEBUG", tv.commands)
         self.assertEqual(tv.commands[-2:], ["setprop log.tag.TvHomePerf ''", perf.HOME_INTENT])
-        # the jank loop presses the 16 default keys
+        # jank: to the first dock app first, then the 16 default keys each round
         loops = [c for c in tv.commands if c.startswith("for k in")]
-        self.assertEqual(len(loops[0].split(";")[0].split()) - 3, 16)
+        self.assertEqual(loops[0], perf.key_loop(perf.TO_FIRST_DOCK_APP, 0.15))
+        self.assertEqual(len(loops[1].split(";")[0].split()) - 3, 16)
         self.assertEqual(sum(c == perf.key_loop(perf.DEFAULT_KEYS, 0.35) for c in loops), 2)
         # dock: to the first dock app, a warm-up, then 8 moves alternating between the first two apps per round
         self.assertIn(perf.key_loop(perf.TO_FIRST_DOCK_APP, 0.15), loops)

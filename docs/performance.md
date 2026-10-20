@@ -11,7 +11,8 @@ sends no telemetry (CONTRIBUTING.md); its only network use is the top shelf's pi
 
 | | What it gives you |
 |---|---|
-| `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank, dock moves (top shelf latency) and memory, each repeated, saved as JSON with medians. |
+| `tools/perf.py plan` | Which scenarios, D-pad keys and traces your branch's diff needs, and why ([below](#measure-only-what-you-changed)). No TV needed. |
+| `tools/perf.py run` | Cold start, Home (warm start), D-pad frame jank, dock moves (top shelf latency) and memory, each repeated, saved as JSON with medians. `--scenarios auto` runs only what `plan` picks. |
 | `tools/perf.py compare` | A Markdown before/after table for a pull request. |
 | `tools/perf.py trace` | A [Perfetto](https://perfetto.dev) trace of a cold start, a Home press, D-pad moves, or moves between two dock apps. |
 | `tools/perf.py summarize` | The slowest slices on the launcher's main thread and RenderThread in a trace, its `tvhome:*` sections that span frames, its frames by jank type, and how long keys took to reach it. |
@@ -64,10 +65,59 @@ the keys that reached the launcher by input source (`0x301` is the remote's D-pa
 the key reached the TV until the launcher's main thread took it, and the time `HomeButtonService.onKeyEvent`
 took in the `:home` process (Android 12+).
 
-`run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem`,
-`--runs` (cold/warm repeats, default 10), `--rounds` (jank rounds, default 3), `--keys` (the D-pad
-sequence), `--dock-moves` and `--dock-interval` (the dock scenario), `--via-home` (warm start through
-the HOME intent, like pressing Home), `--other-app` (see below).
+`run` takes about 4 minutes with the defaults. Options: `--scenarios cold,warm,jank,dock,mem` (or `auto`,
+below), `--runs` (cold/warm repeats, default 10), `--rounds` (jank rounds, default 3), `--quick` (5 and 2),
+`--keys` (the D-pad sequence, or presets, below), `--dock-moves` and `--dock-interval` (the dock scenario),
+`--via-home` (warm start through the HOME intent, like pressing Home), `--other-app` (see below).
+
+### Measure only what you changed
+
+Each scenario costs TV time: with the defaults about 70 s for `cold`, 40 s for `warm`, 30 s for `jank`, a minute
+for `dock` and 10 s for `mem`, for each build. `perf.py plan` reads your branch's diff against `origin/main`
+(commits, uncommitted changes and new files) and says which scenarios, D-pad keys and traces it needs, and why.
+`run --scenarios auto` runs just those. `plan` itself needs no TV.
+
+```bash
+python3 tools/perf.py plan                                   # -v: every reason; --json: for scripts
+python3 tools/perf.py plan --base 9a18332 --head 826f811     # any two commits
+python3 tools/perf.py run --label fix --scenarios auto --quick    # on your emulator
+python3 tools/perf.py run --label fix --scenarios auto            # on the TV, for the pull request
+```
+
+How it decides. The map is `tools/perf_scope.py`, tested in `tools/tests/test_perf_scope.py`:
+
+- **By file**: docs need nothing, the tools need their tests, and the build, ProGuard rules and dependencies need
+  everything. Each class and resource gets the scenarios that run its code: `ProfileCorner` gets `jank` with the
+  corner keys, `TopShelfView` gets `dock` and `mem`.
+- **By member**, in the files that touch most of the launcher (`MainActivity`, `AppAdapter`, `TopShelf`,
+  `activity_main.xml`, `styles.xml`, `config.xml`, the manifest): the method, field, view, style or resource the
+  changed lines are in. `showHero` gets `dock`; `onResume` gets `cold` and `warm`. `onCreate` sets up everything,
+  so it goes statement by statement, by what each one names: `corner.setBar(topBar)` gets `cold` and `mem`, plus
+  the corner's `jank`.
+- Comments, blank lines and imports count for nothing.
+- **Code without a rule** (a new class, a private helper, a new drawable or style) gets what the code that uses it
+  gets. Where nothing uses it, or a statement names nothing it knows, the plan falls back to everything: a missed
+  regression costs more than an extra minute.
+- **What no scenario measures** gets a note instead: the screensaver (a trace while it runs), opening an app (a
+  trace of Select on a tile), `HomeButtonService` (the TV and its remote: `warm` doesn't go through it, and it's
+  off on an emulator), menus and sheets (look at them on your emulator).
+
+An explicit `--scenarios` or `--keys` overrides the plan; `plan` prints the command, ready to edit. When the map is
+wrong, fix `tools/perf_scope.py` and its tests.
+
+**D-pad key presets**, for `jank` and `trace --action keys`: `--keys corner`, or several in turn,
+`--keys grid,corner`. Each starts and ends on the first dock app, and `jank` moves focus there before it starts.
+
+| Preset | Keys |
+|---|---|
+| `default` | along the dock and into the first two grid rows (16 keys) |
+| `grid` | three rows down the grid and back, scrolling the page (needs 16 apps) |
+| `dock` | along the dock and back, twice, at D-pad speed |
+| `corner` | up into the top right (through the top shelf's button when it shows one), along its buttons, Back to the dock; twice |
+| `arrange` | down to the Arrange apps tile (32 apps at most), pick up the first app and move it, then Back, Back, which puts it back without saving. On a shared TV never end with Select: putting an app down saves the order. |
+
+On an emulator `--quick` (5 cold and warm starts, 2 rounds) is enough to see which way a number moves. Use the
+defaults on the TV, for the pull request's table.
 
 **Right after an install** the first warm (Home) numbers can come out up to about 10 ms slower; on the TCL TV a
 second `run --scenarios warm --runs 15` of the same build matched the build before. Re-run when a Home
@@ -91,7 +141,7 @@ for A and B.
 |---|---|---|
 | cold | Open another TV app, `am kill` the launcher, `am start -W` it | `TotalTime` (system: until the first frame); fully drawn (until focus is on a tile, via `reportFullyDrawn`); app-side `create`, `resume`, `reload` |
 | warm | Open another TV app, start the launcher again (or the HOME intent) | `TotalTime`; `focus_restored` = from `onResume` until the first frame with focus back on a tile, i.e. when Home is usable; `resume`; `reload` split into the package query and loading banners/icons/labels; frames drawn until Home settles (animations replayed on return; where the system fades Home in, as on Google TV, Home's 900 ms fall back into place draws about 55, see [transitions.md](transitions.md)) |
-| jank | `dumpsys gfxinfo reset`, 16 D-pad moves 0.35 s apart, `dumpsys gfxinfo` | janky frames %, frame-time percentiles, slow UI thread and high input latency counts |
+| jank | Focus to the first dock app, `dumpsys gfxinfo reset`, 16 D-pad moves 0.35 s apart (or a preset's, `--keys`), `dumpsys gfxinfo` | janky frames %, frame-time percentiles, slow UI thread and high input latency counts |
 | dock | Focus on the first dock app, then Right/Left between the first two dock apps, one press every 1.2 s, 8 per round | `shelf`: from the focus change until the top shelf shows the new app, split into the name (`text`; when the art shows its own title, until the name has gone), the glow colour (`glow`) and the art (`art`: its cross-fade, or 0 when there's none ready); janky frames and frame percentiles of those moves |
 | mem | `dumpsys meminfo` on Home after the other scenarios | PSS total, Java heap, native heap (bitmaps live here), graphics, view count |
 
