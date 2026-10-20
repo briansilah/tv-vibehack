@@ -364,6 +364,98 @@ class FakeTv:
         pass
 
 
+class FakeEmulator(FakeTv):
+    """An Android 14 emulator: ART compiles the default Home app `verify` whatever `-m speed` asks."""
+
+    def __init__(self, home="com.gathin.tvhome/.MainActivity", stock=True, **kw):
+        super().__init__(debuggable=False, **kw)
+        self.home = home
+        self.stock = stock
+
+    def compile_as_home_allows(self):
+        filt = "verify" if self.home.startswith(perf.PKG + "/") else "speed"
+        self.package = re.sub(r"status=[\w-]+", "status=" + filt, self.package)
+
+    def shell(self, cmd, timeout=120):
+        if cmd.startswith("getprop ro.kernel.qemu"):
+            self.commands.append(cmd)
+            return "1\n"
+        if cmd.startswith("cmd role get-role-holders android.app.role.HOME"):
+            self.commands.append(cmd)
+            return self.home.split("/")[0] + "\n"
+        if cmd.startswith("cmd package resolve-activity"):
+            self.commands.append(cmd)
+            return "priority=2 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\n" \
+                   "com.google.android.tvlauncher/.MainActivity\n"   # as on the emulator: not the role holder
+        if cmd.startswith("cmd package query-activities") and "category.HOME" in cmd:
+            self.commands.append(cmd)
+            stock = ("  Activity #1:\n    com.google.android.tvlauncher/.MainActivity\n" if self.stock else "")
+            return ("  Activity #0:\n    com.android.tv.settings/.system.FallbackHome\n" + stock +
+                    "  Activity #2:\n    com.gathin.tvhome/.MainActivity\n")
+        if cmd.startswith("cmd package set-home-activity"):
+            self.commands.append(cmd)
+            self.home = cmd.split()[-1]
+            return "Success\n"
+        if cmd.startswith("cmd package compile"):
+            self.commands.append(cmd)
+            self.compile_as_home_allows()
+            return "compiled\n"
+        return super().shell(cmd, timeout)
+
+
+class EmulatorSpeedTests(unittest.TestCase):
+    def test_a_real_tv_is_left_alone(self):
+        tv = FakeTv(debuggable=False)   # compiled verify, but not an emulator
+        self.assertFalse(perf.emulator_speed(tv, lambda m: None))
+        self.assertFalse(any("set-home-activity" in c or "compile" in c for c in tv.commands))
+
+    def test_launcher_as_home_gives_home_back_and_compiles_speed(self):
+        emu = FakeEmulator()
+        emu.compile_as_home_allows()
+        logs = []
+        self.assertTrue(perf.emulator_speed(emu, logs.append))
+        self.assertEqual(emu.home, "com.google.android.tvlauncher/.MainActivity")   # not Settings' FallbackHome
+        self.assertEqual(perf.parse_package(emu.package)["compiler_filter"], "speed")
+        self.assertIn("is Home again", logs[0])
+
+    def test_already_speed_does_nothing(self):
+        emu = FakeEmulator(home="com.google.android.tvlauncher/.MainActivity")
+        emu.compile_as_home_allows()
+        self.assertFalse(perf.emulator_speed(emu, lambda m: None))
+        self.assertFalse(any(c.startswith("cmd package") for c in emu.commands))
+
+    def test_home_package_falls_back_to_resolve_activity(self):
+        tv = FakeTv()   # no `cmd role` answer, as on Android 9
+        tv.shell = lambda cmd, timeout=120: ("com.example.home/.Home\n" if "resolve-activity" in cmd
+                                             else "Unknown command: role\n")
+        self.assertEqual(perf.home_package(tv), "com.example.home")
+
+    def test_via_home_keeps_the_launcher_as_home(self):
+        emu = FakeEmulator()
+        emu.compile_as_home_allows()
+        logs = []
+        self.assertFalse(perf.emulator_speed(emu, logs.append, keep_home=True))
+        self.assertEqual(emu.home, "com.gathin.tvhome/.MainActivity")
+        self.assertIn("measure main the same way", logs[0])
+
+    def test_no_stock_launcher_only_notes(self):
+        emu = FakeEmulator(stock=False)
+        emu.compile_as_home_allows()
+        logs = []
+        self.assertFalse(perf.emulator_speed(emu, logs.append))
+        self.assertEqual(emu.home, "com.gathin.tvhome/.MainActivity")
+        self.assertIn("only Home app", logs[0])
+
+    def test_run_records_the_speed_build(self):
+        emu = FakeEmulator()
+        emu.compile_as_home_allows()
+        out = os.path.join(tempfile.mkdtemp(), "r.json")
+        with mock.patch.object(perf.time, "sleep", lambda s: None), mock.patch("builtins.print"):
+            perf.main(["run", "--label", "x", "--scenarios", "mem", "--out", out], shell=emu, log=lambda m: None)
+        with open(out) as f:
+            self.assertEqual(json.load(f)["build"]["compiler_filter"], "speed")
+
+
 class EndToEndTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
