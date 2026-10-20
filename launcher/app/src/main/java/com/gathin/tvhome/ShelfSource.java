@@ -555,16 +555,17 @@ final class ShelfSource {
     void pin(Collection<String> urls) {
         pins.clear();
         pins.addAll(urls);
+        // The new pins out of the cache first: the ones let go, put back into it, could push them out.
+        for (String u : pins) {
+            Bitmap b = bitmaps.remove(u);
+            if (b != null) pinned.put(u, b);
+        }
         java.util.Iterator<Map.Entry<String, Bitmap>> it = pinned.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, Bitmap> e = it.next();
             if (pins.contains(e.getKey())) continue;
             bitmaps.put(e.getKey(), e.getValue());
             it.remove();
-        }
-        for (String u : pins) {
-            Bitmap b = bitmaps.remove(u);
-            if (b != null) pinned.put(u, b);
         }
     }
 

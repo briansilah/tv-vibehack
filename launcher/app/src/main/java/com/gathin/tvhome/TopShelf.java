@@ -560,9 +560,12 @@ final class TopShelf implements ShelfSource.Listener {
         }
     }
 
-    /** Starts loading what the app's best art needs; it fades in if focus is still there. */
+    /**
+     * Starts loading what the app's best art needs; it fades in if focus is still there. Not while Home is hidden:
+     * resume does it again.
+     */
     private void want(final ShelfSource.App app) {
-        if (source == null || !started) return;
+        if (source == null || !started || !resumed) return;
         source.makeCover(app, c -> arrived(app));
         if (titles != null && at >= 0) loadItem(titles.get(at), () -> arrived(app));
         keep();
@@ -603,20 +606,25 @@ final class TopShelf implements ShelfSource.Listener {
         if (c.tier == CONTENT) logTitle("arrived", moveSince, app.pkg, titles, at, moveDir);
     }
 
-    /** Decodes what each dock app shows when focus comes to it, so moving along the dock shows it at once. */
+    /**
+     * Decodes what each dock app shows when focus comes to it, so moving along the dock shows it at once. With Home
+     * back, the title the shelf is at too: it may have been dropped while Home was hidden, before it showed.
+     */
     private void preloadDock() {
         if (source == null || !started) return;
-        keep();
+        if (shown && current != null) want(current);
+        else keep();
         for (ShelfSource.App a : dock) source.makeCover(a, null);
     }
 
     /**
      * Keeps decoded what may show next, and decodes it now, nearest first (see ShelfOrder.keep): each dock app's
      * first title, the one focus coming to it shows; and on the focused app, the title showing and the ones next
-     * to it. Everything else may drop out of memory. A title whose picture can't be had hands its place on.
+     * to it. Everything else may drop out of memory. A title whose picture can't be had hands its place on. Not
+     * while Home is hidden: memory is another app's then, and resume does it again.
      */
     private void keep() {
-        if (source == null || !started) return;
+        if (source == null || !started || !resumed) return;
         List<List<ShelfFeeds.Item>> lists = new ArrayList<>(dock.size());
         for (ShelfSource.App a : dock) lists.add(source.items(a.pkg));
         boolean focused = shown && current != null;
@@ -728,7 +736,13 @@ final class TopShelf implements ShelfSource.Listener {
         if (!shown || !resumed || current == null || tier != CONTENT || source == null || titles == null || at < 0) {
             return;
         }
-        if (!ShelfOrder.same(titles.get(at), showingItem)) return;
+        if (!ShelfOrder.same(titles.get(at), showingItem)) {
+            // The title it moved to is still on its way (or was dropped while Home was hidden): it slides in when
+            // it arrives.
+            final ShelfSource.App app = current;
+            loadItem(titles.get(at), () -> arrived(app));
+            return;
+        }
         int to = ShelfOrder.step(titles, at, 1, failed);
         if (to >= 0) move(to, 1, "carousel");
     }
