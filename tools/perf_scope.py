@@ -102,7 +102,7 @@ FILE_RULES = [
      E("jank dock mem", keys="default corner", trace="dock", art="dock",
        why="Liquid Glass on the dock and the top right, redrawn when the shelf changes or the page scrolls; and over "
            "pictures (stand-in art)")),
-    ((JAVA + "Rearranger.java",),
+    ((JAVA + "Rearranger.java",),   # MEMBER_RULES go finer
      E("jank", keys="default arrange", trace="keys:arrange", why="arranging apps; it also sees every focus change "
                                                                 "and key on a tile")),
     ((JAVA + "MoveMarks.java",), E("jank", keys="arrange", trace="keys:arrange", why="the marks on an app being "
@@ -245,6 +245,14 @@ MEMBER_RULES = {
         (("labelAt", "bannerAt", "iconAt", "dockApps", "copy"), E("dock mem", trace="dock", why="the dock apps")),
         (("contains",), E(check="emulator", why="TV apps changing")),
         (("TileListener*",), E("*", why="how tiles talk to MainActivity")),
+    ],
+    JAVA + "Rearranger.java": [
+        (("showActions", "showActions>*", "addAction", "addAction>*", "sheet", "glassAction", "setGlassAction"),
+         E(check="emulator", why="an app's actions (OK held): look at them on your emulator")),
+        (("moveAcrossDock",), E("jank", keys="arrange", trace="keys:arrange", why="moving an app into or out of "
+                                                                                "the dock")),
+        (("onTileFocused", "onKey", "isActive"),
+         E("jank", keys="default arrange", trace="keys:arrange", why="every focus change and key on a tile")),
     ],
     JAVA + "TopShelf.java": [
         (("resume", "pause", "appsChanged", "setDock"),
