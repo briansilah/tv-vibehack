@@ -40,6 +40,8 @@ DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
   `tools/tv.py --pull /sdcard/s.png s.png`. Include a screenshot in your pull request.
 - For performance changes, include a before/after table from `tools/perf.py compare`, measured on
   the same TV ([docs/performance.md](docs/performance.md)).
+- Coding agents: [.github/skills/launcher-tv-testing](.github/skills/launcher-tv-testing/SKILL.md) says which
+  checks a change needs and how to spend as little time on the TV as possible.
 
 Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
