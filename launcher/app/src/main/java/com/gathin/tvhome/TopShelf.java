@@ -731,9 +731,9 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return;
         if (shown && current != null) want(current);
         else keep();
-        // Artworks are full-screen pictures: keep() decodes only those that may show next.
+        // Artworks are full-screen pictures: keep() decodes only those that may show next. Static images as before.
         for (ShelfSource.App a : dock) {
-            if (!source.artworkWanted(a.pkg)) source.makeCover(a, null);
+            if (source.preloads(a)) source.makeCover(a, null);
         }
     }
 

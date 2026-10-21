@@ -193,6 +193,8 @@ final class ShelfSource {
     private int coverGen;
     /** Whether each cover was made for an app that may show its artwork (see {@link #artworkWanted}). */
     private final Map<String, Boolean> coverForArt = new HashMap<>();
+    /** Which artworks are kept decoded, and which apps' static images are made with the dock. */
+    private final ShelfArtKeep artKeep = new ShelfArtKeep();
     /**
      * The titles saved and published on the TV have been read once: until then, which apps have none isn't known, so
      * covers of apps with artwork wait ({@link #deferred}).
@@ -320,6 +322,7 @@ final class ShelfSource {
             if (!AppOrder.packageOf(key).equals(pkg)) continue;
             it.remove();
             madeFor.remove(key);
+            artKeep.forget(key);
         }
         if (choices.get(pkg).suggests() && feeds.containsKey(pkg)) lastFetch = 0;
     }
@@ -329,6 +332,7 @@ final class ShelfSource {
         combined.clear();
         covers.clear();
         madeFor.clear();
+        artKeep.forgetAll();
         lastFetch = 0;
     }
 
@@ -385,7 +389,7 @@ final class ShelfSource {
             deferred.clear();
             for (Deferred d : waiting) {
                 // Artworks only for those asked for by name: the dock's others are decoded as they may show.
-                if (d.done != null || !artworkWanted(d.app.pkg)) makeCover(d.app, d.done);
+                if (d.done != null || preloads(d.app)) makeCover(d.app, d.done);
             }
             listener.onTitlesRead();
         }));
@@ -991,12 +995,19 @@ final class ShelfSource {
     }
 
     /**
-     * Whether the app's cover may be its artwork: it has one, its choice allows it, and it has no titles to show.
-     * An app showing titles falls back on its cover art while one loads, as before: a full-screen artwork decoded for
-     * each dock app (8 MB a picture) would be memory spent on what hardly shows.
+     * Whether the app's cover may be its artwork: it has one, its choice allows it, and, with suggestions, it has no
+     * titles to show (known once they're read). An app showing titles falls back on its cover art while one loads, as
+     * before: a full-screen artwork decoded for each dock app (8 MB a picture) would be memory spent on what hardly
+     * shows.
      */
     boolean artworkWanted(String pkg) {
-        return titlesRead && ShelfArt.has(pkg) && choices.get(pkg).triesArtwork() && items(pkg) == null;
+        ShelfChoice c = choices.get(pkg);
+        return ShelfArt.has(pkg) && c.triesArtwork() && (!c.suggests() || (titlesRead && items(pkg) == null));
+    }
+
+    /** Whether a dock app's cover is made with the dock, ahead of focus: see {@link ShelfArtKeep#preload}. */
+    boolean preloads(App app) {
+        return artKeep.preload(app.key, artworkWanted(app.pkg), choices.get(app.pkg).kind == ShelfChoice.Kind.IMAGE);
     }
 
     /**
@@ -1004,7 +1015,7 @@ final class ShelfSource {
      * for the glow), made for whether it has titles now. {@code done} gets it (null on failure, or for the glow).
      */
     void makeCover(final App app, final Done<Cover> done) {
-        if (!titlesRead && ShelfArt.has(app.pkg)) {
+        if (!titlesRead && ShelfArt.has(app.pkg) && choices.get(app.pkg).suggests()) {
             deferred.add(new Deferred(app, done));
             return;
         }
@@ -1050,7 +1061,9 @@ final class ShelfSource {
                 }
                 // Not kept if the apps changed meanwhile (forgetCovers): it may be from an old banner.
                 boolean keep = gen == coverGen;
-                if (result != null && keep) {
+                if (result != null && keep) artKeep.made(app.key, result.image);
+                // An artwork that may no longer show (focus moved on, Home went away) isn't kept.
+                if (result != null && keep && artKeep.store(app.key, result.artwork)) {
                     covers.put(app.key, result);
                     madeFor.put(app.key, choice);
                     coverForArt.put(app.key, art);
@@ -1126,20 +1139,22 @@ final class ShelfSource {
             int w = BACKDROP_W, h = BACKDROP_H;
             File f = artworkFile(key, w, h);
             Bitmap art = null;
+            long start = Perf.now();
             if (f.isFile()) {
                 try {
                     art = decodeArtwork(f);
+                    Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " from=cache");
                 } catch (IOException e) {
                     //noinspection ResultOfMethodCallIgnored
                     f.delete();
                 }
             }
             if (art == null) {
-                long start = Perf.now();
+                start = Perf.now();
                 int[] px = ShelfArt.render(app.pkg, w, h);
                 if (px == null) return null;
                 art = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888);
-                Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " size=" + w + "x" + h);
+                Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " from=paint size=" + w + "x" + h);
                 saveArtwork(art, f, key);
             }
             // Its logo: the vector one, if it's on the TV, is drawn over this in buildCover; else the banner's.
@@ -1244,6 +1259,7 @@ final class ShelfSource {
                         return;   // apps or the choice changed meanwhile
                     }
                     covers.put(app.key, new Cover(made.backdrop, null, true, stamp));
+                    artKeep.made(app.key, true);
                     listener.onCover(app.key);
                 });
             });
@@ -1301,14 +1317,16 @@ final class ShelfSource {
                     return;
                 }
                 boolean fresh = gen == coverGen;
-                if (result != null && fresh) {
+                if (result != null && fresh) artKeep.made(key, result.image);
+                boolean stored = result != null && fresh && artKeep.store(key, result.artwork);
+                if (stored) {
                     // Dropped meanwhile (choiceChanged, the choice back as it was): it's the cover all the same.
                     covers.put(key, result);
                     madeFor.put(key, choice);
                     coverForArt.put(key, art);
                 }
                 for (Done<Cover> d : waiters) d.done(cover(key));
-                if (result != null && fresh) listener.onCover(key);
+                if (stored) listener.onCover(key);
             });
         });
     }
@@ -1492,6 +1510,7 @@ final class ShelfSource {
         coverGen++;
         coverForArt.clear();
         deferred.clear();
+        artKeep.forgetAll();
     }
 
     /**
@@ -1499,6 +1518,7 @@ final class ShelfSource {
      * others are full-screen pictures, read back from the TV's copy when wanted again.
      */
     void keepArtwork(Collection<String> keys) {
+        artKeep.keep(keys);
         Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, Cover> e = it.next();
@@ -1637,7 +1657,9 @@ final class ShelfSource {
             if (!keep.contains(e.getValue())) bitmaps.remove(e.getKey());
         }
         pinned.values().removeIf(b -> !keep.contains(b));
-        // Static images and artworks are full-screen pictures too: made again from the TV's copy when Home shows.
+        // Static images and artworks are full-screen pictures too: made again from the TV's copy when Home shows. An
+        // artwork still being painted isn't kept either.
+        artKeep.none();
         Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, Cover> e = it.next();

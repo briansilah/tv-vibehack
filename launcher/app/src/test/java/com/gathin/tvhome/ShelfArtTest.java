@@ -88,18 +88,27 @@ public class ShelfArtTest {
 
     @Test
     public void fillsTheEdgesAndStaysMidToDark() {
+        int band = (int) (W * 0.18f);
         for (String key : ShelfArtworks.keys()) {
             int[] px = render(key);
             int ground = px[(int) (ShelfArt.CALM_Y / ShelfArt.DH * H) * W + W / 2];
-            int painted = 0;
+            int painted = 0, left = 0, right = 0;
             float sum = 0f;
-            for (int p : px) {
-                if (CoverArt.distance(p, ground) > 0.12f) painted++;
+            for (int i = 0; i < px.length; i++) {
+                int p = px[i], x = i % W;
+                boolean paint = CoverArt.distance(p, ground) > 0.12f;
+                if (paint) painted++;
+                if (paint && x < band) left++;
+                if (paint && x >= W - band) right++;
                 sum += luma(p);
             }
             float share = painted / (float) px.length;
             assertTrue(key + " too bare: " + share, share > 0.25f);
             assertTrue(key + " too full: " + share, share < 0.75f);
+            // Shapes cluster at both sides, running off the edges, as in the reference.
+            float sides = band * H;
+            assertTrue(key + " left edge bare: " + left / sides, left / sides > 0.45f);
+            assertTrue(key + " right edge bare: " + right / sides, right / sides > 0.45f);
             // The dock's glass and white titles sit on it.
             assertTrue(key + " too light", sum / px.length < 0.42f);
         }

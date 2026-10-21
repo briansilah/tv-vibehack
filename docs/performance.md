@@ -275,7 +275,7 @@ Besides the timings above, the top shelf logs `shelf_fallback` when focus comes 
 decoded yet, so its cover art or the glow shows first, and `shelf_step`, `shelf_carousel` and `shelf_arrived` when a
 title comes on screen after Left or Right, the carousel, or a fallback: how long after the move (waiting for its
 picture), its place in the app's list (`i`, `n`) and its name. `shelf_artwork` says how long an app's artwork took to
-paint (once per app after an install; later it's read back from the cache).
+paint (`from=paint`: once per app after an install) or to read back from the cache (`from=cache`).
 
 ### Trace sections
 
