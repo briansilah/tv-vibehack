@@ -26,6 +26,8 @@
     <string name="move_to_dock">Ins Dock verschieben</string>
     <string name="move_out_of_dock">Aus dem Dock nehmen</string>
     <string name="app_info">App-Info</string>
+    <string name="top_shelf_action">Top Shelf ändern …</string>
+    <string name="liquid_glass_action">Liquid Glass anpassen …</string>
     <string name="home_screen">Startbildschirm</string>
     <string name="arrange_title">Apps anordnen</string>
     <string name="moving_title">%1$s verschieben</string>
@@ -53,6 +55,52 @@
     <string name="shelf_open_in">In %1$s öffnen</string>
     <!-- %1$s: the app. Opens the app's search for the title, where it can't be opened at the title itself. -->
     <string name="shelf_search_in">In %1$s suchen</string>
-    <!-- %1$s: the app. Opens the app, not the title (also under an app's static top shelf image). -->
+    <!-- %1$s: the app. Opens the app, not the title. -->
     <string name="shelf_open_app">%1$s öffnen</string>
+
+    <!-- Home Settings (SettingsActivity). Words as in .github/skills/ux-writing (its German word list). -->
+    <string name="home_settings">Home-Einstellungen</string>
+    <string name="appearance">Darstellung</string>
+    <string name="top_shelf">Top Shelf</string>
+    <string name="top_shelf_about">Was hinter dem Dock zu sehen ist, wenn du eine seiner Apps markierst.</string>
+    <string name="top_shelf_off">Top-Shelf-Bilder sind auf diesem TV aus (top_shelf_art in config.xml), daher zeigt jede App ihre App-Farbe.</string>
+    <string name="same_for_all_apps">Für alle Apps gleich</string>
+    <string name="setting_off">Aus</string>
+    <string name="other_apps">Weitere Apps</string>
+    <string name="other_apps_about">Um den Top Shelf einer App zu sehen, verschiebe sie ins Dock.</string>
+    <string name="settings_default">Standard</string>
+    <string name="colour">Farbe</string>
+    <string name="shelf_picture">Bild</string>
+    <string name="shelf_app_colour">App-Farbe</string>
+    <string name="shelf_suggestions">Vorschläge</string>
+    <string name="shelf_custom">Eigene</string>
+    <string name="shelf_artwork">Artwork</string>
+    <string name="shelf_cover_art">Cover</string>
+    <string name="about_picture_own">Ein Bild, das sich nicht ändert: das eigene von %1$s, wie Apple TV es zeigt.</string>
+    <string name="about_picture_artwork">Ein Bild, das sich nicht ändert: Artwork für %1$s.</string>
+    <string name="about_picture_none">Ein Bild, das sich nicht ändert. %1$s hat keins, daher ist die App-Farbe zu sehen.</string>
+    <string name="about_app_colour">Der Name von %1$s auf einem Leuchten in der Farbe der App.</string>
+    <string name="about_suggestions">Titel aus %1$s, alle 10 Sekunden ein neuer: zuerst, was du gerade schaust, dann Beliebtes.</string>
+    <string name="about_suggestions_none_artwork">Noch keine Titel aus %1$s. Bis es welche gibt, ist das Artwork zu sehen.</string>
+    <string name="about_suggestions_none_cover_art">Noch keine Titel aus %1$s. Bis es welche gibt, ist das Cover zu sehen.</string>
+    <string name="about_custom_artwork">Artwork, Cover oder eine Farbe deiner Wahl.</string>
+    <string name="about_custom">Cover oder eine Farbe deiner Wahl.</string>
+    <string name="about_artwork">Artwork für %1$s, in den Farben und Formen der App.</string>
+    <string name="about_cover_art">Das Logo von %1$s auf Formen in den Farben der App.</string>
+    <string name="about_colour">Der Name von %1$s auf einem Leuchten in einer Farbe deiner Wahl.</string>
+    <string name="about_same_off">Der Top Shelf jeder App zeigt, was du für sie gewählt hast.</string>
+    <string name="about_same_all">Alle Apps zeigen: %1$s. Was du je App gewählt hast, gilt wieder, wenn du das ausschaltest.</string>
+    <string name="about_same_artwork">Alle Apps zeigen ihr Artwork, oder ihr Cover, wenn sie keins haben.</string>
+    <string name="about_same_over">Zeigt: %1$s, wie unter „Für alle Apps gleich“ eingestellt. Schalte das aus, um die Auswahl dieser App zu nutzen.</string>
+    <string name="about_glass">Wie durchsichtig das Dock und die Ecke oben rechts sind. Du stellst es auf dem Home-Bildschirm ein, um die Änderung zu sehen.</string>
+    <string-array name="colour_names">
+        <item>Rot</item>
+        <item>Orange</item>
+        <item>Gelb</item>
+        <item>Grün</item>
+        <item>Türkis</item>
+        <item>Blau</item>
+        <item>Lila</item>
+        <item>Pink</item>
+    </string-array>
 </resources>

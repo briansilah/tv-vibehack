@@ -19,9 +19,11 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Home Settings: the launcher's own settings, on the TV. A tile in the grid like tvOS's Settings app (it's an app of
@@ -29,11 +31,14 @@ import java.util.Map;
  * of an app's actions (hold OK), which opens straight on that app.
  *
  * <ul>
- * <li>Home Settings: all apps' top shelf choice, each Dock app's, then Liquid Glass, then the other apps'.</li>
- * <li>All Apps: Per App (each app's own), or one choice for every app, over theirs without erasing them.</li>
- * <li>An app: Suggestions, Static Image, Original (the glow in its colour) or Custom. The default is marked.</li>
+ * <li>Home Settings: Appearance (Liquid Glass), then the Top Shelf: Same for All Apps and each Dock app's, then the
+ * other apps'.</li>
+ * <li>Same for All Apps: Off (each app's own), or one choice for every app, over theirs without erasing them.</li>
+ * <li>An app: Picture (the default: its own, else its artwork, else its colour), App Colour (the glow in its
+ * colour), Suggestions or Custom. The default is marked.</li>
  * <li>Custom: its artwork (when it has some), its cover art, or the glow in a colour of your choice.</li>
  * </ul>
+ * Its words follow .github/skills/ux-writing.
  * On the left, Home in miniature shows what the top shelf would show for the choice in focus. A choice is saved as
  * it's picked ({@link ShelfChoices}) and Home shows it when it's back.
  */
@@ -43,7 +48,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
     static final String EXTRA_PACKAGE = "com.gathin.tvhome.PACKAGE";
 
     private static final int ROOT = 0, APP = 1, CUSTOM = 2, ALL = 3;
-    /** showRoot's focus: the All Apps row. */
+    /** showRoot's focus: the Same for All Apps row. */
     private static final String ALL_ROW = "*";
     private static final DecelerateInterpolator EASE = new DecelerateInterpolator(1.8f);
     /** Previews kept made: the app's choices, as you move between them. */
@@ -66,6 +71,8 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
     private final List<Drawable> dockBanners = new ArrayList<>();
     private final Map<String, ShelfSource.App> shelfApps = new HashMap<>();
     private final Map<String, Integer> glows = new HashMap<>();
+    /** The apps with a picture of their own on the TV, which their Picture shows (else their artwork). */
+    private final Set<String> ownPictures = new HashSet<>();
     private final Map<String, ShelfSource.Cover> previews = new LinkedHashMap<String, ShelfSource.Cover>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, ShelfSource.Cover> eldest) {
@@ -103,14 +110,24 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             // What the apps published and the feeds saved on the TV, for the previews of their suggestions.
             source.start();
         } else {
-            choices = new ShelfChoices(this, ShelfFeeds.parseImages(images).keySet());
+            choices = new ShelfChoices(this);
         }
         direct = getIntent() != null ? getIntent().getStringExtra(EXTRA_PACKAGE) : null;
         title.setText(R.string.home_settings);
         final int columns = getResources().getInteger(R.integer.columns);
         new Thread(() -> {
             final AppAdapter.Ordered loaded = AppAdapter.loadInOrder(getApplicationContext(), columns);
-            runOnUiThread(() -> loaded(loaded));
+            final Set<String> own = new HashSet<>();
+            if (source != null) {
+                for (AppAdapter.Entry e : loaded.apps) {
+                    if (source.hasOwnPicture(e.pkg)) own.add(e.pkg);
+                }
+            }
+            runOnUiThread(() -> {
+                ownPictures.clear();
+                ownPictures.addAll(own);
+                loaded(loaded);
+            });
         }, "tvhome-settings").start();
     }
 
@@ -138,73 +155,86 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
 
     // ---- pages -----------------------------------------------------------------------------------------------
 
-    /** Home Settings: the apps' top shelf choices and Liquid Glass. {@code focusPkg}: the row to focus. */
+    /**
+     * Home Settings: Liquid Glass, then the top shelf: all apps' choice and each Dock app's, then the other apps', a
+     * long list, last. {@code focusPkg}: the row to focus, else the first.
+     */
     private void showRoot(String focusPkg) {
         page = ROOT;
         app = null;
         title.setText(R.string.home_settings);
         clear();
-        View first = null, focus = null;
+        View focus = null;
+        header(R.string.appearance, 0);
+        int glass = prefs.getInt(MainActivity.PREF_GLASS, getResources().getInteger(R.integer.liquid_glass));
+        View first = row(getString(R.string.liquid_glass), MainActivity.glassLabel(this, glass),
+                R.drawable.ic_chevron_right, this::openGlass, this::previewGlass);
         if (source == null) {
             header(R.string.top_shelf, R.string.top_shelf_off);
         } else {
             header(R.string.top_shelf, R.string.top_shelf_about);
             ShelfChoice all = choices.all();
-            View allRow = row(getString(R.string.all_apps), all == null ? getString(R.string.per_app) : name(all),
+            View allRow = row(getString(R.string.same_for_all_apps),
+                    all == null ? getString(R.string.setting_off) : name(all),
                     R.drawable.ic_chevron_right, this::showAll, () -> previewAll(choices.all()));
-            first = allRow;
             if (ALL_ROW.equals(focusPkg)) focus = allRow;
             for (int i = 0; i < dockCount; i++) {
                 View r = appRow(apps.get(i));
                 if (apps.get(i).pkg.equals(focusPkg)) focus = r;
             }
-        }
-        header(R.string.appearance, 0);
-        int glass = prefs.getInt(MainActivity.PREF_GLASS, getResources().getInteger(R.integer.liquid_glass));
-        View glassRow = row(getString(R.string.liquid_glass), MainActivity.glassLabel(this, glass),
-                R.drawable.ic_chevron_right, this::openGlass, () -> {
-                    previewing = null;
-                    preview.setDock(dockBanners, -1);
-                    if (source == null || apps.isEmpty()) preview.showGlow(null, AmbientColor.FALLBACK);
-                    about.setText(R.string.about_glass);
-                });
-        if (first == null) first = glassRow;
-        if (source != null && apps.size() > dockCount) {
-            header(R.string.other_apps, R.string.other_apps_about);
-            for (int i = dockCount; i < apps.size(); i++) {
-                View r = appRow(apps.get(i));
-                if (apps.get(i).pkg.equals(focusPkg)) focus = r;
+            if (apps.size() > dockCount) {
+                header(R.string.other_apps, R.string.other_apps_about);
+                for (int i = dockCount; i < apps.size(); i++) {
+                    View r = appRow(apps.get(i));
+                    if (apps.get(i).pkg.equals(focusPkg)) focus = r;
+                }
             }
         }
         enter(focus != null ? focus : first);
     }
 
-    /** An app's own choice (all apps' may be over it: then the about line says so). */
+    /** Liquid Glass: Home with the first Dock app's top shelf behind the dock, none of it highlighted. */
+    private void previewGlass() {
+        if (source == null || apps.isEmpty()) {
+            previewing = null;
+            preview.showGlow(null, AmbientColor.FALLBACK);
+        } else {
+            AppAdapter.Entry e = apps.get(0);
+            showPreview(e, choices.get(e.pkg));
+            previewApp = null;   // its titles arriving don't change what this says
+        }
+        preview.setDock(dockBanners, -1);
+        about.setText(R.string.about_glass);
+    }
+
+    /**
+     * An app's own choice. With all apps' over it, the preview shows that, as Home does, and the about line says so.
+     */
     private View appRow(final AppAdapter.Entry e) {
         return row(e.label, name(choices.own(e.pkg)), R.drawable.ic_chevron_right, () -> showApp(e, null), () -> {
-            showPreview(e, choices.own(e.pkg));
             ShelfChoice all = choices.all();
-            if (all != null) about.setText(getString(R.string.about_all_over, name(all)));
+            showPreview(e, all != null ? all : choices.own(e.pkg));
+            if (all != null) about.setText(getString(R.string.about_same_over, name(all)));
         });
     }
 
-    /** All Apps: Per App, or one choice for every app (Artwork if any app has some). */
+    /** Same for All Apps: Off, or one choice for every app (Artwork if any app has some), as an app's are ordered. */
     private void showAll() {
         page = ALL;
         app = null;
-        title.setText(R.string.all_apps);
+        title.setText(R.string.same_for_all_apps);
         clear();
         ShelfChoice now = choices.all();
         List<ShelfChoice> options = new ArrayList<>();
         options.add(null);
-        options.add(ShelfChoice.SUGGESTIONS);
         options.add(ShelfChoice.IMAGE);
         options.add(ShelfChoice.GLOW);
+        options.add(ShelfChoice.SUGGESTIONS);
         if (anyArtwork()) options.add(ShelfChoice.ARTWORK);
         View target = null;
         for (final ShelfChoice c : options) {
             boolean chosen = c == null ? now == null : c.equals(now);
-            View r = row(c == null ? getString(R.string.per_app) : name(c),
+            View r = row(c == null ? getString(R.string.setting_off) : name(c),
                     c == null ? getString(R.string.settings_default) : null, chosen ? R.drawable.ic_check : 0, () -> {
                         choices.setAll(c);
                         showRoot(ALL_ROW);
@@ -214,14 +244,14 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         enter(target);
     }
 
-    /** The first Dock app with all apps' choice {@code c}, or its own for Per App. */
+    /** The first Dock app with all apps' choice {@code c}, or its own for Off. */
     private void previewAll(ShelfChoice c) {
         AppAdapter.Entry e = apps.isEmpty() ? null : apps.get(0);
         if (e == null) return;
         showPreview(e, c != null ? c : choices.own(e.pkg));
-        about.setText(c == null ? getString(R.string.about_per_app)
-                : c.kind == ShelfChoice.Kind.ARTWORK ? getString(R.string.about_all_artwork)
-                : getString(R.string.about_all, name(c)));
+        about.setText(c == null ? getString(R.string.about_same_off)
+                : c.kind == ShelfChoice.Kind.ARTWORK ? getString(R.string.about_same_artwork)
+                : getString(R.string.about_same_all, name(c)));
     }
 
     private boolean anyArtwork() {
@@ -231,19 +261,24 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         return false;
     }
 
-    /** An app's choices. {@code focus}: the row to focus, else the current choice's. */
+    /**
+     * An app's choices: the default first, then from the plainest to the richest, and Custom, which opens more.
+     * {@code focus}: the row to focus, else the current choice's.
+     */
     private void showApp(final AppAdapter.Entry e, ShelfChoice.Kind focus) {
         page = APP;
         app = e;
         title.setText(e.label);
         clear();
         ShelfChoice now = choices.own(e.pkg);
-        ShelfChoice def = choices.byDefault(e.pkg);
+        ShelfChoice def = ShelfChoice.byDefault();
         boolean custom = !now.equals(ShelfChoice.SUGGESTIONS) && !now.equals(ShelfChoice.IMAGE)
                 && !now.equals(ShelfChoice.GLOW);
         if (focus == null) focus = custom ? ShelfChoice.Kind.COLOUR : now.kind;
         View target = null;
-        for (ShelfChoice c : new ShelfChoice[]{ShelfChoice.SUGGESTIONS, ShelfChoice.IMAGE, ShelfChoice.GLOW}) {
+        // What the choices are for, as this page also opens straight from the app's actions.
+        header(R.string.top_shelf, 0);
+        for (ShelfChoice c : new ShelfChoice[]{ShelfChoice.IMAGE, ShelfChoice.GLOW, ShelfChoice.SUGGESTIONS}) {
             final ShelfChoice pick = c;
             View r = row(name(c), c.equals(def) ? getString(R.string.settings_default) : null,
                     c.equals(now) ? R.drawable.ic_check : 0, () -> pick(pick), () -> showPreview(e, pick));
@@ -253,7 +288,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         View r = row(getString(R.string.shelf_custom), custom ? name(now) : null, R.drawable.ic_chevron_right,
                 () -> showCustom(e), () -> {
                     showPreview(e, customLook);
-                    about.setText(R.string.about_custom);
+                    about.setText(ShelfArt.has(e.pkg) ? R.string.about_custom_artwork : R.string.about_custom);
                 });
         if (target == null) target = r;
         enter(target);
@@ -457,9 +492,9 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
                 previewTitle(e, a, c, titles, 0, token);
                 return;
             }
-            about.setText(getString(R.string.about_suggestions_none, e.label));
+            about.setText(noTitles(e));
         }
-        previewCover(a, c, token);
+        previewCover(e, a, c, token);
     }
 
     /**
@@ -471,8 +506,8 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         int i = from;
         while (i < titles.size() && (titles.get(i).backdrop == null || source.failedLately(titles.get(i).backdrop))) i++;
         if (i >= titles.size()) {
-            about.setText(getString(R.string.about_suggestions_none, e.label));
-            previewCover(a, c, token);
+            if (previewApp == e) about.setText(noTitles(e));
+            previewCover(e, a, c, token);
             return;
         }
         final ShelfFeeds.Item first = titles.get(i);
@@ -494,7 +529,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         });
     }
 
-    private void previewCover(ShelfSource.App a, ShelfChoice c, final Object token) {
+    private void previewCover(final AppAdapter.Entry e, ShelfSource.App a, ShelfChoice c, final Object token) {
         final String key = a.pkg + "|" + c.encode();
         ShelfSource.Cover kept = previews.get(key);
         if (kept != null) {
@@ -505,8 +540,14 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             if (cover != null) previews.put(key, cover);
             if (previewing != token) return;
             if (cover != null) preview.showCover(cover.backdrop, cover.logo, cover.image);
-            else preview.showGlow(a.label, glowOf(previewApp));
+            else preview.showGlow(a.label, glowOf(e));
         });
+    }
+
+    /** Suggestions without titles: what shows until they come, as on Home. */
+    private CharSequence noTitles(AppAdapter.Entry e) {
+        return getString(ShelfArt.has(e.pkg) ? R.string.about_suggestions_none_artwork
+                : R.string.about_suggestions_none_cover_art, e.label);
     }
 
     private CharSequence aboutText(AppAdapter.Entry e, ShelfChoice c) {
@@ -514,7 +555,9 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             case SUGGESTIONS:
                 return getString(R.string.about_suggestions, e.label);
             case IMAGE:
-                return getString(R.string.about_static, e.label);
+                // What it will show: its own picture, else its artwork, else its colour.
+                return getString(ownPictures.contains(e.pkg) ? R.string.about_picture_own
+                        : ShelfArt.has(e.pkg) ? R.string.about_picture_artwork : R.string.about_picture_none, e.label);
             case ARTWORK:
                 return getString(R.string.about_artwork, e.label);
             case COVER_ART:
@@ -522,7 +565,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             case COLOUR:
                 return getString(R.string.about_colour, e.label);
             default:
-                return getString(R.string.about_original, e.label);
+                return getString(R.string.about_app_colour, e.label);
         }
     }
 
@@ -574,16 +617,25 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             case SUGGESTIONS:
                 return getString(R.string.shelf_suggestions);
             case IMAGE:
-                return getString(R.string.shelf_static);
+                return getString(R.string.shelf_picture);
             case ARTWORK:
                 return getString(R.string.shelf_artwork);
             case COVER_ART:
                 return getString(R.string.shelf_cover_art);
             case COLOUR:
-                return getString(R.string.colour);
+                return colourName(c.colour);
             default:
-                return getString(R.string.shelf_original);
+                return getString(R.string.shelf_app_colour);
         }
+    }
+
+    /** A custom colour's name (Red, …), or "Colour" for one not in the palette. */
+    private String colourName(int colour) {
+        String[] names = getResources().getStringArray(R.array.colour_names);
+        for (int i = 0; i < ShelfChoice.PALETTE.length && i < names.length; i++) {
+            if ((ShelfChoice.PALETTE[i] | 0xFF000000) == colour) return names[i];
+        }
+        return getString(R.string.colour);
     }
 
     private static Drawable bannerOf(AppAdapter.Entry e) {

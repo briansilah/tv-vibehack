@@ -75,20 +75,20 @@ A home screen that is yours again:
   it slightly blurred, more colourful and bent along its edges, under a bright rim (Android 12 and
   later; the bending needs Android 13). The top right's capsule is the same glass. How see-through it
   is goes on a slider like Apple's, from the clearest (the default) through Clear, Apple TV's own look,
-  to Tinted: hold OK on any app and pick **Liquid Glass**.
-- **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows what
-  it suggests: what you were watching first (with **Resume** a press of Up away), then your watchlist,
-  then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
-  Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
-  in every 10 seconds. YouTube shows one picture instead, as on Apple TV: its Apple TV Top Shelf image,
-  once you've put it on the TV. An app without suggestions shows its artwork: an original picture in its
-  brand's colours and shapes, in the manner of YouTube's, with its logo (about 30 apps have one), or else
-  cover art: its logo on shapes in its own colours. Otherwise, its name over an ambient glow in its colour.
-  Each app's can be changed on the TV in **Home Settings**. See [The top shelf](#the-top-shelf).
+  to Tinted: hold OK on any app and pick **Adjust Liquid Glass…**.
+- **A top shelf like Apple TV's.** With a dock app focused, the whole screen behind the dock shows one
+  picture that stays, as Apple TV shows YouTube's: the app's own Apple TV Top Shelf image, once you've
+  put it on the TV, or else its artwork: an original picture in its brand's colours and shapes, in the
+  manner of YouTube's, with its logo (about 30 apps have one). Otherwise, its name over an ambient glow
+  in its colour. Or, app by app in **Home Settings**, what it suggests: what you were watching first
+  (with **Resume** a press of Up away), then your watchlist, then the app's own recommendations mixed
+  with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+, Prime Video, Stremio's
+  popular titles), each full screen with its title's logo, the next one pushing in every 10 seconds.
+  See [The top shelf](#the-top-shelf).
 - **Home Settings**, the launcher's own settings on the TV, as an app in the grid like Apple TV's Settings:
-  what each app's top shelf shows (its suggestions, a static image, the original glow, or its artwork,
-  cover art or a colour of your choice), with a preview of Home as you move, and Liquid Glass.
-  See [Home Settings](#home-settings).
+  Liquid Glass, and what each app's top shelf shows (its **Picture**, its **App Colour**, its
+  **Suggestions**, or its artwork, cover art or a colour of your choice), with a preview of Home as you
+  move. See [Home Settings](#home-settings).
 - **The rest of your apps in a grid** that glides up on a spring when you press Down, as on Apple TV:
   the dock row moves to the top, the time and profile picture scroll away with the page, and the rows
   get the whole screen. Back on the dock, they come back.
@@ -98,7 +98,7 @@ A home screen that is yours again:
   [docs/transitions.md](docs/transitions.md).
 - **Apple TV-style focus**: no separate highlight; the focused tile itself grows with a quick spring
   onto a soft shadow, and grid tiles show their name. Left and Right stop at the end of a row.
-- **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange apps tile at the
+- **Arrange apps from the remote**: hold OK on an app and pick Move, or use the Arrange Apps tile at the
   end of the grid. The app lifts, chevrons show where it can go, the arrows move it (into and out of
   the dock too) and OK puts it down.
 - **The time and your profile picture in the top right**, in a small Liquid Glass capsule, as on Apple TV.
@@ -217,18 +217,19 @@ feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 1
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
 
-**Arrange** apps on the TV itself. Hold OK on an app for its actions:
+**Arrange** apps on the TV itself. Hold OK on an app for its actions, in three groups: where the app
+goes, the app itself, and the whole home screen.
 
 - **Move** picks the app up. It lifts with a ring, chevrons show the ways it can go, and the other apps
   dim. The arrows move it one slot or row at a time while the others make room; the dock is just the
   first row, so an app moved into it pushes the dock's last app down into the grid. OK puts it down
   and saves; Back puts it back where it was.
 - **Move to Dock** puts the app in the dock's last slot, whose app moves down to the start of the grid;
-  **Move out of Dock** puts a dock app at the start of the grid.
-- **App info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
-- **Top Shelf** opens [Home Settings](#home-settings) on what the app's top shelf shows; picking one
-  comes straight back to Home, which shows it.
-- **Liquid Glass** isn't about the app but the home screen: a slider, like Apple's, for how see-through
+  **Move Out of Dock** puts a dock app at the start of the grid.
+- **Change Top Shelf…** opens [Home Settings](#home-settings) on what the app's top shelf shows; picking
+  one comes straight back to Home, which shows it.
+- **App Info** opens Android's page for the app, with Uninstall, Force stop and Clear storage.
+- **Adjust Liquid Glass…** isn't about the app but the home screen: a slider, like Apple's, for how see-through
   the dock and the top right are. Left and Right move it from Clear to Tinted while they change behind
   it; OK keeps it. To try looks from a computer:
   `adb shell am start -n com.gathin.tvhome/.MainActivity --ei liquid_glass 50` saves 50 as the
@@ -236,7 +237,7 @@ also be changed on the TV, in [Home Settings](#home-settings).
   `config.xml`'s until the launcher restarts (or `false`), keeping the choice, and meanwhile
   `--ei liquid_glass` isn't saved: `tools/perf.py` measures with it.
 
-To arrange several apps in one go, select **Arrange apps** at the end of the grid: OK picks an app up
+To arrange several apps in one go, select **Arrange Apps** at the end of the grid: OK picks an app up
 and puts it down, and Back (or the tile, now **Done**) finishes. While arranging, the top of the screen
 says what's happening and which remote keys do what.
 
@@ -246,35 +247,42 @@ go at the end, as on Apple TV; apps you uninstall drop out and the rest close up
 ### Home Settings
 
 The launcher's own settings, on the TV. As Settings is an app on Apple TV's Home Screen, **Home Settings**
-is an app in the grid, a gear on glass like the Arrange apps tile: installed with the launcher, it goes at the end of
-your apps, next to Arrange apps, and you can move it into the dock or hide it (`hidden_apps`) like any other. Google TV's own
+is an app in the grid, a gear on glass like the Arrange Apps tile: installed with the launcher, it goes at the end of
+your apps, next to Arrange Apps, and you can move it into the dock or hide it (`hidden_apps`) like any other. Google TV's own
 app list shows it too. On the left, Home in miniature shows what you'll get as you move through the list.
 
-- **Top Shelf**, first **All Apps**: **Per App** (the default: each app's own choice, below), or one choice
-  for every app at once (Suggestions, Static Image, Original, or Artwork where the launcher has some),
-  over theirs without erasing them: Per App brings them back. Then each dock app with what its top shelf
-  shows, then the rest of your apps (their top shelf shows once they're in the dock). Pick an app, then
-  one of:
-  - **Suggestions**: its suggested titles ([below](#the-top-shelf)). The default, except for YouTube.
-  - **Static Image**: one picture that stays, as Apple TV shows YouTube's: its Apple TV image if you've
-    put one on the TV, else its artwork, else its cover art. YouTube's default.
-  - **Original**: no picture, just the ambient glow in its colour and its name, as before the top shelf
-    had art. Nothing is fetched for it.
+- **Appearance**: **Liquid Glass** opens the slider on Home, over the dock, so you see the glass change as
+  you move it.
+- **Top Shelf**: first **Same for All Apps**: **Off** (the default: each app's own choice, below), or one
+  choice for every app at once (Picture, App Colour, Suggestions, or Artwork where the launcher has some),
+  over theirs without erasing them: Off brings them back. Then each dock app with what its top shelf
+  shows, then **Other Apps** (their top shelf shows once they're in the dock). Pick an app, then one of:
+  - **Picture**, the default: one picture that stays, as Apple TV shows YouTube's: its Apple TV image if
+    you've put one on the TV, else its artwork, else its App Colour. Nothing is fetched for it but a
+    picture from `top_shelf_images`' URL, once.
+  - **App Colour**: no picture, just the ambient glow in its colour and its name, as before the top shelf
+    had art.
+  - **Suggestions**: its suggested titles ([below](#the-top-shelf)), with its artwork or cover art until
+    it has some.
   - **Custom**: its **Artwork** (for the apps the launcher has some for), its **Cover Art** (its logo on
     shapes in its colours), or the glow in a **colour** of your choice.
 
-  "Default" marks what `config.xml` gives it (`top_shelf_images`, else suggestions); picking that forgets
-  your choice, so a later change to `config.xml` applies again.
-- **Liquid Glass** opens the slider on Home, over the dock, so you see the glass change as you move it.
+  Under the preview, a sentence says what the choice in focus shows for that app: for Picture, whether
+  it's its own picture, its artwork or its colour. Picking **Default** forgets your choice.
+
+The words follow Apple's guidance for interfaces, summed up in [the ux-writing skill](.github/skills/ux-writing/SKILL.md).
 
 Your choices are kept on the TV, through restarts and updates of the launcher; clearing the launcher's
-storage forgets them. `tools/perf.py` measures the launcher as it ships, with `config.xml`'s choices
+storage forgets them. `tools/perf.py` measures the launcher as it ships, with the default choices
 (`--ez default_config true`), and says so when a run had choices of yours in effect.
 
 ### The top shelf
 
-With focus on a dock app, the screen behind the dock shows the best of these that the app has, as
-Apple TV's Top Shelf does:
+With focus on a dock app, the screen behind the dock shows what [Home Settings](#home-settings) says
+for it, as Apple TV's Top Shelf does. By default that's its **Picture**, one that stays: its own (a
+static image, below) if it's on the TV, else its artwork (below), else its name over the ambient glow.
+Nothing is fetched for it from the network. An app set to **Suggestions** shows the best of these that
+it has:
 
 1. **Suggested titles**, full screen with the title's logo (or name) and what it is ("Continue
    watching", "Recommended for you", "Top 10 on Netflix · Kenya"). The next one pushes in from the
@@ -291,9 +299,6 @@ Apple TV's Top Shelf does:
      which need no account or key: Stremio's Cinemeta, and the open-source
      [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
      come from Stremio's image service (metahub).
-   - **Or one static image**, for the apps in `top_shelf_images` in `config.xml` (YouTube) or set to
-     Static Image in [Home Settings](#home-settings): the picture Apple TV shows for them, full
-     screen, instead of suggestions. Below.
 2. **Its artwork**, for the apps that have one: a picture made for the app, in the manner of
    YouTube's on Apple TV (big flat shapes running off the edges, dry-brush strokes and a scribble,
    around a calm middle), from its brand's colours and the shapes of its identity, with its logo over
@@ -321,8 +326,8 @@ used), or the title is passed over for the next. A title logo too small to read 
 the title in text.
 
 **Static images.** On Apple TV, YouTube has no Top Shelf content of its own: it shows one picture, its
-logo on bright shapes, full screen behind the dock. The launcher shows the same for each app in
-`top_shelf_images`, and each app you set to Static Image in Home Settings. That picture is Google's, so it isn't in this repository: you put it on your TV
+logo on bright shapes, full screen behind the dock. The launcher shows the same as an app's Picture,
+once it's on the TV, for any app. That picture is Google's, so it isn't in this repository: you put it on your TV
 yourself, from a screenshot of your Apple TV. Pair the Apple TV with Xcode on a Mac (on the Apple TV:
 Settings → Remotes and Devices → Remote App and Devices), put YouTube in its top row and focus it, then
 in Xcode: Window → Devices and Simulators → your Apple TV → Take Screenshot. Then:
