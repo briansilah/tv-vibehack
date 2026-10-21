@@ -371,8 +371,10 @@ The script therefore turns on `HomeButtonService`, an accessibility service in t
 Trade-offs:
 
 - Every remote key passes through the service, which answers at once for everything but Home.
-- Each change of volume makes the service read `dumpsys input` once, and while a volume key is
-  held it reads it about 20 times a second.
+- The `DUMP` permission the install script grants lets the launcher read the state of any system
+  service through `dumpsys`. It reads only `dumpsys input`, only after the volume changes and
+  while a volume key is held (about 20 times a second), and keeps nothing it reads.
+  `tools/restore.sh` revokes it.
 - Double-pressing Home no longer opens the picture-in-picture menu.
 - The stock launcher keeps running in the background.
 - On TCL, the service only starts at boot if the app's `AUTO_START` permission is allowed; the
