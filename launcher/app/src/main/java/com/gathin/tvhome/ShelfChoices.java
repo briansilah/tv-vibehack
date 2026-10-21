@@ -37,7 +37,11 @@ final class ShelfChoices {
     };
 
     ShelfChoices(Context ctx, Collection<String> imageApps) {
-        prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
+        this(ctx.getSharedPreferences("home", Context.MODE_PRIVATE), imageApps);
+    }
+
+    ShelfChoices(SharedPreferences prefs, Collection<String> imageApps) {
+        this.prefs = prefs;
         images = new HashSet<>(imageApps);
     }
 
