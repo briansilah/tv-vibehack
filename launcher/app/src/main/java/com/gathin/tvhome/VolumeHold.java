@@ -36,10 +36,10 @@ import java.util.regex.Pattern;
  * on every Android TV (KeyMapper's issue 2101). The service never sees volume keys, so it can't pass them on.
  *
  * So this repeats the step itself, with InputDispatcher's timing: when a volume key changes the volume, it steps again
- * once the key repeat timeout has passed since the press, then at the key repeat rate, for as long as the input
- * system has had a key down that the service didn't see (a volume key: the service sees every other key) without a
- * break since that change. It looks every repeat interval, from the change on, so a key let go and pressed again is
- * a new press, not a hold. Only `dumpsys input` says which keys are down: there's no API for it, and the volume key's
+ * once the key repeat timeout has passed, then at the key repeat rate, for as long as the input system has had a key
+ * down that the service didn't see (a volume key: the service sees every other key) without a break since that
+ * change. It looks every repeat interval, from the change on, so a key let go and pressed again is a new press, not a
+ * hold. Only `dumpsys input` says which keys are down: there's no API for it, and the volume key's
  * up never reaches an app either. It needs the DUMP permission, which the install script grants. Without it a hold
  * stays one step.
  */
@@ -61,13 +61,13 @@ final class VolumeHold {
     /** Keys the service has seen go down and not up yet, by {@link #key}. Written on the main thread. */
     private final Set<Long> seen = ConcurrentHashMap.newKeySet();
     /**
-     * How long the window manager holds a volume key back before its step, in case it starts a key combination
-     * (Volume Down and Power: a screenshot; Volume Up and Power: the power menu): KeyCombinationManager's
-     * COMBINE_KEY_DELAY_MILLIS. InputDispatcher counts the repeat timeout from the press, so this waits that much less.
+     * The repeat timeout counts from the volume change, not from the press, which no app can see. On TCL's Google TV
+     * the volume changes as the key goes down, so that's the same. Stock Android holds a volume key back 150 ms first,
+     * in case it starts a key combination (KeyCombinationManager), and there the first repeat comes that much later
+     * than without the service; an app can't read those combinations, and erring late never turns a press into two
+     * steps.
      */
-    static final int HELD_BACK_MS = 150;
-
-    private final Repeat repeat = new Repeat(ViewConfiguration.getKeyRepeatTimeout() - HELD_BACK_MS,
+    private final Repeat repeat = new Repeat(ViewConfiguration.getKeyRepeatTimeout(),
             ViewConfiguration.getKeyRepeatDelay());
     private HandlerThread thread;
     private Handler handler;
