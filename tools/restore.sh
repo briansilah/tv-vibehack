@@ -20,6 +20,7 @@ export MSYS_NO_PATHCONV=1
 s=$(settings get secure enabled_accessibility_services | sed -E 's#(^|:)com\.gathin\.tvhome/[^:]*##g; s#^:##'); if [ -z "$s" ] || [ "$s" = null ]; then settings delete secure enabled_accessibility_services; else settings put secure enabled_accessibility_services "$s"; fi; echo home-button-service-off
 SH
   echo "appops set com.gathin.tvhome AUTO_START default 2>/dev/null; appops write-settings; echo auto-start-default"
+  echo "pm revoke com.gathin.tvhome android.permission.DUMP 2>/dev/null; echo dump-revoked"
   # resolve the stock HOME component on the TV (Android 9 needs pkg/activity, not just pkg)
   echo "cmd package set-home-activity --user 0 \$(cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME $STOCK | tail -n 1)"
   echo "settings put global window_animation_scale 1.0"

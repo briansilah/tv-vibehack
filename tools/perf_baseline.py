@@ -468,6 +468,8 @@ def install_apk(sh, apk, log):
     if "package:" in sh.shell("pm path " + GOOGLE_TV_LAUNCHER):
         # As launcher/build-and-install.sh does: keep the Home button service allowed to start, and on.
         sh.shell("appops set %s AUTO_START allow 2>/dev/null; appops write-settings; echo auto-start" % perf.PKG)
+        # Lets the service repeat a held volume key (VolumeHold); builds without it don't ask for DUMP.
+        sh.shell("pm grant %s android.permission.DUMP 2>/dev/null; echo dump-granted" % perf.PKG)
         services = sh.shell("settings get secure enabled_accessibility_services").strip()
         if HOME_SERVICE not in services:
             log("turning the Home button service back on")

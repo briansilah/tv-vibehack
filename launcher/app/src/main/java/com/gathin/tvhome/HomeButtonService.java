@@ -33,6 +33,7 @@ import java.util.Map;
  *   than 30 s in standby (launcherx's DispatchActivity, with home-app rights to start it), at boot, or when an app
  *   goes home itself. That one shows briefly first.
  * It only acts while Home resolves to another app; with the stock launcher disabled it passes everything through.
+ * Filtering keys costs a held volume key its repeats on a TV; {@link VolumeHold} puts them back.
  * Keys sent with `adb shell input` skip accessibility services, so test Home with the real remote.
  * It reads no window text: only the package and class of the window that comes to the front, and once, when it
  * starts, the package of the active window. It runs in its own process (":home") because every key on the TV waits
@@ -58,6 +59,7 @@ public class HomeButtonService extends AccessibilityService {
     private boolean homeHeld;
     private boolean longPressDone;
     private boolean dreaming;
+    private VolumeHold volumeHold;
 
     private final BroadcastReceiver dreamReceiver = new BroadcastReceiver() {
         @Override
@@ -98,10 +100,15 @@ public class HomeButtonService extends AccessibilityService {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(dreamReceiver, dreams, RECEIVER_NOT_EXPORTED);
         else registerReceiver(dreamReceiver, dreams);
         handler.postDelayed(connectCheck, CONNECT_CHECK_DELAY_MS);
+        if (volumeHold == null) {
+            volumeHold = new VolumeHold(this);
+            volumeHold.start();
+        }
     }
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (volumeHold != null) volumeHold.keyEvent(event);
         if (event.getKeyCode() != KeyEvent.KEYCODE_HOME) return false;
         switch (event.getAction()) {
             case KeyEvent.ACTION_DOWN:
@@ -204,6 +211,10 @@ public class HomeButtonService extends AccessibilityService {
     @Override
     public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        if (volumeHold != null) {
+            volumeHold.stop();
+            volumeHold = null;
+        }
         try {
             unregisterReceiver(dreamReceiver);
         } catch (IllegalArgumentException ignored) {
