@@ -53,6 +53,9 @@ case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *pack
     # TVs have no such op. Allow it before turning the service on, or TCL blocks the first bind. App ops are saved
     # lazily (up to 30 min later) and not on `adb reboot`, so save now or the next boot forgets it.
     echo "appops set com.gathin.tvhome AUTO_START allow 2>/dev/null; appops write-settings; echo auto-start"
+    # While the service filters keys, a held volume key changes the volume by one step; the service repeats it
+    # itself, and only `dumpsys input` can tell it the key is still down.
+    echo "pm grant com.gathin.tvhome android.permission.DUMP 2>/dev/null; echo dump-granted"
     # Add the service to enabled_accessibility_services, keeping any others.
     cat <<'SH'
 s=$(settings get secure enabled_accessibility_services); case "$s" in *com.gathin.tvhome/.HomeButtonService*) ;; null|"") settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeButtonService ;; *) settings put secure enabled_accessibility_services "$s:com.gathin.tvhome/.HomeButtonService" ;; esac; settings put secure accessibility_enabled 1; echo home-button-service-on

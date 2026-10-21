@@ -366,6 +366,11 @@ class PlanTests(unittest.TestCase):
                                              '    <application />')
         path = ps.SOURCE + "AndroidManifest.xml"
         self.assertPlan(plan_for(change(path, old, new, "INTERNET")), ["dock", "mem"])
+        new = old.replace("<application />", '<uses-permission android:name="android.permission.DUMP" />\n'
+                                             '    <application />')
+        p = plan_for(change(path, old, new, "DUMP"))
+        self.assertPlan(p, [], check="tv")
+        self.assertTrue(p["tv"])
         new = old.replace("<application />", '<application android:largeHeap="true" />')
         self.assertPlan(plan_for(change(path, old, new, "largeHeap", "application")), ps.SCENARIOS, ["default"])
 
@@ -383,6 +388,8 @@ class PlanTests(unittest.TestCase):
         self.assertPlan(p, [], check="tv")
         self.assertTrue(p["tv"])
         self.assertIn("--seconds 30", ps.render(p))
+        p = plan_for(ps.Change(ps.JAVA + "VolumeHold.java", None, "a\n", None, None))
+        self.assertPlan(p, [], check="tv")
 
     def test_variants(self):
         p = plan_for(ps.Change(ps.JAVA + "GlassTestArt.java", "a\n", "b\n", [1], [1]))

@@ -359,6 +359,11 @@ The script therefore turns on `HomeButtonService`, an accessibility service in t
 
 - **Home** opens this launcher; the stock home never appears. From the screensaver too.
 - **Holding Home** opens the quick settings panel, as on stock Google TV.
+- **Holding Volume Up or Down** keeps changing the volume, as without the service. While any
+  accessibility service filters keys, Android TV changes the volume by one step per press, however
+  long it's held, so the service repeats the step itself at the system's pace until the key is
+  let go. Only `dumpsys input` says whether the key is still down, so the install script grants
+  the app the `DUMP` permission; without it a hold changes the volume by one step.
 - **Settings on the remote** works as before: the system opens the panel over any app.
 - When the stock home comes up on its own, the service covers it: at boot, and when the TV wakes
   after more than 30 seconds in standby (Google TV sends it home then). It shows briefly first.
@@ -366,6 +371,7 @@ The script therefore turns on `HomeButtonService`, an accessibility service in t
 Trade-offs:
 
 - Every remote key passes through the service, which answers at once for everything but Home.
+- While a volume key is held, the service runs `dumpsys input` about 20 times a second.
 - Double-pressing Home no longer opens the picture-in-picture menu.
 - The stock launcher keeps running in the background.
 - On TCL, the service only starts at boot if the app's `AUTO_START` permission is allowed; the
