@@ -58,8 +58,11 @@ final class VolumeHold {
 
     private final Context context;
     private final AudioManager audio;
-    /** Keys the service has seen go down and not up yet, by {@link #key}. Written on the main thread. */
-    private final Set<Long> seen = ConcurrentHashMap.newKeySet();
+    /**
+     * Keys the service has seen go down and not up yet, by {@link #key}, with their press's down time. Written by the
+     * service's main thread; the handler thread only removes presses it knows are over.
+     */
+    private final Map<Long, Long> seen = new ConcurrentHashMap<>();
     /**
      * The repeat timeout counts from the volume change, not from the press, which no app can see. On TCL's Google TV
      * the volume changes as the key goes down, so that's the same. Stock Android holds a volume key back 150 ms first,
@@ -86,9 +89,11 @@ final class VolumeHold {
             if (value < 0 || previous < 0 || value == previous) return;
             if (type == stream && repeat.ownStep(previous, value)) return;
             handler.removeCallbacks(check);
+            // A key changes the volume by one step; anything else (an app, the Assistant) also ends a repeat.
+            boolean key = Math.abs(value - previous) == 1;
             if (steps > 0) Log.i(TAG, "volume key held: repeated it " + steps + " times");
             steps = 0;
-            if (!dumpGranted()) {
+            if (!key || !dumpGranted()) {
                 repeat.stop();
                 return;
             }
@@ -106,17 +111,18 @@ final class VolumeHold {
 
     /** Whether the key is still down; once the repeat timeout has passed, one more step. */
     private void checkHeld() {
-        Set<Long> before = new HashSet<>(seen);
+        Map<Long, Long> before = new HashMap<>(seen);
         Map<Integer, Integer> down = readKeysDown();
-        boolean held = false;
+        int unseen = 0;
         if (down != null) {
             forgetReleased(before, down);
-            before.addAll(seen);
-            held = unseenKeyDown(down, perDevice(before));
+            Set<Long> keys = new HashSet<>(before.keySet());
+            keys.addAll(seen.keySet());
+            unseen = unseenKeysDown(down, perDevice(keys));
         }
         long now = SystemClock.uptimeMillis();
         long next = Repeat.IDLE;
-        int action = repeat.check(now, held);
+        int action = repeat.check(now, unseen);
         if (action == Repeat.STEP) {
             // Something else moved the volume since (another press): its own change starts over. At the end of the
             // range the volume stays put, and so do we.
@@ -175,7 +181,7 @@ final class VolumeHold {
     /** Every key the service sees, from its onKeyEvent; called on every key, so it does little. */
     void keyEvent(KeyEvent event) {
         long k = key(event.getDeviceId(), event.getScanCode(), event.getKeyCode());
-        if (event.getAction() == KeyEvent.ACTION_DOWN) seen.add(k);
+        if (event.getAction() == KeyEvent.ACTION_DOWN) seen.put(k, event.getDownTime());
         else if (event.getAction() == KeyEvent.ACTION_UP) seen.remove(k);
     }
 
@@ -189,23 +195,24 @@ final class VolumeHold {
         return counts;
     }
 
-    /** True when some device has more keys down than the service has seen go down on it. */
-    static boolean unseenKeyDown(Map<Integer, Integer> down, Map<Integer, Integer> seen) {
+    /** How many keys are down that the service didn't see go down: on each device, those beyond the ones it saw. */
+    static int unseenKeysDown(Map<Integer, Integer> down, Map<Integer, Integer> seen) {
+        int unseen = 0;
         for (Map.Entry<Integer, Integer> e : down.entrySet()) {
             Integer s = seen.get(e.getKey());
-            if (e.getValue() > (s == null ? 0 : s)) return true;
+            unseen += Math.max(0, e.getValue() - (s == null ? 0 : s));
         }
-        return false;
+        return unseen;
     }
 
     /**
      * Drops keys whose up the service missed: those it had seen down before the dump, on a device with nothing down
-     * in it. Keys it sees go down meanwhile aren't in {@code before}, so they stay.
+     * in it. Only that press goes: one the service sees go down again meanwhile has another down time, so it stays.
      */
-    private void forgetReleased(Set<Long> before, Map<Integer, Integer> down) {
-        for (long k : before) {
-            Integer n = down.get((int) (k >> 32));
-            if (n == null || n == 0) seen.remove(k);
+    private void forgetReleased(Map<Long, Long> before, Map<Integer, Integer> down) {
+        for (Map.Entry<Long, Long> e : before.entrySet()) {
+            Integer n = down.get((int) (e.getKey() >> 32));
+            if (n == null || n == 0) seen.remove(e.getKey(), e.getValue());
         }
     }
 
@@ -284,6 +291,8 @@ final class VolumeHold {
         private final long delay;
         private boolean armed;
         private boolean repeating;
+        /** Keys down that the service didn't see, at the first look after the change; -1 before it. */
+        private int keys = -1;
         private int direction;
         /** The volume the key's own step set, and the one our last step set. */
         private int start;
@@ -304,6 +313,7 @@ final class VolumeHold {
         long volumeChanged(long now, int previous, int value) {
             armed = true;
             repeating = false;
+            keys = -1;
             direction = Integer.signum(value - previous);
             start = expected = value;
             due = now + timeout;
@@ -321,9 +331,14 @@ final class VolumeHold {
             return n >= 1 && n <= (expected - start) * direction;
         }
 
-        /** What to do now: {@link #STOP} once the key is up, {@link #STEP} once the repeat timeout has passed. */
-        int check(long now, boolean held) {
-            if (!armed || !held) {
+        /**
+         * What to do now, with {@code unseen} keys down that the service didn't see: {@link #STOP} once any of them
+         * goes up or another goes down, as InputDispatcher ends a repeat on any key up and moves it to a new key;
+         * {@link #STEP} once the repeat timeout has passed.
+         */
+        int check(long now, int unseen) {
+            if (keys < 0) keys = unseen;
+            if (!armed || unseen == 0 || unseen != keys) {
                 stop();
                 return STOP;
             }

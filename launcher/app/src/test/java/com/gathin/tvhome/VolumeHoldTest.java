@@ -89,13 +89,16 @@ public class VolumeHoldTest {
     }
 
     @Test
-    public void aKeyTheServiceNeverSawIsAVolumeKey() {
-        assertTrue(VolumeHold.unseenKeyDown(map(6, 0, 7, 1), map()));
+    public void keysTheServiceNeverSawAreVolumeKeys() {
+        assertEquals(1, VolumeHold.unseenKeysDown(map(6, 0, 7, 1), map()));
         // The D-pad held on the remote's keyboard, seen by the service: nothing else is down.
-        assertFalse(VolumeHold.unseenKeyDown(map(6, 1, 7, 0), map(6, 1)));
+        assertEquals(0, VolumeHold.unseenKeysDown(map(6, 1, 7, 0), map(6, 1)));
         // A key seen on one device doesn't account for a key down on another.
-        assertTrue(VolumeHold.unseenKeyDown(map(6, 1, 7, 1), map(6, 1)));
-        assertFalse(VolumeHold.unseenKeyDown(map(6, 0, 7, 0), map()));
+        assertEquals(1, VolumeHold.unseenKeysDown(map(6, 1, 7, 1), map(6, 1)));
+        // Both volume keys held.
+        assertEquals(2, VolumeHold.unseenKeysDown(map(6, 0, 7, 2), map()));
+        // A key the service saw go down but whose up it missed doesn't count below zero.
+        assertEquals(0, VolumeHold.unseenKeysDown(map(6, 0, 7, 0), map(6, 1)));
     }
 
     @Test
@@ -118,17 +121,17 @@ public class VolumeHoldTest {
         assertEquals(1, r.direction());
         assertEquals(6, r.expected());
         for (long t = 1000; t < 1400; t += 50) {
-            assertEquals(WAIT, r.check(t, true));
+            assertEquals(WAIT, r.check(t, 1));
             assertEquals(t + 50, r.next());
         }
-        assertEquals(STEP, r.check(1400, true));
+        assertEquals(STEP, r.check(1400, 1));
         assertEquals(1450, r.stepped(1400, 7));
         assertEquals(7, r.expected());
-        assertEquals(STEP, r.check(1458, true));
+        assertEquals(STEP, r.check(1458, 1));
         assertEquals(1500, r.stepped(1458, 8));             // a late look keeps the pace
-        assertEquals(STEP, r.check(1620, true));
+        assertEquals(STEP, r.check(1620, 1));
         assertEquals(1670, r.stepped(1620, 9));             // a very late one doesn't catch up in a burst
-        assertEquals(STOP, r.check(1670, false));
+        assertEquals(STOP, r.check(1670, 0));
         assertEquals(VolumeHold.Repeat.IDLE, r.next());
     }
 
@@ -137,18 +140,34 @@ public class VolumeHoldTest {
         VolumeHold.Repeat r = new VolumeHold.Repeat(400, 50);
         r.volumeChanged(1000, 6, 5);
         assertEquals(-1, r.direction());
-        assertEquals(WAIT, r.check(1000, true));
-        assertEquals(STOP, r.check(1050, false));
+        assertEquals(WAIT, r.check(1000, 1));
+        assertEquals(STOP, r.check(1050, 0));
         // Down again later, but this press had no change of its own: not a hold.
-        assertEquals(STOP, r.check(1400, true));
+        assertEquals(STOP, r.check(1400, 1));
     }
 
     @Test
     public void theLastLookBeforeTheTimeoutIsAtTheTimeout() {
         VolumeHold.Repeat r = new VolumeHold.Repeat(400, 50);
         r.volumeChanged(1000, 5, 6);
-        assertEquals(WAIT, r.check(1380, true));
+        assertEquals(WAIT, r.check(1380, 1));
         assertEquals(1400, r.next());
+    }
+
+    @Test
+    public void anyKeyUpOrDownEndsTheRepeat() {
+        VolumeHold.Repeat r = new VolumeHold.Repeat(400, 50);
+        // Volume Down pressed while Volume Up is held: its own change arms the repeat with two keys down.
+        r.volumeChanged(1000, 7, 6);
+        assertEquals(WAIT, r.check(1000, 2));
+        assertEquals(STEP, r.check(1400, 2));
+        r.stepped(1400, 5);
+        // Volume Down let go, Volume Up still held: stop, as InputDispatcher does on any key up.
+        assertEquals(STOP, r.check(1450, 1));
+        // Another key down (Power, the Assistant's button) moves the repeat away too.
+        r.volumeChanged(2000, 5, 6);
+        assertEquals(WAIT, r.check(2000, 1));
+        assertEquals(STOP, r.check(2050, 2));
     }
 
     @Test
@@ -156,9 +175,9 @@ public class VolumeHoldTest {
         VolumeHold.Repeat r = new VolumeHold.Repeat(400, 50);
         r.volumeChanged(1000, 5, 6);
         assertFalse(r.ownStep(6, 7));                      // waiting: any change is a new press
-        r.check(1400, true);
+        r.check(1400, 1);
         r.stepped(1400, 7);
-        r.check(1450, true);
+        r.check(1450, 1);
         r.stepped(1450, 8);
         assertTrue(r.ownStep(6, 7));                       // late, or after the next step
         assertTrue(r.ownStep(7, 8));
@@ -173,12 +192,12 @@ public class VolumeHoldTest {
     public void anotherPressStartsOver() {
         VolumeHold.Repeat r = new VolumeHold.Repeat(400, 50);
         r.volumeChanged(1000, 5, 6);
-        r.check(1400, true);
+        r.check(1400, 1);
         r.stepped(1400, 7);
         assertEquals(1460, r.volumeChanged(1460, 7, 6));
         assertEquals(-1, r.direction());
         assertEquals(6, r.expected());
-        assertEquals(WAIT, r.check(1460, true));
-        assertEquals(STEP, r.check(1860, true));
+        assertEquals(WAIT, r.check(1460, 1));
+        assertEquals(STEP, r.check(1860, 1));
     }
 }

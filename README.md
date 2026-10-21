@@ -371,7 +371,8 @@ The script therefore turns on `HomeButtonService`, an accessibility service in t
 Trade-offs:
 
 - Every remote key passes through the service, which answers at once for everything but Home.
-- While a volume key is held, the service runs `dumpsys input` about 20 times a second.
+- Each change of volume makes the service read `dumpsys input` once, and while a volume key is
+  held it reads it about 20 times a second.
 - Double-pressing Home no longer opens the picture-in-picture menu.
 - The stock launcher keeps running in the background.
 - On TCL, the service only starts at boot if the app's `AUTO_START` permission is allowed; the
