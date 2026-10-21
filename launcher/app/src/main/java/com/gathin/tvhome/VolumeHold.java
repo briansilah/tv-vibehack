@@ -94,7 +94,7 @@ final class VolumeHold {
             if (steps > 0) Log.i(TAG, "volume key held: repeated it " + steps + " times");
             steps = 0;
             if (!key || !dumpGranted()) {
-                repeat.stop();
+                repeat.reset();
                 return;
             }
             stream = type;
@@ -321,12 +321,12 @@ final class VolumeHold {
         }
 
         /**
-         * True for a change one of our steps made: one step in our direction, to a volume we stepped to. Only our
-         * steps' changes come in while we repeat, unless something else moved the volume too; their broadcasts may
-         * come late or be merged, so it's the value that says, not the order.
+         * True for a change one of our steps made: one step in our direction, to a volume we stepped to. Their
+         * broadcasts may come late, even after we've stopped, or be merged, so it's the value that says, not the
+         * order; what we stepped through is kept until a change that isn't ours.
          */
         boolean ownStep(int previous, int value) {
-            if (!repeating || value - previous != direction) return false;
+            if (value - previous != direction) return false;
             int n = (value - start) * direction;
             return n >= 1 && n <= (expected - start) * direction;
         }
@@ -360,6 +360,12 @@ final class VolumeHold {
             armed = false;
             repeating = false;
             return next = IDLE;
+        }
+
+        /** Stops, and forgets the steps we made: a change that isn't ours came in. */
+        void reset() {
+            stop();
+            start = expected;
         }
 
         long next() {

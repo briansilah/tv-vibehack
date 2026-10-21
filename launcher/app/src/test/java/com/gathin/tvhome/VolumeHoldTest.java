@@ -184,8 +184,15 @@ public class VolumeHoldTest {
         assertFalse(r.ownStep(8, 9));                      // past ours: another press
         assertFalse(r.ownStep(8, 7));                      // the other way
         assertFalse(r.ownStep(6, 8));                      // not one step
+        // Stopped (the key went up) before our last step's broadcast came: still ours, so it doesn't start over.
         r.stop();
+        assertTrue(r.ownStep(7, 8));
+        assertFalse(r.ownStep(8, 9));
+        // A change that isn't ours forgets them.
+        r.reset();
         assertFalse(r.ownStep(7, 8));
+        r.volumeChanged(2000, 8, 7);
+        assertFalse(r.ownStep(8, 7));                      // waiting: nothing of ours yet
     }
 
     @Test
