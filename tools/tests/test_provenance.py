@@ -197,7 +197,9 @@ class ProblemTests(unittest.TestCase):
                           (dict(launcher=dict(SHIPPED, glass=50)), "Liquid Glass at 50 (ships at 0)"),
                           (dict(launcher=dict(SHIPPED, test_art=1)), "stand-in top shelf art"),
                           (dict(launcher=dict(SHIPPED, shelf_choices=2)), "2 apps' top shelf as chosen in Home "
-                                                                          "Settings")):
+                                                                          "Settings"),
+                          (dict(launcher=dict(SHIPPED, shelf_choices=1, shelf_all="glow")),
+                           "all apps' top shelf set to glow in Home Settings")):
             m = levels(self.problems(self.repo.result("main", self.c1, **kw)), M)
             self.assertTrue(any(words in t for t in m), (kw, m))
 

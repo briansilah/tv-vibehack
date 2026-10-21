@@ -276,11 +276,6 @@ final class ShelfSource {
         return choices;
     }
 
-    /** Whether the app has designed artwork (ShelfArt), offered in Home Settings. */
-    static boolean hasArtwork(String pkg) {
-        return false;
-    }
-
     /**
      * The app's designed artwork as its cover, or null when it has none. Worker thread. (The artwork itself comes
      * with the top shelf's art collection.)
@@ -304,6 +299,14 @@ final class ShelfSource {
             madeFor.remove(key);
         }
         if (choices.get(pkg).suggests() && feeds.containsKey(pkg)) lastFetch = 0;
+    }
+
+    /** All apps' choice changed (Home Settings): every app's titles and cover are made again. */
+    void allChoicesChanged() {
+        combined.clear();
+        covers.clear();
+        madeFor.clear();
+        lastFetch = 0;
     }
 
     /** The dock's apps changed: fetches their feeds if they're new and stale. */

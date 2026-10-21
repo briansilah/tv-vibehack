@@ -184,9 +184,15 @@ final class TopShelf implements ShelfSource.Listener {
         if (started) applyChoices();
     }
 
-    /** How many apps' top shelf shows something else than config.xml's default: for tools/perf.py's log. */
+    /** How many choices made in Home Settings are in effect (each app's, and all apps'): for tools/perf.py's log. */
     int choicesInEffect() {
         return source == null ? 0 : source.choices().inEffect();
+    }
+
+    /** All apps' choice in effect, or "-" for each app's own: for tools/perf.py's log. */
+    String allChoice() {
+        ShelfChoice c = source == null ? null : source.choices().all();
+        return c == null ? "-" : c.encode();
     }
 
     /** The glow's colour chosen for the app in Home Settings, or 0 for its own. */
@@ -203,8 +209,13 @@ final class TopShelf implements ShelfSource.Listener {
     private void applyChoices() {
         java.util.Set<String> changed = source.choices().takeChanged();
         if (changed.isEmpty()) return;
-        for (String pkg : changed) source.choiceChanged(pkg);
-        if (!shown || current == null || !changed.contains(current.pkg)) return;
+        boolean all = changed.contains(ShelfChoices.ALL);
+        if (all) {
+            source.allChoicesChanged();
+        } else {
+            for (String pkg : changed) source.choiceChanged(pkg);
+        }
+        if (!shown || current == null || !(all || changed.contains(current.pkg))) return;
         leaveActions();
         visit(current);
         display(choose(current), 0L, null, true);

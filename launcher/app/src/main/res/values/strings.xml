@@ -62,6 +62,8 @@
     <string name="home_settings">Home Settings</string>
     <string name="top_shelf">Top Shelf</string>
     <string name="top_shelf_about">What shows behind the Dock while one of its apps is focused.</string>
+    <string name="all_apps">All Apps</string>
+    <string name="per_app">Per App</string>
     <string name="other_apps">Other Apps</string>
     <string name="other_apps_about">Their top shelf shows once you move them into the Dock.</string>
     <string name="appearance">Appearance</string>
@@ -84,6 +86,12 @@
     <string name="about_artwork">Artwork made for %1$s. Up from it opens the app.</string>
     <string name="about_cover_art">%1$s\'s logo on shapes in its colours. Up from it opens the app.</string>
     <string name="about_colour">A colour of your choice, with %1$s\'s name.</string>
+    <string name="about_per_app">Each app shows its own choice, below.</string>
+    <!-- %1$s: a choice, e.g. Original. -->
+    <string name="about_all">Every app shows %1$s, whatever its own choice. Per App brings theirs back.</string>
+    <string name="about_all_artwork">Every app shows its artwork, or its cover art without any. Per App brings their own choices back.</string>
+    <!-- On an app's row while All Apps is set. %1$s: all apps' choice. -->
+    <string name="about_all_over">All Apps is set to %1$s, over this. Choose Per App there to use this again.</string>
     <string name="about_glass">How see-through the Dock and the top right are. It opens on Home, so you see them change.</string>
     <!-- The custom colours (ShelfChoice.PALETTE), for screen readers. -->
     <string-array name="colour_names">

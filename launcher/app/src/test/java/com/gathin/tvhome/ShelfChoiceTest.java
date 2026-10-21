@@ -32,6 +32,21 @@ public class ShelfChoiceTest {
     }
 
     @Test
+    public void allAppsChoiceIsOverEachAppsOwnWithoutErasingIt() {
+        // Per app (none saved for all): each app's own, else config.xml's.
+        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve(null, "glow", false));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(null, null, true));
+        // All apps' over the app's own and over config.xml's.
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("image", "glow", false));
+        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("suggestions", null, true));
+        assertEquals(ShelfChoice.ARTWORK, ShelfChoice.resolve("artwork", "colour:0A84FF", false));
+        // An unreadable one for all apps: each app's own again.
+        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve("hologram", "glow", false));
+        // Its key isn't an app's.
+        assertNull(ShelfChoice.pkgOf(ShelfChoice.PREF_ALL));
+    }
+
+    @Test
     public void everyChoiceSurvivesSavingAndReading() {
         for (ShelfChoice.Kind k : ShelfChoice.Kind.values()) {
             ShelfChoice c = ShelfChoice.of(k);

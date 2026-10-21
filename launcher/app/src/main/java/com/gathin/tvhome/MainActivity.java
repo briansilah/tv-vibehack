@@ -857,7 +857,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                     + " glass_saved=" + prefs.getInt(PREF_GLASS, -1)
                     + " glass_tier=" + tiers[LiquidGlass.tier(this)]
                     + " test_art=" + (testArt != null ? 1 : 0)
-                    + " shelf_choices=" + topShelf.choicesInEffect());
+                    + " shelf_choices=" + topShelf.choicesInEffect()
+                    + " shelf_all=" + topShelf.allChoice());
         }
     }
 

@@ -249,8 +249,11 @@ is an app in the grid, a gear on glass like the Arrange apps tile: installed wit
 your apps, next to Arrange apps, and you can move it into the dock or hide it (`hidden_apps`) like any other. Google TV's own
 app list shows it too. On the left, Home in miniature shows what you'll get as you move through the list.
 
-- **Top Shelf**: each dock app with what its top shelf shows, then the rest of your apps (their top shelf
-  shows once they're in the dock). Pick an app, then one of:
+- **Top Shelf**, first **All Apps**: **Per App** (the default: each app's own choice, below), or one choice
+  for every app at once (Suggestions, Static Image, Original, or Artwork where the launcher has some),
+  over theirs without erasing them: Per App brings them back. Then each dock app with what its top shelf
+  shows, then the rest of your apps (their top shelf shows once they're in the dock). Pick an app, then
+  one of:
   - **Suggestions**: its suggested titles ([below](#the-top-shelf)). The default, except for YouTube.
   - **Static Image**: one picture that stays, as Apple TV shows YouTube's: its Apple TV image if you've
     put one on the TV, else its artwork, else its cover art. Up from it opens the app. YouTube's default.

@@ -3,9 +3,9 @@ package com.gathin.tvhome;
 import java.util.Locale;
 
 /**
- * What an app's top shelf shows, as chosen for it in Home Settings ({@link SettingsActivity}): saved on the TV, or
- * else config.xml's default (its static image for an app in top_shelf_images, YouTube's; suggestions for the rest).
- * Pure Java; {@link ShelfChoices} keeps them.
+ * What an app's top shelf shows, as chosen in Home Settings ({@link SettingsActivity}): for all apps at once, else for
+ * the app, saved on the TV, or else config.xml's default (its static image for an app in top_shelf_images, YouTube's;
+ * suggestions for the rest). Pure Java; {@link ShelfChoices} keeps them.
  */
 final class ShelfChoice {
 
@@ -32,6 +32,11 @@ final class ShelfChoice {
 
     /** Where they're saved: the launcher's "home" preferences, one key per app. */
     static final String PREF_PREFIX = "shelf_choice.";
+    /**
+     * All apps' choice, over each app's own without erasing it ("Per App" removes it, and theirs apply again). Not
+     * under {@link #PREF_PREFIX}: no app's.
+     */
+    static final String PREF_ALL = "shelf_choice_all";
 
     /** Custom colours: red, orange, yellow, green, teal, blue, purple and pink, as tvOS's system colours. */
     static final int[] PALETTE = {
@@ -93,6 +98,12 @@ final class ShelfChoice {
     static ShelfChoice resolve(String saved, boolean listedImage) {
         ShelfChoice c = decode(saved);
         return c != null ? c : byDefault(listedImage);
+    }
+
+    /** The choice in effect with all apps' ({@link #PREF_ALL}, null for per app) over the app's own. */
+    static ShelfChoice resolve(String savedAll, String saved, boolean listedImage) {
+        ShelfChoice all = decode(savedAll);
+        return all != null ? all : resolve(saved, listedImage);
     }
 
     /** "suggestions", "image", "artwork", "cover_art", "glow" or "colour:RRGGBB". */

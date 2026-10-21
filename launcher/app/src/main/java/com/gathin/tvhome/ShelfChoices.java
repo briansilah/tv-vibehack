@@ -10,11 +10,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The top shelf choices saved on the TV (Home Settings), with config.xml's defaults for the rest: in the launcher's
- * "home" preferences, which updates keep and clearing the launcher's storage resets. Notes which apps' choices
- * changed since asked, so Home redoes only those. Main thread.
+ * The top shelf choices saved on the TV (Home Settings): all apps' if set, else each app's, else config.xml's
+ * defaults. In the launcher's "home" preferences, which updates keep and clearing the launcher's storage resets.
+ * Notes which apps' choices changed since asked ({@link #ALL}: all apps'), so Home redoes only those. Main thread.
  */
 final class ShelfChoices {
+
+    /** In {@link #takeChanged}: all apps' choice changed, so every app's may have. */
+    static final String ALL = "*";
 
     private final SharedPreferences prefs;
     /** Apps config.xml gives a static image (top_shelf_images). */
@@ -25,6 +28,10 @@ final class ShelfChoices {
     /** Held here: SharedPreferences keeps its listeners only weakly. */
     private final SharedPreferences.OnSharedPreferenceChangeListener watcher = (p, key) -> {
         // A null key is clear(), which the launcher never calls (clearing its storage ends the process too).
+        if (ShelfChoice.PREF_ALL.equals(key)) {
+            changed.add(ALL);
+            return;
+        }
         String pkg = ShelfChoice.pkgOf(key);
         if (pkg != null) changed.add(pkg);
     };
@@ -39,10 +46,30 @@ final class ShelfChoices {
         prefs.registerOnSharedPreferenceChangeListener(watcher);
     }
 
-    /** What the app's top shelf shows. */
+    /** What the app's top shelf shows: all apps' choice, else its own. */
     ShelfChoice get(String pkg) {
         boolean listed = images.contains(pkg);
-        return shipped ? ShelfChoice.byDefault(listed) : ShelfChoice.resolve(prefs.getString(ShelfChoice.key(pkg), null), listed);
+        if (shipped) return ShelfChoice.byDefault(listed);
+        return ShelfChoice.resolve(prefs.getString(ShelfChoice.PREF_ALL, null),
+                prefs.getString(ShelfChoice.key(pkg), null), listed);
+    }
+
+    /** The app's own choice, whatever all apps' is: what Home Settings shows and changes for it. */
+    ShelfChoice own(String pkg) {
+        return ShelfChoice.resolve(prefs.getString(ShelfChoice.key(pkg), null), images.contains(pkg));
+    }
+
+    /** All apps' choice, or null for each app's own ("Per App"). */
+    ShelfChoice all() {
+        return shipped ? null : ShelfChoice.decode(prefs.getString(ShelfChoice.PREF_ALL, null));
+    }
+
+    /** Saves all apps' choice; null goes back to each app's own, which were kept. */
+    void setAll(ShelfChoice c) {
+        SharedPreferences.Editor e = prefs.edit();
+        if (c == null) e.remove(ShelfChoice.PREF_ALL);
+        else e.putString(ShelfChoice.PREF_ALL, c.encode());
+        e.apply();
     }
 
     ShelfChoice byDefault(String pkg) {
@@ -57,10 +84,13 @@ final class ShelfChoices {
         e.apply();
     }
 
-    /** How many apps have a choice of their own in effect: 0 with config.xml's ({@link #useShipped}). */
+    /**
+     * How many choices made in Home Settings are in effect: apps with one of their own, plus one for all apps'. 0 with
+     * config.xml's ({@link #useShipped}).
+     */
     int inEffect() {
         if (shipped) return 0;
-        int n = 0;
+        int n = all() != null ? 1 : 0;
         for (Map.Entry<String, ?> e : prefs.getAll().entrySet()) {
             String pkg = ShelfChoice.pkgOf(e.getKey());
             if (pkg != null && e.getValue() instanceof String
@@ -75,6 +105,7 @@ final class ShelfChoices {
     void useShipped(boolean on) {
         if (on == shipped) return;
         shipped = on;
+        if (prefs.contains(ShelfChoice.PREF_ALL)) changed.add(ALL);
         for (String key : prefs.getAll().keySet()) {
             String pkg = ShelfChoice.pkgOf(key);
             if (pkg != null) changed.add(pkg);
