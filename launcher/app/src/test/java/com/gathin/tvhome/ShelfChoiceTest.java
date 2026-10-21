@@ -102,15 +102,6 @@ public class ShelfChoiceTest {
     }
 
     @Test
-    public void aStaticPictureOpensTheAppFromItsButtonButSuggestionsCoverArtDoesnt() {
-        assertTrue(ShelfChoice.IMAGE.staticPicture());
-        assertTrue(ShelfChoice.ARTWORK.staticPicture());
-        assertTrue(ShelfChoice.COVER_ART.staticPicture());
-        assertFalse(ShelfChoice.SUGGESTIONS.staticPicture());
-        assertFalse(ShelfChoice.GLOW.staticPicture());
-    }
-
-    @Test
     public void coverArtOnlySkipsTheArtwork() {
         assertTrue(ShelfChoice.SUGGESTIONS.triesArtwork());
         assertTrue(ShelfChoice.IMAGE.triesArtwork());

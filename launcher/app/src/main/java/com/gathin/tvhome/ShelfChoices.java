@@ -58,7 +58,7 @@ final class ShelfChoices {
         return ShelfChoice.resolve(prefs.getString(ShelfChoice.key(pkg), null));
     }
 
-    /** All apps' choice, or null for each app's own ("Per App"). */
+    /** All apps' choice, or null for each app's own (Same for All Apps: Off). */
     ShelfChoice all() {
         return shipped ? null : ShelfChoice.decode(prefs.getString(ShelfChoice.PREF_ALL, null));
     }

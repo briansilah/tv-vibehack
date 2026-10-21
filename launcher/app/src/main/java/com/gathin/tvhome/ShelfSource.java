@@ -266,7 +266,7 @@ final class ShelfSource {
 
     /** The app's suggested titles, its own first, or null if none (yet) or it shows something else. */
     List<ShelfFeeds.Item> items(String pkg) {
-        // An app with a static image (YouTube's), or another choice than suggestions, shows only that, as on tvOS.
+        // An app set to anything but Suggestions shows only that, as on tvOS.
         return choices.get(pkg).suggests() ? titles(pkg) : null;
     }
 
@@ -1205,6 +1205,15 @@ final class ShelfSource {
                 o.delete();
             }
         }
+    }
+
+    /**
+     * Whether the app has a picture of its own on the TV (put there, or fetched from config.xml's URL), which its
+     * Picture shows before its artwork. Worker thread.
+     */
+    boolean hasOwnPicture(String pkg) {
+        String url = images.get(pkg);
+        return staticImageFile(pkg, url != null ? url : "") != null;
     }
 
     /**

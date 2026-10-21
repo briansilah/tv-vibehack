@@ -54,24 +54,24 @@
          Google account name or photo.) -->
     <string name="profile_name" translatable="false"></string>
 
-    <!-- Top shelf art: with focus on a dock app, the space above the dock shows, best first,
-         1. what the app suggests: what it publishes on the TV for the home screen (what you were watching, its
-            recommendations; needs READ_TV_LISTINGS, which build-and-install.sh grants), then the titles of its
-            feed below; or, for an app in top_shelf_images, its static image instead;
-         2. its artwork, for the apps that have one (ShelfArtworks.java): a picture painted for the app in its
-            brand's colours and shapes, with its logo; else its cover art: its logo, cut out of its banner, on
-            shapes in its colours;
-         3. otherwise the ambient glow and its name.
-         false: always the glow and name, with no network use.
-         Home Settings on the TV changes this per app: suggestions, a static image, the glow alone, or the app's
-         artwork, cover art or a colour. -->
+    <!-- Top shelf art: with focus on a dock app, the space above the dock shows what Home Settings on the TV says
+         for it. By default, its Picture: one that stays,
+         1. its own picture, if it's on the TV (top_shelf_images below);
+         2. else its artwork, for the apps that have one (ShelfArtworks.java): a picture painted for the app in its
+            brand's colours and shapes, with its logo;
+         3. else its App Colour: the ambient glow and its name.
+         Home Settings can change it per app (or for all at once): App Colour; Suggestions, what the app publishes on
+         the TV for the home screen (what you were watching, its recommendations; needs READ_TV_LISTINGS, which
+         build-and-install.sh grants), then the titles of its feed below, with its artwork or cover art (its logo,
+         cut out of its banner, on shapes in its colours) until it has some; or Custom: its artwork, cover art or a
+         colour.
+         false: always the glow and name, with no network use. -->
     <bool name="top_shelf_art">true</bool>
 
-    <!-- Apps whose top shelf is one static image, as tvOS shows YouTube's, instead of suggestions: "package [| URL]".
-         This is the default; Home Settings on the TV can change it for any app.
-         The image is the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's
-         home screen), else one fetched once from the https URL and kept on the TV. Until it has one, the app shows
-         its artwork (or cover art). Up from the app goes straight to the top right corner. -->
+    <!-- Apps' own pictures, which their Picture shows (Apple TV shows YouTube's): "package [| URL]". The picture is
+         the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's home screen),
+         else one fetched once from the https URL and kept on the TV. Until it has one, the app shows its artwork, or
+         its App Colour. Every app's Picture looks for one put on the TV, listed here or not. -->
     <string-array name="top_shelf_images" translatable="false">
         <item>com.google.android.youtube.tv</item>
     </string-array>

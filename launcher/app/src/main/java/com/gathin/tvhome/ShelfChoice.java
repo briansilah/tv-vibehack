@@ -10,18 +10,18 @@ import java.util.Locale;
 final class ShelfChoice {
 
     enum Kind {
-        /** What the app suggests, a title at a time; its artwork or cover art until it has some. */
+        /** Suggestions: what the app suggests, a title at a time; its artwork or cover art until it has some. */
         SUGGESTIONS("suggestions"),
         /**
-         * One picture that stays, the default: its Apple TV image put on the TV (or fetched), else its artwork, else
-         * none (its colour and name, as GLOW).
+         * Picture, the default: one picture that stays, its Apple TV image put on the TV (or fetched), else its
+         * artwork, else none (its colour and name, as GLOW).
          */
         IMAGE("image"),
         /** Its designed artwork (ShelfSource.artwork), else its cover art. */
         ARTWORK("artwork"),
         /** Its cover art, made from its banner and logo. */
         COVER_ART("cover_art"),
-        /** No picture: the glow in the app's colour, with its name. */
+        /** App Colour: no picture, the glow in the app's colour, with its name. */
         GLOW("glow"),
         /** No picture: the glow in a colour of your choice, with its name. */
         COLOUR("colour");
@@ -36,8 +36,8 @@ final class ShelfChoice {
     /** Where they're saved: the launcher's "home" preferences, one key per app. */
     static final String PREF_PREFIX = "shelf_choice.";
     /**
-     * All apps' choice, over each app's own without erasing it ("Per App" removes it, and theirs apply again). Not
-     * under {@link #PREF_PREFIX}: no app's.
+     * All apps' choice (Same for All Apps), over each app's own without erasing it: Off removes it, and theirs apply
+     * again. Not under {@link #PREF_PREFIX}: no app's.
      */
     static final String PREF_ALL = "shelf_choice_all";
 
@@ -142,14 +142,6 @@ final class ShelfChoice {
     /** Some picture shows (cover art at least), rather than the glow alone. */
     boolean picture() {
         return kind != Kind.GLOW && kind != Kind.COLOUR;
-    }
-
-    /**
-     * One picture shows and stays, as YouTube's static image: Up from the app moves to a button that opens it. Not
-     * for suggestions, whose cover art only stands in until titles come.
-     */
-    boolean staticPicture() {
-        return kind == Kind.IMAGE || kind == Kind.ARTWORK || kind == Kind.COVER_ART;
     }
 
     /** Whether, without a picture of its own or artwork, it shows its cover art (else its colour alone). */
