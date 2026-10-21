@@ -530,8 +530,14 @@ final class TopShelf implements ShelfSource.Listener {
     }
 
     @Override
+    public void onTitlesRead() {
+        preloadDock();
+    }
+
+    @Override
     public void onCover(String key) {
-        // Its sharp logo arrived: if the app is showing its cover, the logo changes in place.
+        // Its sharp logo arrived, or it was made again with or without its artwork: if the app is showing its cover,
+        // it changes in place.
         if (shown && current != null && current.key.equals(key) && tier == COVER) {
             Choice c = choose(current);
             if (c != null && c.tier == COVER) display(c, ARRIVE_MS, null, true);
@@ -669,7 +675,10 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return;
         if (shown && current != null) want(current);
         else keep();
-        for (ShelfSource.App a : dock) source.makeCover(a, null);
+        // Artworks are full-screen pictures: keep() decodes only those that may show next.
+        for (ShelfSource.App a : dock) {
+            if (!source.artworkWanted(a.pkg)) source.makeCover(a, null);
+        }
     }
 
     /**
@@ -698,6 +707,22 @@ final class TopShelf implements ShelfSource.Listener {
                 handler.post(keepAgain);
             });
         }
+        keepArtwork();
+    }
+
+    /**
+     * Artworks are decoded only for the dock app showing one, and those either side of it, which may show next
+     * (focus in the grid: those around the dock app it left); never for apps with titles to show.
+     */
+    private void keepArtwork() {
+        List<String> keys = new ArrayList<>(3);
+        for (int i = Math.max(0, dockAt - 1); i <= Math.min(dock.size() - 1, dockAt + 1); i++) {
+            ShelfSource.App a = dock.get(i);
+            if (!source.artworkWanted(a.pkg)) continue;
+            keys.add(a.key);
+            source.makeCover(a, null);
+        }
+        source.keepArtwork(keys);
     }
 
     // ---- showing -------------------------------------------------------------------------------------------

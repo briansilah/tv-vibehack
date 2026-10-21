@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -69,6 +70,9 @@ final class ShelfSource {
 
         /** An app's cover art changed (its crisp logo arrived). */
         void onCover(String key);
+
+        /** The titles saved and published on the TV have been read: which apps have none, so show artwork, is known. */
+        void onTitlesRead();
     }
 
     /** An app as the top shelf needs it, for its cover art. */
@@ -181,6 +185,25 @@ final class ShelfSource {
     private final Map<String, App> coverApps = new HashMap<>();
     /** Covers being made, and who's waiting for each. */
     private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
+    /** Whether each cover was made for an app that may show its artwork (see {@link #artworkWanted}). */
+    private final Map<String, Boolean> coverForArt = new HashMap<>();
+    /**
+     * The titles saved and published on the TV have been read once: until then, which apps have none isn't known, so
+     * covers of apps with artwork wait ({@link #deferred}).
+     */
+    private boolean titlesRead;
+    private final List<Deferred> deferred = new ArrayList<>();
+
+    /** A cover asked for before the titles were read. */
+    private static final class Deferred {
+        final App app;
+        final Done<Cover> done;
+
+        Deferred(App app, Done<Cover> done) {
+            this.app = app;
+            this.done = done;
+        }
+    }
     /**
      * What may show next (TopShelf.keep): each dock app's first title, and those next to the title showing. Kept out
      * of the cache's turnover, so a dock move, Left, Right or the carousel finds them decoded.
@@ -280,7 +303,10 @@ final class ShelfSource {
         if (started) return;
         started = true;
         readOwn();
-        if (feeds.isEmpty()) return;
+        if (feeds.isEmpty()) {
+            afterReads();
+            return;
+        }
         final List<ShelfFeeds.Feed> all = new ArrayList<>(feeds.values());
         WORK.execute(() -> {
             final Map<String, ShelfFeeds.Cached> saved = new HashMap<>();
@@ -300,6 +326,21 @@ final class ShelfSource {
                 refresh();
             });
         });
+        afterReads();
+    }
+
+    /** Once what start() reads has arrived (one worker, in order; then the main thread, in order). */
+    private void afterReads() {
+        WORK.execute(() -> main.post(() -> {
+            titlesRead = true;
+            List<Deferred> waiting = new ArrayList<>(deferred);
+            deferred.clear();
+            for (Deferred d : waiting) {
+                // Artworks only for those asked for by name: the dock's others are decoded as they may show.
+                if (d.done != null || !artworkWanted(d.app.pkg)) makeCover(d.app, d.done);
+            }
+            listener.onTitlesRead();
+        }));
     }
 
     /**
@@ -900,10 +941,28 @@ final class ShelfSource {
         return covers.get(key);
     }
 
-    /** Makes the app's cover art in the background, unless it has it; {@code done} gets it (null on failure). */
+    /**
+     * Whether the app's cover may be its artwork: it has one, and no titles to show. An app showing titles falls back
+     * on its cover art while one loads, as before: a full-screen artwork decoded for each dock app (8 MB a picture)
+     * would be memory spent on what hardly shows.
+     */
+    boolean artworkWanted(String pkg) {
+        return titlesRead && ShelfArt.has(pkg) && items(pkg) == null;
+    }
+
+    /**
+     * Makes the app's cover art in the background, unless it has it (made for whether it has titles now);
+     * {@code done} gets it (null on failure).
+     */
     void makeCover(final App app, final Done<Cover> done) {
+        if (!titlesRead && ShelfArt.has(app.pkg)) {
+            deferred.add(new Deferred(app, done));
+            return;
+        }
+        final boolean art = artworkWanted(app.pkg);
         Cover c = covers.get(app.key);
-        if (c != null) {
+        Boolean madeFor = coverForArt.get(app.key);
+        if (c != null && (c.image || madeFor == null || madeFor == art)) {
             if (done != null) done.done(c);
             return;
         }
@@ -919,11 +978,17 @@ final class ShelfSource {
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = images.get(app.pkg);
+        // Made again for titles that came or went: the one showing changes in place.
+        final boolean again = c != null;
         WORK.execute(() -> {
-            final Cover result = buildCover(app, imageUrl, spec, svgFile);
+            final Cover result = buildCover(app, art, imageUrl, spec, svgFile);
             main.post(() -> {
                 List<Done<Cover>> waiters = coversLoading.remove(app.key);
-                if (result != null) covers.put(app.key, result);
+                if (result != null) {
+                    covers.put(app.key, result);
+                    coverForArt.put(app.key, art);
+                    if (again) listener.onCover(app.key);
+                }
                 if (waiters != null) {
                     for (Done<Cover> d : waiters) d.done(result);
                 }
@@ -934,12 +999,15 @@ final class ShelfSource {
         });
     }
 
-    /** The app's static image if it has one on the TV, else its artwork, else its cover art, or null. Worker thread. */
-    private Cover buildCover(App app, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
+    /**
+     * The app's static image if it has one on the TV, else its artwork ({@code art}: see {@link #artworkWanted}), else
+     * its cover art, or null. Worker thread.
+     */
+    private Cover buildCover(App app, boolean art, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
         File f = imageUrl == null ? null : staticImageFile(app.pkg, imageUrl);
         Cover made = imageCover(f);
         try {
-            if (made == null) made = artwork(app);
+            if (made == null && art) made = artwork(app);
             if (made == null) made = renderCover(ctx, app);
             // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
             if (made != null && !made.image && svgFile != null && svgFile.exists()) {
@@ -1120,11 +1188,15 @@ final class ShelfSource {
         coversLoading.put(key, new ArrayList<>());
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
+        final boolean art = artworkWanted(app.pkg);
         WORK.execute(() -> {
-            final Cover result = buildCover(app, images.get(app.pkg), spec, svgFile);
+            final Cover result = buildCover(app, art, images.get(app.pkg), spec, svgFile);
             main.post(() -> {
                 List<Done<Cover>> waiters = coversLoading.remove(key);
-                if (result != null && covers.containsKey(key)) covers.put(key, result);
+                if (result != null && covers.containsKey(key)) {
+                    covers.put(key, result);
+                    coverForArt.put(key, art);
+                }
                 if (waiters != null) {
                     for (Done<Cover> d : waiters) d.done(covers.get(key));
                 }
@@ -1303,6 +1375,23 @@ final class ShelfSource {
     void forgetCovers() {
         covers.clear();
         coverApps.clear();
+        coverForArt.clear();
+        deferred.clear();
+    }
+
+    /**
+     * Keeps decoded only the artworks of {@code keys} (what shows, and what may show next: see TopShelf.keep); the
+     * others are full-screen pictures, read back from the TV's copy when wanted again.
+     */
+    void keepArtwork(Collection<String> keys) {
+        Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Cover> e = it.next();
+            if (e.getValue().artwork && !keys.contains(e.getKey())) {
+                it.remove();
+                coverForArt.remove(e.getKey());
+            }
+        }
     }
 
     private static Cover renderCover(Context ctx, App app) {
@@ -1433,7 +1522,14 @@ final class ShelfSource {
         }
         pinned.values().removeIf(b -> !keep.contains(b));
         // Static images and artworks are full-screen pictures too: made again from the TV's copy when Home shows.
-        covers.values().removeIf(c -> (c.image || c.artwork) && !keep.contains(c.backdrop));
+        Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Cover> e = it.next();
+            if ((e.getValue().image || e.getValue().artwork) && !keep.contains(e.getValue().backdrop)) {
+                it.remove();
+                coverForArt.remove(e.getKey());
+            }
+        }
     }
 
     // ---- files ---------------------------------------------------------------------------------------------
