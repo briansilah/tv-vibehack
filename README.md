@@ -257,7 +257,7 @@ app list shows it too. On the left, Home in miniature shows what you'll get as y
   one of:
   - **Suggestions**: its suggested titles ([below](#the-top-shelf)). The default, except for YouTube.
   - **Static Image**: one picture that stays, as Apple TV shows YouTube's: its Apple TV image if you've
-    put one on the TV, else its artwork, else its cover art. Up from it opens the app. YouTube's default.
+    put one on the TV, else its artwork, else its cover art. YouTube's default.
   - **Original**: no picture, just the ambient glow in its colour and its name, as before the top shelf
     had art. Nothing is fetched for it.
   - **Custom**: its **Artwork** (for the apps the launcher has some for), its **Cover Art** (its logo on
@@ -341,7 +341,7 @@ the screen down to where tvOS's dock starts, nothing drawn over it, its bottom e
 the dock, mirrored and blurred. An app's own 2320 x 720 Top Shelf Image (Wide) goes up as it is with
 `--whole`, losing its sides as on tvOS; a line
 `package | https://...` in `top_shelf_images` fetches one from a URL instead, once. Until an app has
-its image, it shows its artwork. Up from it moves to **Open YouTube**.
+its image, it shows its artwork. Up from it goes straight to the top right corner: a picture has no button.
 
 **Up** from a dock app showing a title moves to a button under it, which says what OK will do with
 that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue
@@ -352,7 +352,9 @@ catalogue title by its name, where the app can't be opened at the title (Netflix
 Left and Right page through the titles one at a time, in the same order both ways (one still
 downloading slides in when it arrives); Down or Back returns to the dock, and Up again opens the top
 right corner. Focus coming back to an app starts again at its first title. Apps don't let other apps
-add to their watchlists, so there's no such button.
+add to their watchlists, so there's no such button. Up from a dock app showing anything else (a static
+image, artwork or cover art, also while its first title is loading, or the glow) goes straight to the
+top right corner, with no button.
 
 **The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
 the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept
