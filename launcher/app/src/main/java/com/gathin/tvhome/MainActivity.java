@@ -960,9 +960,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     public boolean onTileDpadKey(int position, int keyCode) {
         int target = AppOrder.step(position, adapter.getItemCount(), COLUMNS, keyCode);
         if (target < 0) {
-            // Up from the dock: into the top shelf, as on tvOS, when it shows a title with something to open
-            // (Play, Resume); otherwise, and Up again from there, the top right corner opens on Settings, next to the
-            // profile picture, as tvOS opens Control Center on its settings tab.
+            // Up from the dock: into the top shelf, as on tvOS, when it shows a suggested title (Play, Resume, Open);
+            // otherwise (a static picture, artwork, cover art or the glow), and Up again from there, the top right
+            // corner opens on Settings, next to the profile picture, as tvOS opens Control Center on its settings tab.
             if (!rearranger.isActive() && topShelf.enterActions()) return true;
             btnSettings.requestFocus();
             return true;

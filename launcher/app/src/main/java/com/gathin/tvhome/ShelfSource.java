@@ -292,14 +292,6 @@ final class ShelfSource {
         return f == null ? null : ShelfFeeds.caption(f, country, countryName);
     }
 
-    /**
-     * Whether the app's top shelf is one picture that stays, as YouTube's static image (config.xml, top_shelf_images)
-     * or a picture chosen in Home Settings, rather than titles: Up from it then moves to a button that opens the app.
-     */
-    boolean staticPicture(String pkg) {
-        return choices.get(pkg).staticPicture();
-    }
-
     /** What the app's top shelf shows. */
     ShelfChoice choice(String pkg) {
         return choices.get(pkg);

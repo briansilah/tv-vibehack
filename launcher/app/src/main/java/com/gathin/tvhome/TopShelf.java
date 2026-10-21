@@ -303,15 +303,12 @@ final class TopShelf implements ShelfSource.Listener {
 
     /**
      * Up from the dock: focus goes to the button under the title showing (Resume, Play, Open in the app, Search in
-     * the app, or Open the app: see {@link ShelfAction}), and the carousel holds still. Returns false if there's
-     * nothing to act on.
+     * the app, or Open the app: see {@link ShelfAction}), and the carousel holds still. Only a suggested title has
+     * one: for anything else on screen (a static image, artwork or cover art, also while an app's first title is
+     * loading, or the glow) this returns false, and Up goes straight to the top right corner.
      */
     boolean enterActions() {
-        if (!shown || current == null) return false;
-        // An app whose top shelf is one picture (YouTube's static image, or a picture chosen in Home Settings) has one
-        // too: it opens the app.
-        boolean opensApp = tier == COVER && source.staticPicture(current.pkg);
-        if (!opensApp && (tier != CONTENT || showingItem == null)) return false;
+        if (!shown || current == null || tier != CONTENT || showingItem == null) return false;
         acting = true;
         handler.removeCallbacks(advance);
         // Left and Right go from the title you see, not from one the carousel was about to bring in.
