@@ -157,8 +157,11 @@ final class Rearranger {
                     () -> moveAcrossDock(app));
         }
         addAction(actions, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
+        // Every app has a top shelf but Home Settings itself.
         final String pkg = adapter.pkgAt(position);
-        if (shelfAction != null && pkg != null) addAction(actions, popup, R.string.top_shelf, () -> shelfAction.accept(pkg));
+        if (shelfAction != null && pkg != null && !pkg.equals(activity.getPackageName())) {
+            addAction(actions, popup, R.string.top_shelf, () -> shelfAction.accept(pkg));
+        }
         // Not about this app but the home screen, as iOS's Home Screen menu offers its look.
         if (glassAction != null) addAction(actions, popup, R.string.liquid_glass, glassAction);
 

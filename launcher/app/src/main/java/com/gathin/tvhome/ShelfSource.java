@@ -175,6 +175,10 @@ final class ShelfSource {
     private final Map<String, App> coverApps = new HashMap<>();
     /** Covers being made, and who's waiting for each. */
     private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
+    /** The choice each cover was made for: one made for another is as good as none ({@link #cover}). */
+    private final Map<String, ShelfChoice> madeFor = new HashMap<>();
+    /** Counts forgetCovers: a cover begun before it isn't kept. */
+    private int coverGen;
     /**
      * What may show next (TopShelf.keep): each dock app's first title, and those next to the title showing. Kept out
      * of the cache's turnover, so a dock move, Left, Right or the carousel finds them decoded.
@@ -291,12 +295,13 @@ final class ShelfSource {
      */
     void choiceChanged(String pkg) {
         combined.remove(pkg);
-        java.util.Iterator<Map.Entry<String, App>> it = coverApps.entrySet().iterator();
+        // Its covers go (one being made for the old choice is dropped when it's done: see madeFor).
+        java.util.Iterator<String> it = covers.keySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<String, App> e = it.next();
-            if (!e.getValue().pkg.equals(pkg) || coversLoading.containsKey(e.getKey())) continue;
-            covers.remove(e.getKey());
+            String key = it.next();
+            if (!AppOrder.packageOf(key).equals(pkg)) continue;
             it.remove();
+            madeFor.remove(key);
         }
         if (choices.get(pkg).suggests() && feeds.containsKey(pkg)) lastFetch = 0;
     }
@@ -935,9 +940,10 @@ final class ShelfSource {
 
     // ---- cover art -----------------------------------------------------------------------------------------
 
-    /** The app's cover art if made already, or null. */
+    /** The app's cover art if made already for its top shelf choice, or null. */
     Cover cover(String key) {
-        return covers.get(key);
+        Cover c = covers.get(key);
+        return c != null && choices.get(AppOrder.packageOf(key)).equals(madeFor.get(key)) ? c : null;
     }
 
     /**
@@ -945,12 +951,14 @@ final class ShelfSource {
      * for the glow). {@code done} gets it (null on failure, or for the glow).
      */
     void makeCover(final App app, final Done<Cover> done) {
-        Cover c = covers.get(app.key);
+        Cover c = cover(app.key);
         if (c != null) {
             if (done != null) done.done(c);
             return;
         }
         final ShelfChoice choice = choices.get(app.pkg);
+        covers.remove(app.key);   // one made for another choice
+        madeFor.remove(app.key);
         if (!choice.picture()) {
             if (done != null) done.done(null);
             return;
@@ -960,29 +968,31 @@ final class ShelfSource {
             if (done != null) waiting.add(done);
             return;
         }
-        waiting = new ArrayList<>();
-        if (done != null) waiting.add(done);
-        coversLoading.put(app.key, waiting);
+        final List<Done<Cover>> waiters = new ArrayList<>();
+        if (done != null) waiters.add(done);
+        coversLoading.put(app.key, waiters);
         coverApps.put(app.key, app);
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = imageUrl(app.pkg, choice);
+        final int gen = coverGen;
         WORK.execute(() -> {
             final Cover result = buildCover(app, choice, imageUrl, spec, svgFile);
             main.post(() -> {
-                List<Done<Cover>> waiters = coversLoading.remove(app.key);
+                if (coversLoading.get(app.key) == waiters) coversLoading.remove(app.key);
                 if (!choice.equals(choices.get(app.pkg))) {
                     // The choice changed meanwhile: make the new one for whoever's waiting.
-                    if (waiters != null) {
-                        for (Done<Cover> d : waiters) makeCover(app, d);
-                    }
+                    for (Done<Cover> d : waiters) makeCover(app, d);
                     return;
                 }
-                if (result != null) covers.put(app.key, result);
-                if (waiters != null) {
-                    for (Done<Cover> d : waiters) d.done(result);
+                // Not kept if the apps changed meanwhile (forgetCovers): it may be from an old banner.
+                boolean keep = gen == coverGen;
+                if (result != null && keep) {
+                    covers.put(app.key, result);
+                    madeFor.put(app.key, choice);
                 }
-                if (result != null && result.image) return;
+                for (Done<Cover> d : waiters) d.done(result);
+                if (!keep || (result != null && result.image)) return;
                 if (imageUrl != null) fetchImage(app, imageUrl);
                 if (result != null && svgFile != null && !svgFile.exists()) fetchLogo(app, spec, svgFile);
             });
@@ -1077,7 +1087,7 @@ final class ShelfSource {
                         failed.put(url, System.currentTimeMillis());
                         return;
                     }
-                    if (!covers.containsKey(app.key) || choices.get(app.pkg).kind != ShelfChoice.Kind.IMAGE) {
+                    if (cover(app.key) == null || choices.get(app.pkg).kind != ShelfChoice.Kind.IMAGE) {
                         return;   // apps or the choice changed meanwhile
                     }
                     covers.put(app.key, new Cover(made.backdrop, null, true, stamp));
@@ -1119,22 +1129,31 @@ final class ShelfSource {
     /** Makes the app's cover again for its choice (a new static image, or its sharp logo arrived); it changes in place. */
     private void remakeCover(final String key) {
         final App app = coverApps.get(key);
-        if (app == null || !covers.containsKey(key) || coversLoading.containsKey(key)) return;
-        coversLoading.put(key, new ArrayList<>());
+        if (app == null || cover(key) == null || coversLoading.containsKey(key)) return;
+        final List<Done<Cover>> waiters = new ArrayList<>();
+        coversLoading.put(key, waiters);
         final ShelfChoice choice = choices.get(app.pkg);
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = imageUrl(app.pkg, choice);
+        final int gen = coverGen;
         WORK.execute(() -> {
             final Cover result = buildCover(app, choice, imageUrl, spec, svgFile);
             main.post(() -> {
-                List<Done<Cover>> waiters = coversLoading.remove(key);
-                boolean current = choice.equals(choices.get(app.pkg));
-                if (result != null && current && covers.containsKey(key)) covers.put(key, result);
-                if (waiters != null) {
-                    for (Done<Cover> d : waiters) d.done(covers.get(key));
+                if (coversLoading.get(key) == waiters) coversLoading.remove(key);
+                if (!choice.equals(choices.get(app.pkg))) {
+                    // The choice changed meanwhile: whoever's waiting gets the new one.
+                    for (Done<Cover> d : waiters) makeCover(app, d);
+                    return;
                 }
-                if (result != null && current) listener.onCover(key);
+                boolean fresh = gen == coverGen;
+                if (result != null && fresh) {
+                    // Dropped meanwhile (choiceChanged, the choice back as it was): it's the cover all the same.
+                    covers.put(key, result);
+                    madeFor.put(key, choice);
+                }
+                for (Done<Cover> d : waiters) d.done(cover(key));
+                if (result != null && fresh) listener.onCover(key);
             });
         });
     }
@@ -1303,10 +1322,13 @@ final class ShelfSource {
         return new Cover(cover.backdrop, hardware(lockup));
     }
 
-    /** Apps changed: their banners may have too. */
+    /** Apps changed: their banners may have too. Covers being made now aren't kept (coverGen). */
     void forgetCovers() {
         covers.clear();
+        madeFor.clear();
         coverApps.clear();
+        coversLoading.clear();
+        coverGen++;
     }
 
     private static Cover renderCover(Context ctx, App app) {

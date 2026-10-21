@@ -118,8 +118,12 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         dockBanners.clear();
         for (int i = 0; i < dockCount; i++) dockBanners.add(copy(bannerOf(apps.get(i))));
         AppAdapter.Entry to = direct != null ? entry(direct) : null;
-        if (to != null) showApp(to, null);
-        else showRoot(null);
+        if (to != null) {
+            showApp(to, null);
+        } else {
+            direct = null;   // not a TV app here (any more): the whole of Home Settings, as from its tile
+            showRoot(null);
+        }
     }
 
     private AppAdapter.Entry entry(String pkg) {
