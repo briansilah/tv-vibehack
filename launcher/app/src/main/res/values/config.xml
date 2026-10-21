@@ -58,7 +58,9 @@
          1. what the app suggests: what it publishes on the TV for the home screen (what you were watching, its
             recommendations; needs READ_TV_LISTINGS, which build-and-install.sh grants), then the titles of its
             feed below; or, for an app in top_shelf_images, its static image instead;
-         2. its cover art: its logo, cut out of its banner, on shapes in its colours;
+         2. its artwork, for the apps that have one (ShelfArtworks.java): a picture painted for the app in its
+            brand's colours and shapes, with its logo; else its cover art: its logo, cut out of its banner, on
+            shapes in its colours;
          3. otherwise the ambient glow and its name.
          false: always the glow and name, with no network use.
          Home Settings on the TV changes this per app: suggestions, a static image, the glow alone, or the app's
@@ -69,7 +71,7 @@
          This is the default; Home Settings on the TV can change it for any app.
          The image is the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's
          home screen), else one fetched once from the https URL and kept on the TV. Until it has one, the app shows
-         its cover art. Up from the app moves to a button that opens it. -->
+         its artwork (or cover art). Up from the app moves to a button that opens it. -->
     <string-array name="top_shelf_images" translatable="false">
         <item>com.google.android.youtube.tv</item>
     </string-array>
@@ -88,7 +90,7 @@
         <item>com.stremio.one | Popular on Stremio | https://cinemeta-catalogs.strem.io/top/catalog/movie/top.json | https://cinemeta-catalogs.strem.io/top/catalog/series/top.json</item>
     </string-array>
 
-    <!-- Cover art's logo, sharp at any size: a vector logo from Simple Icons (simpleicons.org, CC0), fetched once
+    <!-- The logo on artwork and cover art, sharp at any size: a vector logo from Simple Icons (simpleicons.org, CC0), fetched once
          and kept on the TV: "package | icon | brand colour (RRGGBB) [| wordmark]", the icon's name as on
          simpleicons.org; wordmark: the icon is the app's name, so it isn't written beside it. Apps not listed (or
          offline) get the logo cut out of their banner, never shown larger than it is. -->
@@ -100,6 +102,8 @@
         <item>com.google.android.youtube.tvmusic | youtubemusic | FF0000</item>
         <item>com.plexapp.android | plex | EBAF00</item>
         <item>com.wbd.stream | hbomax | FFFFFF | wordmark</item>
+        <item>com.formulaone.production | f1 | E10600 | wordmark</item>
+        <item>com.android.vending | googleplay | 414141</item>
     </string-array>
 
     <!-- What the top shelf's button opens for a feed's title (Up from the dock, then OK): "package | link", with

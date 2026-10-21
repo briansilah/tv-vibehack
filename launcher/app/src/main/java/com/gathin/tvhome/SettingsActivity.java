@@ -608,4 +608,9 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
     @Override
     public void onCover(String key) {
     }
+
+    @Override
+    public void onTitlesRead() {
+        // Titles that were already read arrive by onItems; with none, the preview stays as it is.
+    }
 }

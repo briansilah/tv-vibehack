@@ -81,9 +81,10 @@ A home screen that is yours again:
   then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+,
   Prime Video, Stremio's popular titles), each full screen with its title's logo, the next one pushing
   in every 10 seconds. YouTube shows one picture instead, as on Apple TV: its Apple TV Top Shelf image,
-  once you've put it on the TV. An app without suggestions shows cover art: its logo on shapes in its own
-  colours. Otherwise, its name over an ambient glow in its colour. Each app's can be changed on the TV in
-  **Home Settings**. See [The top shelf](#the-top-shelf).
+  once you've put it on the TV. An app without suggestions shows its artwork: an original picture in its
+  brand's colours and shapes, in the manner of YouTube's, with its logo (about 30 apps have one), or else
+  cover art: its logo on shapes in its own colours. Otherwise, its name over an ambient glow in its colour.
+  Each app's can be changed on the TV in **Home Settings**. See [The top shelf](#the-top-shelf).
 - **Home Settings**, the launcher's own settings on the TV, as an app in the grid like Apple TV's Settings:
   what each app's top shelf shows (its suggestions, a static image, the original glow, or its artwork,
   cover art or a colour of your choice), with a preview of Home as you move, and Liquid Glass.
@@ -293,11 +294,26 @@ Apple TV's Top Shelf does:
    - **Or one static image**, for the apps in `top_shelf_images` in `config.xml` (YouTube) or set to
      Static Image in [Home Settings](#home-settings): the picture Apple TV shows for them, full
      screen, instead of suggestions. Below.
-2. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
+2. **Its artwork**, for the apps that have one: a picture made for the app, in the manner of
+   YouTube's on Apple TV (big flat shapes running off the edges, dry-brush strokes and a scribble,
+   around a calm middle), from its brand's colours and the shapes of its identity, with its logo over
+   it. Below.
+3. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
    on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
    in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
    or offline, the logo cut out of the app's banner, never shown larger than it is.
-3. Otherwise the app's name over the ambient glow, as before.
+4. Otherwise the app's name over the ambient glow, as before.
+
+**Artwork.** About 30 apps have one: those on the TV this was made for (YouTube, YouTube Music,
+Netflix, Apple TV, F1 TV, Plex, Stremio, the Play Store and Play Games, Settings, TCL's apps) and the
+most watched elsewhere and in Kenya (Prime Video, Disney+, HBO Max, Spotify, Twitch, Crunchyroll,
+Paramount+, Peacock, Hulu, Tubi, Pluto TV, DAZN, JioHotstar, DStv, Viusasa, Kodi, VLC). They're all
+original: the launcher paints each one on the TV the first time it's needed (`ShelfArt`, one recipe
+per app in `ShelfArtworks`), at the screen's size, and keeps it as a JPEG in its cache until the
+launcher is updated. No app's own pictures are copied or shipped; its logo comes as for cover art.
+YouTube's Apple TV image, once it's on the TV, still wins over its artwork.
+
+![The artwork collection](docs/shelf-art.jpg)
 
 **Only sharp pictures show.** A title's backdrop must be at least about 720p once any black bars are
 cut off (YouTube's thumbnails are fetched at 1280 x 720; the small ones the apps publish are never
@@ -314,7 +330,7 @@ in Xcode: Window → Devices and Simulators → your Apple TV → Take Screensho
 ```bash
 python3 tools/top_shelf_image.py ~/Desktop/Screenshot.png                     # YouTube's
 python3 tools/top_shelf_image.py Screenshot.png --package <package>           # another app with a static image
-python3 tools/top_shelf_image.py --remove                                     # back to YouTube's cover art
+python3 tools/top_shelf_image.py --remove                                     # back to YouTube's artwork
 ```
 
 It keeps the part of the screen above the dock, paints over the time and profile picture from what's
@@ -325,7 +341,7 @@ the screen down to where tvOS's dock starts, nothing drawn over it, its bottom e
 the dock, mirrored and blurred. An app's own 2320 x 720 Top Shelf Image (Wide) goes up as it is with
 `--whole`, losing its sides as on tvOS; a line
 `package | https://...` in `top_shelf_images` fetches one from a URL instead, once. Until an app has
-its image, it shows its cover art. Up from it moves to **Open YouTube**.
+its image, it shows its artwork. Up from it moves to **Open YouTube**.
 
 **Up** from a dock app showing a title moves to a button under it, which says what OK will do with
 that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue

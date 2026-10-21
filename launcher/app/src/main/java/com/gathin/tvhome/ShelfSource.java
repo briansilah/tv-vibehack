@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -69,6 +70,9 @@ final class ShelfSource {
 
         /** An app's cover art changed (its crisp logo arrived). */
         void onCover(String key);
+
+        /** The titles saved and published on the TV have been read: which apps have none, so show artwork, is known. */
+        void onTitlesRead();
     }
 
     /** An app as the top shelf needs it, for its cover art. */
@@ -92,8 +96,9 @@ final class ShelfSource {
     }
 
     /**
-     * An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out); or its static
-     * Top Shelf image ({@code image}), full screen with its logo in the picture.
+     * An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out), or its
+     * artwork ({@code artwork}, see ShelfArt) and logo; or its static Top Shelf image ({@code image}), full screen
+     * with its logo in the picture.
      */
     static final class Cover {
         final Bitmap backdrop;
@@ -101,16 +106,23 @@ final class ShelfSource {
         final boolean image;
         /** For an app with a static image: which file it was made from ("" for none), to notice a new one. */
         final String stamp;
+        /** Its artwork: a full-screen picture, like a static image. */
+        final boolean artwork;
 
         Cover(Bitmap backdrop, Bitmap logo) {
             this(backdrop, logo, false, null);
         }
 
         Cover(Bitmap backdrop, Bitmap logo, boolean image, String stamp) {
+            this(backdrop, logo, image, stamp, false);
+        }
+
+        Cover(Bitmap backdrop, Bitmap logo, boolean image, String stamp, boolean artwork) {
             this.backdrop = backdrop;
             this.logo = logo;
             this.image = image;
             this.stamp = stamp;
+            this.artwork = artwork;
         }
     }
 
@@ -179,6 +191,27 @@ final class ShelfSource {
     private final Map<String, ShelfChoice> madeFor = new HashMap<>();
     /** Counts forgetCovers: a cover begun before it isn't kept. */
     private int coverGen;
+    /** Whether each cover was made for an app that may show its artwork (see {@link #artworkWanted}). */
+    private final Map<String, Boolean> coverForArt = new HashMap<>();
+    /** Which artworks are kept decoded, and which apps' static images are made with the dock. */
+    private final ShelfArtKeep artKeep = new ShelfArtKeep();
+    /**
+     * The titles saved and published on the TV have been read once: until then, which apps have none isn't known, so
+     * covers of apps with artwork wait ({@link #deferred}).
+     */
+    private boolean titlesRead;
+    private final List<Deferred> deferred = new ArrayList<>();
+
+    /** A cover asked for before the titles were read. */
+    private static final class Deferred {
+        final App app;
+        final Done<Cover> done;
+
+        Deferred(App app, Done<Cover> done) {
+            this.app = app;
+            this.done = done;
+        }
+    }
     /**
      * What may show next (TopShelf.keep): each dock app's first title, and those next to the title showing. Kept out
      * of the cache's turnover, so a dock move, Left, Right or the carousel finds them decoded.
@@ -277,14 +310,6 @@ final class ShelfSource {
     }
 
     /**
-     * The app's designed artwork as its cover, or null when it has none. Worker thread. (The artwork itself comes
-     * with the top shelf's art collection.)
-     */
-    private Cover artwork(App app) {
-        return null;
-    }
-
-    /**
      * The app's top shelf choice changed (Home Settings): its titles and cover are made again for it, and its feed
      * fetched if it now suggests titles and hasn't lately. Whoever shows it asks again.
      */
@@ -297,6 +322,7 @@ final class ShelfSource {
             if (!AppOrder.packageOf(key).equals(pkg)) continue;
             it.remove();
             madeFor.remove(key);
+            artKeep.forget(key);
         }
         if (choices.get(pkg).suggests() && feeds.containsKey(pkg)) lastFetch = 0;
     }
@@ -306,6 +332,7 @@ final class ShelfSource {
         combined.clear();
         covers.clear();
         madeFor.clear();
+        artKeep.forgetAll();
         lastFetch = 0;
     }
 
@@ -328,7 +355,10 @@ final class ShelfSource {
         if (started) return;
         started = true;
         readOwn();
-        if (feeds.isEmpty()) return;
+        if (feeds.isEmpty()) {
+            afterReads();
+            return;
+        }
         final List<ShelfFeeds.Feed> all = new ArrayList<>(feeds.values());
         WORK.execute(() -> {
             final Map<String, ShelfFeeds.Cached> saved = new HashMap<>();
@@ -348,6 +378,21 @@ final class ShelfSource {
                 refresh();
             });
         });
+        afterReads();
+    }
+
+    /** Once what start() reads has arrived (one worker, in order; then the main thread, in order). */
+    private void afterReads() {
+        WORK.execute(() -> main.post(() -> {
+            titlesRead = true;
+            List<Deferred> waiting = new ArrayList<>(deferred);
+            deferred.clear();
+            for (Deferred d : waiting) {
+                // Artworks only for those asked for by name: the dock's others are decoded as they may show.
+                if (d.done != null || preloads(d.app)) makeCover(d.app, d.done);
+            }
+            listener.onTitlesRead();
+        }));
     }
 
     /**
@@ -950,18 +995,44 @@ final class ShelfSource {
     }
 
     /**
+     * Whether the app's cover may be its artwork: it has one, its choice allows it, and, with suggestions, it has no
+     * titles to show (known once they're read). An app showing titles falls back on its cover art while one loads, as
+     * before: a full-screen artwork decoded for each dock app (8 MB a picture) would be memory spent on what hardly
+     * shows.
+     */
+    boolean artworkWanted(String pkg) {
+        ShelfChoice c = choices.get(pkg);
+        return ShelfArt.has(pkg) && c.triesArtwork() && (!c.suggests() || (titlesRead && items(pkg) == null));
+    }
+
+    /** Whether a dock app's cover is made with the dock, ahead of focus: see {@link ShelfArtKeep#preload}. */
+    boolean preloads(App app) {
+        return artKeep.preload(app.key, artworkWanted(app.pkg), choices.get(app.pkg).kind == ShelfChoice.Kind.IMAGE);
+    }
+
+    /**
      * Makes the app's cover art in the background, unless it has it: the picture its top shelf choice shows (none
-     * for the glow). {@code done} gets it (null on failure, or for the glow).
+     * for the glow), made for whether it has titles now. {@code done} gets it (null on failure, or for the glow).
      */
     void makeCover(final App app, final Done<Cover> done) {
+        if (!titlesRead && ShelfArt.has(app.pkg) && choices.get(app.pkg).suggests()) {
+            deferred.add(new Deferred(app, done));
+            return;
+        }
+        final boolean art = artworkWanted(app.pkg);
         Cover c = cover(app.key);
-        if (c != null) {
+        Boolean artFor = coverForArt.get(app.key);
+        if (c != null && (c.image || artFor == null || artFor == art)) {
             if (done != null) done.done(c);
             return;
         }
         final ShelfChoice choice = choices.get(app.pkg);
-        covers.remove(app.key);   // one made for another choice
-        madeFor.remove(app.key);
+        // Made again for titles that came or went: it shows meanwhile, and the new one changes in place.
+        final boolean again = c != null;
+        if (!again) {
+            covers.remove(app.key);   // one made for another choice
+            madeFor.remove(app.key);
+        }
         if (!choice.picture()) {
             if (done != null) done.done(null);
             return;
@@ -980,7 +1051,7 @@ final class ShelfSource {
         final String imageUrl = imageUrl(app.pkg, choice);
         final int gen = coverGen;
         WORK.execute(() -> {
-            final Cover result = buildCover(app, choice, imageUrl, spec, svgFile);
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
             main.post(() -> {
                 if (coversLoading.get(app.key) == waiters) coversLoading.remove(app.key);
                 if (!choice.equals(choices.get(app.pkg))) {
@@ -990,9 +1061,13 @@ final class ShelfSource {
                 }
                 // Not kept if the apps changed meanwhile (forgetCovers): it may be from an old banner.
                 boolean keep = gen == coverGen;
-                if (result != null && keep) {
+                if (result != null && keep) artKeep.made(app.key, result.image);
+                // An artwork that may no longer show (focus moved on, Home went away) isn't kept.
+                if (result != null && keep && artKeep.store(app.key, result.artwork)) {
                     covers.put(app.key, result);
                     madeFor.put(app.key, choice);
+                    coverForArt.put(app.key, art);
+                    if (again) listener.onCover(app.key);
                 }
                 for (Done<Cover> d : waiters) d.done(result);
                 if (!keep || (result != null && result.image)) return;
@@ -1014,8 +1089,10 @@ final class ShelfSource {
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = imageUrl(app.pkg, choice);
+        // With suggestions, its artwork shows only if it has no titles, as on Home.
+        final boolean art = ShelfArt.has(app.pkg) && choice.triesArtwork() && (!choice.suggests() || titles(app.pkg) == null);
         WORK.execute(() -> {
-            final Cover result = buildCover(app, choice, imageUrl, spec, svgFile);
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
             main.post(() -> done.done(result));
         });
     }
@@ -1028,14 +1105,15 @@ final class ShelfSource {
     }
 
     /**
-     * The picture for the app's choice: for its static image, the one on the TV; then, unless it's cover art only,
-     * its designed artwork; else its cover art; or null. Worker thread.
+     * The picture for the app's choice: for its static image, the one on the TV; then, if {@code art} (see
+     * {@link #artworkWanted}), its artwork; else its cover art; or null. Worker thread.
      */
-    private Cover buildCover(App app, ShelfChoice choice, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
+    private Cover buildCover(App app, ShelfChoice choice, boolean art, String imageUrl, ShelfFeeds.LogoSpec spec,
+                             File svgFile) {
         File f = imageUrl == null ? null : staticImageFile(app.pkg, imageUrl);
         Cover made = imageCover(f);
         try {
-            if (made == null && choice.triesArtwork()) made = artwork(app);
+            if (made == null && art) made = artwork(app);
             if (made == null) made = renderCover(ctx, app);
             // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
             if (made != null && !made.image && svgFile != null && svgFile.exists()) {
@@ -1046,7 +1124,94 @@ final class ShelfSource {
         }
         if (made == null || imageUrl == null) return made;
         // Which picture it was made from (or failed to be), so a new one put on the TV is noticed (checkImages).
-        return new Cover(made.backdrop, made.logo, made.image, stamp(f));
+        return new Cover(made.backdrop, made.logo, made.image, stamp(f), made.artwork);
+    }
+
+    /**
+     * The app's artwork (ShelfArt) and its logo cut from its banner, as for its cover art; or null if it has none
+     * or it couldn't be painted. Painting takes a moment, so it's done once per install of the launcher and kept on
+     * the TV, then read back like a static image. Worker thread.
+     */
+    private Cover artwork(App app) {
+        String key = ShelfArtworks.key(app.pkg);
+        if (key == null) return null;
+        try {
+            int w = BACKDROP_W, h = BACKDROP_H;
+            File f = artworkFile(key, w, h);
+            Bitmap art = null;
+            long start = Perf.now();
+            if (f.isFile()) {
+                try {
+                    art = decodeArtwork(f);
+                    Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " from=cache");
+                } catch (IOException e) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
+            if (art == null) {
+                start = Perf.now();
+                int[] px = ShelfArt.render(app.pkg, w, h);
+                if (px == null) return null;
+                art = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888);
+                Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " from=paint size=" + w + "x" + h);
+                saveArtwork(art, f, key);
+            }
+            // Its logo: the vector one, if it's on the TV, is drawn over this in buildCover; else the banner's.
+            ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
+            boolean vector = spec != null && new File(dir, "logo-" + spec.slug + ".svg").exists();
+            return new Cover(hardware(art), vector ? null : bannerLogo(ctx, app), false, null, true);
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;
+        }
+    }
+
+    /** Where an artwork is kept, per size and per install of the launcher (a new one may paint it differently). */
+    private File artworkFile(String key, int w, int h) {
+        if (installStamp == null) {
+            long t = 0L;
+            try {
+                t = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).lastUpdateTime;
+            } catch (PackageManager.NameNotFoundException | RuntimeException ignored) {
+            }
+            installStamp = Long.toString(t, 36);
+        }
+        return new File(dir, "artwork-" + key + "-" + w + "x" + h + "-" + installStamp + ".jpg");
+    }
+
+    private volatile String installStamp;
+
+    private static Bitmap decodeArtwork(File f) throws IOException {
+        if (Build.VERSION.SDK_INT >= 28) return ImageDecoder.decodeBitmap(ImageDecoder.createSource(f));
+        Bitmap b = BitmapFactory.decodeFile(f.getPath());
+        if (b == null) throw new IOException("undecodable");
+        return b;
+    }
+
+    /** Keeps a painted artwork on the TV, in place of any older one of it. */
+    private void saveArtwork(Bitmap art, File f, String key) {
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        File tmp = new File(dir, f.getName() + ".part");
+        try (OutputStream out = new FileOutputStream(tmp)) {
+            if (!art.compress(Bitmap.CompressFormat.JPEG, 95, out)) throw new IOException("not encoded");
+        } catch (IOException | RuntimeException e) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            return;
+        }
+        if (!tmp.renameTo(f)) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            return;
+        }
+        File[] old = dir.listFiles((d, name) -> name.startsWith("artwork-" + key + "-") && !name.equals(f.getName()));
+        if (old != null) {
+            for (File o : old) {
+                //noinspection ResultOfMethodCallIgnored
+                o.delete();
+            }
+        }
     }
 
     /**
@@ -1094,6 +1259,7 @@ final class ShelfSource {
                         return;   // apps or the choice changed meanwhile
                     }
                     covers.put(app.key, new Cover(made.backdrop, null, true, stamp));
+                    artKeep.made(app.key, true);
                     listener.onCover(app.key);
                 });
             });
@@ -1139,9 +1305,10 @@ final class ShelfSource {
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = imageUrl(app.pkg, choice);
+        final boolean art = artworkWanted(app.pkg);
         final int gen = coverGen;
         WORK.execute(() -> {
-            final Cover result = buildCover(app, choice, imageUrl, spec, svgFile);
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
             main.post(() -> {
                 if (coversLoading.get(key) == waiters) coversLoading.remove(key);
                 if (!choice.equals(choices.get(app.pkg))) {
@@ -1150,13 +1317,16 @@ final class ShelfSource {
                     return;
                 }
                 boolean fresh = gen == coverGen;
-                if (result != null && fresh) {
+                if (result != null && fresh) artKeep.made(key, result.image);
+                boolean stored = result != null && fresh && artKeep.store(key, result.artwork);
+                if (stored) {
                     // Dropped meanwhile (choiceChanged, the choice back as it was): it's the cover all the same.
                     covers.put(key, result);
                     madeFor.put(key, choice);
+                    coverForArt.put(key, art);
                 }
                 for (Done<Cover> d : waiters) d.done(cover(key));
-                if (result != null && fresh) listener.onCover(key);
+                if (stored) listener.onCover(key);
             });
         });
     }
@@ -1261,6 +1431,7 @@ final class ShelfSource {
                 return;
             }
             // Its cover made again for its choice, now with the sharp logo (not over a static image: it has its own).
+            // An artwork is read back from the TV, not painted again.
             main.post(() -> {
                 Cover now = covers.get(app.key);
                 if (now != null && !now.image) remakeCover(app.key);
@@ -1287,6 +1458,11 @@ final class ShelfSource {
         android.graphics.RectF bounds = new android.graphics.RectF();
         path.computeBounds(bounds, true);
         float s = markH / 24f;
+        if (spec.wordmark && bounds.width() > 0f && bounds.height() > 0f) {
+            // A wordmark is the whole logo: as large as it fits, a wide flat one (F1's) as wide as a long name.
+            s = Math.min(160f / bounds.height(), 440f / bounds.width());
+            markH = bounds.height() * s;
+        }
         float markW = Math.max(1f, bounds.width() * s);
         int color = spec.color;
         float[] hsv = new float[3];
@@ -1322,7 +1498,7 @@ final class ShelfSource {
             float baseline = 2 + markH / 2f - (fm.ascent + fm.descent) / 2f;
             c.drawText(label, 2 + markW + gap, baseline, text);
         }
-        return new Cover(cover.backdrop, hardware(lockup));
+        return new Cover(cover.backdrop, hardware(lockup), cover.image, cover.stamp, cover.artwork);
     }
 
     /** Apps changed: their banners may have too. Covers being made now aren't kept (coverGen). */
@@ -1332,9 +1508,83 @@ final class ShelfSource {
         coverApps.clear();
         coversLoading.clear();
         coverGen++;
+        coverForArt.clear();
+        deferred.clear();
+        artKeep.forgetAll();
+    }
+
+    /**
+     * Keeps decoded only the artworks of {@code keys} (what shows, and what may show next: see TopShelf.keep); the
+     * others are full-screen pictures, read back from the TV's copy when wanted again.
+     */
+    void keepArtwork(Collection<String> keys) {
+        artKeep.keep(keys);
+        Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Cover> e = it.next();
+            if (e.getValue().artwork && !keys.contains(e.getKey())) {
+                it.remove();
+                madeFor.remove(e.getKey());
+                coverForArt.remove(e.getKey());
+            }
+        }
     }
 
     private static Cover renderCover(Context ctx, App app) {
+        Banner banner = banner(ctx, app);
+        if (banner == null) return null;
+        int[] palette = CoverArt.palette(banner.px, 3);
+        Bitmap logo = banner.logo();
+
+        Bitmap back = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(back);
+        c.drawColor(CoverArt.base(palette));
+        int n = 5;
+        int[] colours = CoverArt.blobColours(palette, n);
+        float[][] blobs = CoverArt.blobs(app.pkg.hashCode(), n);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        for (int i = 0; i < n; i++) {
+            float cx = blobs[i][0] * COVER_W, cy = blobs[i][1] * COVER_H, r = blobs[i][2] * COVER_W;
+            int col = colours[i] & 0x00FFFFFF;
+            p.setShader(new RadialGradient(cx, cy, r, new int[]{0xC7000000 | col, 0x52000000 | col, col},
+                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+            c.drawCircle(cx, cy, r, p);
+        }
+        scrim(c, COVER_W, COVER_H, 0.55f, false);
+        return new Cover(hardware(back), logo == null ? null : hardware(logo));
+    }
+
+    /** The app's logo cut out of its banner, as on its cover art, or null. Worker thread. */
+    private static Bitmap bannerLogo(Context ctx, App app) {
+        Banner banner = banner(ctx, app);
+        Bitmap logo = banner == null ? null : banner.logo();
+        return logo == null ? null : hardware(logo);
+    }
+
+    /** An app's banner (or icon), drawn. */
+    private static final class Banner {
+        final Drawable d;
+        final int[] px;
+        final int w, h;
+
+        Banner(Drawable d, int[] px, int w, int h) {
+            this.d = d;
+            this.px = px;
+            this.w = w;
+            this.h = h;
+        }
+
+        /** Its logo without the background, or null. */
+        Bitmap logo() {
+            // An adaptive banner (Stremio's) has its logo on its own layer: no background to cut away.
+            int[] logoPx = d instanceof AdaptiveIconDrawable && ((AdaptiveIconDrawable) d).getForeground() != null
+                    ? draw(((AdaptiveIconDrawable) d).getForeground(), w, h, true) : px;
+            CoverArt.Logo cut = CoverArt.cutOut(logoPx, w, h);
+            return cut == null ? null : Bitmap.createBitmap(cut.argb, cut.w, cut.h, Bitmap.Config.ARGB_8888);
+        }
+    }
+
+    private static Banner banner(Context ctx, App app) {
         Drawable d = null;
         if (app.info != null && app.bannerRes != 0) {
             // The banner's sharpest version: TV banners are often 320 x 180, which a logo the size of a third of the
@@ -1369,30 +1619,7 @@ final class ShelfSource {
         }
         w = Math.max(16, w);
         h = Math.max(9, h);
-        int[] px = draw(d, w, h, false);
-        int[] palette = CoverArt.palette(px, 3);
-        // An adaptive banner (Stremio's) has its logo on its own layer: no background to cut away.
-        int[] logoPx = d instanceof AdaptiveIconDrawable && ((AdaptiveIconDrawable) d).getForeground() != null
-                ? draw(((AdaptiveIconDrawable) d).getForeground(), w, h, true) : px;
-        CoverArt.Logo cut = CoverArt.cutOut(logoPx, w, h);
-        Bitmap logo = cut == null ? null : Bitmap.createBitmap(cut.argb, cut.w, cut.h, Bitmap.Config.ARGB_8888);
-
-        Bitmap back = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(back);
-        c.drawColor(CoverArt.base(palette));
-        int n = 5;
-        int[] colours = CoverArt.blobColours(palette, n);
-        float[][] blobs = CoverArt.blobs(app.pkg.hashCode(), n);
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        for (int i = 0; i < n; i++) {
-            float cx = blobs[i][0] * COVER_W, cy = blobs[i][1] * COVER_H, r = blobs[i][2] * COVER_W;
-            int col = colours[i] & 0x00FFFFFF;
-            p.setShader(new RadialGradient(cx, cy, r, new int[]{0xC7000000 | col, 0x52000000 | col, col},
-                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-            c.drawCircle(cx, cy, r, p);
-        }
-        scrim(c, COVER_W, COVER_H, 0.55f, false);
-        return new Cover(hardware(back), logo == null ? null : hardware(logo));
+        return new Banner(d, draw(d, w, h, false), w, h);
     }
 
     /** {@code d} drawn at w x h; a layer of an adaptive drawable spreads past its bounds as the whole would. */
@@ -1414,7 +1641,7 @@ final class ShelfSource {
     }
 
     private static Bitmap hardware(Bitmap b) {
-        if (Build.VERSION.SDK_INT < 28) return b;
+        if (Build.VERSION.SDK_INT < 28 || b.getConfig() == Bitmap.Config.HARDWARE) return b;
         Bitmap hw = b.copy(Bitmap.Config.HARDWARE, false);
         if (hw == null) return b;
         b.recycle();
@@ -1430,8 +1657,18 @@ final class ShelfSource {
             if (!keep.contains(e.getValue())) bitmaps.remove(e.getKey());
         }
         pinned.values().removeIf(b -> !keep.contains(b));
-        // Static images are full-screen pictures too: made again from the TV's copy when Home shows.
-        covers.values().removeIf(c -> c.image && !keep.contains(c.backdrop));
+        // Static images and artworks are full-screen pictures too: made again from the TV's copy when Home shows. An
+        // artwork still being painted isn't kept either.
+        artKeep.none();
+        Iterator<Map.Entry<String, Cover>> it = covers.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Cover> e = it.next();
+            if ((e.getValue().image || e.getValue().artwork) && !keep.contains(e.getValue().backdrop)) {
+                it.remove();
+                madeFor.remove(e.getKey());
+                coverForArt.remove(e.getKey());
+            }
+        }
     }
 
     // ---- files ---------------------------------------------------------------------------------------------

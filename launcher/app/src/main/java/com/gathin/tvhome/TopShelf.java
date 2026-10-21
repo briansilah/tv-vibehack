@@ -22,8 +22,8 @@ import java.util.List;
  *   the app itself publishes on the TV (what you were watching, its recommendations), then its feed's titles
  *   (config.xml, top_shelf_feeds; e.g. Netflix's Top 10 in the TV's country). See {@link ShelfSource}. An app with a
  *   static image (top_shelf_images; YouTube's, as on tvOS) shows that instead, as its cover art.</li>
- *   <li><b>Cover art</b>: the app's own logo, cut out of its banner, on soft shapes in its colours, as tvOS shows an
- *   app's static Top Shelf image.</li>
+ *   <li><b>Its artwork</b> ({@link ShelfArt}, for the apps that have one), else <b>cover art</b>: the app's own logo,
+ *   cut out of its banner, on soft shapes in its colours, as tvOS shows an app's static Top Shelf image.</li>
  *   <li>Neither (yet): the ambient glow and the app's name, which MainActivity draws as before.</li>
  * </ol>
  * Home Settings changes this per app ({@link ShelfChoice}): suggestions, one picture, or the glow alone.
@@ -589,8 +589,14 @@ final class TopShelf implements ShelfSource.Listener {
     }
 
     @Override
+    public void onTitlesRead() {
+        preloadDock();
+    }
+
+    @Override
     public void onCover(String key) {
-        // Its sharp logo arrived: if the app is showing its cover, the logo changes in place.
+        // Its sharp logo arrived, or it was made again with or without its artwork: if the app is showing its cover,
+        // it changes in place.
         if (shown && current != null && current.key.equals(key) && tier == COVER) {
             Choice c = choose(current);
             if (c != null && c.tier == COVER) display(c, ARRIVE_MS, null, true);
@@ -728,7 +734,10 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return;
         if (shown && current != null) want(current);
         else keep();
-        for (ShelfSource.App a : dock) source.makeCover(a, null);
+        // Artworks are full-screen pictures: keep() decodes only those that may show next. Static images as before.
+        for (ShelfSource.App a : dock) {
+            if (source.preloads(a)) source.makeCover(a, null);
+        }
     }
 
     /**
@@ -757,6 +766,22 @@ final class TopShelf implements ShelfSource.Listener {
                 handler.post(keepAgain);
             });
         }
+        keepArtwork();
+    }
+
+    /**
+     * Artworks are decoded only for the dock app showing one, and those either side of it, which may show next
+     * (focus in the grid: those around the dock app it left); never for apps with titles to show.
+     */
+    private void keepArtwork() {
+        List<String> keys = new ArrayList<>(3);
+        for (int i = Math.max(0, dockAt - 1); i <= Math.min(dock.size() - 1, dockAt + 1); i++) {
+            ShelfSource.App a = dock.get(i);
+            if (!source.artworkWanted(a.pkg)) continue;
+            keys.add(a.key);
+            source.makeCover(a, null);
+        }
+        source.keepArtwork(keys);
     }
 
     // ---- showing -------------------------------------------------------------------------------------------
