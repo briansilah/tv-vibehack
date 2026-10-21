@@ -23,7 +23,7 @@ public class ShelfChoicesTest {
     }
 
     private static ShelfChoices choices(MemoryPrefs p) {
-        return new ShelfChoices(p, Collections.singleton(YOUTUBE));
+        return new ShelfChoices(p);
     }
 
     @Test
@@ -40,12 +40,13 @@ public class ShelfChoicesTest {
         MemoryPrefs p = saved();
         ShelfChoices c = choices(p);
         c.useShipped(true);
-        assertEquals(ShelfChoice.SUGGESTIONS, c.get(NETFLIX));
+        // The default: every app's picture, which stays put.
+        assertEquals(ShelfChoice.IMAGE, c.get(NETFLIX));
         assertEquals(ShelfChoice.IMAGE, c.get(YOUTUBE));
         assertNull(c.all());
         assertEquals(0, c.inEffect());
         c.useShipped(false);
-        assertEquals(ShelfChoice.IMAGE, c.get(NETFLIX));
+        assertEquals(ShelfChoice.GLOW, c.own(NETFLIX));
         assertEquals("glow", p.getString(ShelfChoice.key(NETFLIX), null));
     }
 
@@ -60,7 +61,7 @@ public class ShelfChoicesTest {
         assertEquals(2, rebuilt.inEffect());   // what it would use if nobody told it
         rebuilt.useShipped(true);
         assertEquals(0, rebuilt.inEffect());
-        assertEquals(ShelfChoice.SUGGESTIONS, rebuilt.get(NETFLIX));
+        assertEquals(ShelfChoice.IMAGE, rebuilt.get(NETFLIX));
     }
 
     @Test
@@ -83,10 +84,13 @@ public class ShelfChoicesTest {
         MemoryPrefs p = new MemoryPrefs();
         ShelfChoices c = choices(p);
         c.set(YOUTUBE, ShelfChoice.GLOW);
-        c.set(YOUTUBE, ShelfChoice.IMAGE);   // config.xml's for YouTube
+        c.set(YOUTUBE, ShelfChoice.IMAGE);   // the default, for every app
         assertTrue(p.getAll().isEmpty());
         c.setAll(ShelfChoice.GLOW);
         c.setAll(null);
         assertTrue(p.getAll().isEmpty());
+        // Suggestions aren't the default: they're kept.
+        c.set(NETFLIX, ShelfChoice.SUGGESTIONS);
+        assertEquals("suggestions", p.getString(ShelfChoice.key(NETFLIX), null));
     }
 }

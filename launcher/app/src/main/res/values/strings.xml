@@ -27,6 +27,9 @@
     <string name="move_to_dock">Move to Dock</string>
     <string name="move_out_of_dock">Move out of Dock</string>
     <string name="app_info">App info</string>
+    <!-- An app's actions (hold OK): open its Top Shelf page in Home Settings; the Liquid Glass slider on Home. -->
+    <string name="top_shelf_action">Change Top Shelf…</string>
+    <string name="liquid_glass_action">Adjust Liquid Glass…</string>
     <string name="home_screen">Home screen</string>
     <string name="arrange_title">Arrange your apps</string>
     <string name="moving_title">Moving %1$s</string>

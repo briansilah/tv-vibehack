@@ -103,7 +103,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             // What the apps published and the feeds saved on the TV, for the previews of their suggestions.
             source.start();
         } else {
-            choices = new ShelfChoices(this, ShelfFeeds.parseImages(images).keySet());
+            choices = new ShelfChoices(this);
         }
         direct = getIntent() != null ? getIntent().getStringExtra(EXTRA_PACKAGE) : null;
         title.setText(R.string.home_settings);
@@ -238,7 +238,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         title.setText(e.label);
         clear();
         ShelfChoice now = choices.own(e.pkg);
-        ShelfChoice def = choices.byDefault(e.pkg);
+        ShelfChoice def = ShelfChoice.byDefault();
         boolean custom = !now.equals(ShelfChoice.SUGGESTIONS) && !now.equals(ShelfChoice.IMAGE)
                 && !now.equals(ShelfChoice.GLOW);
         if (focus == null) focus = custom ? ShelfChoice.Kind.COLOUR : now.kind;

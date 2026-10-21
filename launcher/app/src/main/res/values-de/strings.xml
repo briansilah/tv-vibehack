@@ -26,6 +26,8 @@
     <string name="move_to_dock">Ins Dock verschieben</string>
     <string name="move_out_of_dock">Aus dem Dock nehmen</string>
     <string name="app_info">App-Info</string>
+    <string name="top_shelf_action">Top Shelf ändern …</string>
+    <string name="liquid_glass_action">Liquid Glass anpassen …</string>
     <string name="home_screen">Startbildschirm</string>
     <string name="arrange_title">Apps anordnen</string>
     <string name="moving_title">%1$s verschieben</string>

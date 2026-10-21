@@ -44,6 +44,8 @@ final class Rearranger {
 
     /** How long the other apps take to slide out of the way. */
     private static final long SHIFT_MS = 220L;
+    /** Between groups of an app's actions, in place of the rows' usual 14dp. */
+    private static final int GROUP_GAP_DP = 36;
 
     private final Activity activity;
     private final FrameLayout root;
@@ -149,21 +151,21 @@ final class Rearranger {
             if (sheet == popup) sheet = null;
         });
 
+        // In groups, a gap apart: where the app goes, then the app itself, then the home screen.
         LinearLayout actions = view.findViewById(R.id.sheetActions);
-        addAction(actions, popup, R.string.move, () -> begin(app, false));
+        addAction(actions, popup, R.string.move, false, () -> begin(app, false));
         // Only the dock move that applies; there's nothing to show when there is no grid.
         if (AppOrder.dockToggleTarget(position, adapter.appCount(), columns) != position) {
-            addAction(actions, popup, position < columns ? R.string.move_out_of_dock : R.string.move_to_dock,
+            addAction(actions, popup, position < columns ? R.string.move_out_of_dock : R.string.move_to_dock, false,
                     () -> moveAcrossDock(app));
         }
-        addAction(actions, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
         // Every app has a top shelf but Home Settings itself.
         final String pkg = adapter.pkgAt(position);
-        if (shelfAction != null && pkg != null && !pkg.equals(activity.getPackageName())) {
-            addAction(actions, popup, R.string.top_shelf, () -> shelfAction.accept(pkg));
-        }
+        boolean shelf = shelfAction != null && pkg != null && !pkg.equals(activity.getPackageName());
+        if (shelf) addAction(actions, popup, R.string.top_shelf_action, true, () -> shelfAction.accept(pkg));
+        addAction(actions, popup, R.string.app_info, !shelf, () -> adapter.openAppInfo(adapter.positionOf(app)));
         // Not about this app but the home screen, as iOS's Home Screen menu offers its look.
-        if (glassAction != null) addAction(actions, popup, R.string.liquid_glass, glassAction);
+        if (glassAction != null) addAction(actions, popup, R.string.liquid_glass_action, true, glassAction);
 
         sheet = popup;
         int[] at = new int[2];
@@ -190,10 +192,13 @@ final class Rearranger {
         root.post(this::ensureHeader);
     }
 
-    private void addAction(LinearLayout actions, PopupWindow popup, int text, Runnable action) {
+    /** {@code group}: the first of a new group, a gap below the last. */
+    private void addAction(LinearLayout actions, PopupWindow popup, int text, boolean group, Runnable action) {
         TextView row = (TextView) activity.getLayoutInflater().inflate(R.layout.sheet_action, actions, false);
         row.setText(text);
-        if (actions.getChildCount() == 0) ((ViewGroup.MarginLayoutParams) row.getLayoutParams()).topMargin = 0;
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) row.getLayoutParams();
+        if (actions.getChildCount() == 0) lp.topMargin = 0;
+        else if (group) lp.topMargin = Math.round(GROUP_GAP_DP * density);
         row.setOnClickListener(v -> {
             popup.dismiss();
             action.run();

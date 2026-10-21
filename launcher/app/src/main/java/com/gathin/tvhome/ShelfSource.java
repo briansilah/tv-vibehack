@@ -236,7 +236,7 @@ final class ShelfSource {
         this.links = ShelfFeeds.parseLinks(linkLines);
         this.logos = ShelfFeeds.parseLogos(logoLines);
         this.images = ShelfFeeds.parseImages(imageLines);
-        this.choices = new ShelfChoices(this.ctx, images.keySet());
+        this.choices = new ShelfChoices(this.ctx);
         this.country = ShelfFeeds.country(timeZoneRegion(), Locale.getDefault().getCountry());
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? ""
                 : new Locale("", country.toUpperCase(Locale.ROOT)).getDisplayCountry();
@@ -1106,7 +1106,8 @@ final class ShelfSource {
 
     /**
      * The picture for the app's choice: for its static image, the one on the TV; then, if {@code art} (see
-     * {@link #artworkWanted}), its artwork; else its cover art; or null. Worker thread.
+     * {@link #artworkWanted}), its artwork; else its cover art, but for a static image, which then has none (its colour
+     * and name show); or null. Worker thread.
      */
     private Cover buildCover(App app, ShelfChoice choice, boolean art, String imageUrl, ShelfFeeds.LogoSpec spec,
                              File svgFile) {
@@ -1114,7 +1115,7 @@ final class ShelfSource {
         Cover made = imageCover(f);
         try {
             if (made == null && art) made = artwork(app);
-            if (made == null) made = renderCover(ctx, app);
+            if (made == null && choice.fallsBackToCoverArt()) made = renderCover(ctx, app);
             // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
             if (made != null && !made.image && svgFile != null && svgFile.exists()) {
                 made = withLogo(ctx, made, app, spec, svgFile);

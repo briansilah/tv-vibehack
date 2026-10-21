@@ -4,15 +4,18 @@ import java.util.Locale;
 
 /**
  * What an app's top shelf shows, as chosen in Home Settings ({@link SettingsActivity}): for all apps at once, else for
- * the app, saved on the TV, or else config.xml's default (its static image for an app in top_shelf_images, YouTube's;
- * suggestions for the rest). Pure Java; {@link ShelfChoices} keeps them.
+ * the app, saved on the TV, or else the default: its picture ({@link #IMAGE}), which stays put. Pure Java;
+ * {@link ShelfChoices} keeps them.
  */
 final class ShelfChoice {
 
     enum Kind {
         /** What the app suggests, a title at a time; its artwork or cover art until it has some. */
         SUGGESTIONS("suggestions"),
-        /** One picture: its Apple TV image put on the TV (or fetched), else its artwork, else its cover art. */
+        /**
+         * One picture that stays, the default: its Apple TV image put on the TV (or fetched), else its artwork, else
+         * none (its colour and name, as GLOW).
+         */
         IMAGE("image"),
         /** Its designed artwork (ShelfSource.artwork), else its cover art. */
         ARTWORK("artwork"),
@@ -89,21 +92,24 @@ final class ShelfChoice {
                 ? key.substring(PREF_PREFIX.length()) : null;
     }
 
-    /** config.xml's choice for an app: its static image if top_shelf_images lists it, else suggestions. */
-    static ShelfChoice byDefault(boolean listedImage) {
-        return listedImage ? IMAGE : SUGGESTIONS;
+    /**
+     * Every app's choice until one is made: its picture, which stays put. Suggestions, which change and fetch titles
+     * from the network, are for the apps you choose them for.
+     */
+    static ShelfChoice byDefault() {
+        return IMAGE;
     }
 
-    /** The choice in effect: the saved one if it can be read, else config.xml's. */
-    static ShelfChoice resolve(String saved, boolean listedImage) {
+    /** The choice in effect: the saved one if it can be read, else the default. */
+    static ShelfChoice resolve(String saved) {
         ShelfChoice c = decode(saved);
-        return c != null ? c : byDefault(listedImage);
+        return c != null ? c : byDefault();
     }
 
     /** The choice in effect with all apps' ({@link #PREF_ALL}, null for per app) over the app's own. */
-    static ShelfChoice resolve(String savedAll, String saved, boolean listedImage) {
+    static ShelfChoice resolve(String savedAll, String saved) {
         ShelfChoice all = decode(savedAll);
-        return all != null ? all : resolve(saved, listedImage);
+        return all != null ? all : resolve(saved);
     }
 
     /** "suggestions", "image", "artwork", "cover_art", "glow" or "colour:RRGGBB". */
@@ -144,6 +150,11 @@ final class ShelfChoice {
      */
     boolean staticPicture() {
         return kind == Kind.IMAGE || kind == Kind.ARTWORK || kind == Kind.COVER_ART;
+    }
+
+    /** Whether, without a picture of its own or artwork, it shows its cover art (else its colour alone). */
+    boolean fallsBackToCoverArt() {
+        return kind != Kind.IMAGE;
     }
 
     /** Whether the designed artwork is tried before the cover art made from the app's banner. */

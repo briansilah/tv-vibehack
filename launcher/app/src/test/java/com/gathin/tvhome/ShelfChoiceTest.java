@@ -10,40 +10,48 @@ import org.junit.Test;
 public class ShelfChoiceTest {
 
     @Test
-    public void withoutASavedChoiceAnAppGetsConfigsDefault() {
-        // top_shelf_images lists YouTube: its static image; the rest suggest titles.
-        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(null, true));
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve(null, false));
+    public void withoutASavedChoiceEveryAppShowsItsPicture() {
+        // A picture that stays put, not suggestions, which change and need the network.
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.byDefault());
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(null));
     }
 
     @Test
     public void aSavedChoiceWinsOverTheDefault() {
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("suggestions", true));
-        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("image", false));
-        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve("glow", false));
+        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("suggestions"));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("image"));
+        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve("glow"));
     }
 
     @Test
     public void anUnreadableChoiceFallsBackToTheDefault() {
-        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("hologram", true));
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("", false));
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("colour:red", false));
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("colour:FF00001", false));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("hologram"));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(""));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("colour:red"));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("colour:FF00001"));
     }
 
     @Test
     public void allAppsChoiceIsOverEachAppsOwnWithoutErasingIt() {
-        // Per app (none saved for all): each app's own, else config.xml's.
-        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve(null, "glow", false));
-        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(null, null, true));
-        // All apps' over the app's own and over config.xml's.
-        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("image", "glow", false));
-        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("suggestions", null, true));
-        assertEquals(ShelfChoice.ARTWORK, ShelfChoice.resolve("artwork", "colour:0A84FF", false));
+        // Per app (none saved for all): each app's own, else the default.
+        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve(null, "glow"));
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve(null, null));
+        // All apps' over the app's own and over the default.
+        assertEquals(ShelfChoice.IMAGE, ShelfChoice.resolve("image", "glow"));
+        assertEquals(ShelfChoice.SUGGESTIONS, ShelfChoice.resolve("suggestions", null));
+        assertEquals(ShelfChoice.ARTWORK, ShelfChoice.resolve("artwork", "colour:0A84FF"));
         // An unreadable one for all apps: each app's own again.
-        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve("hologram", "glow", false));
+        assertEquals(ShelfChoice.GLOW, ShelfChoice.resolve("hologram", "glow"));
         // Its key isn't an app's.
         assertNull(ShelfChoice.pkgOf(ShelfChoice.PREF_ALL));
+    }
+
+    @Test
+    public void aPictureOfItsOwnFallsBackToItsColourNotItsCoverArt() {
+        assertFalse(ShelfChoice.IMAGE.fallsBackToCoverArt());
+        assertTrue(ShelfChoice.SUGGESTIONS.fallsBackToCoverArt());
+        assertTrue(ShelfChoice.ARTWORK.fallsBackToCoverArt());
+        assertTrue(ShelfChoice.COVER_ART.fallsBackToCoverArt());
     }
 
     @Test
