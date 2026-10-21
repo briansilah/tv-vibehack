@@ -587,9 +587,10 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(cmds[2].startswith("s=$(settings get secure enabled_accessibility_services"))
         self.assertTrue(cmds[2].endswith("echo home-button-service-off"))
         self.assertTrue(cmds[3].startswith("appops set com.gathin.tvhome AUTO_START default"))
-        self.assertIn("com.google.android.apps.tv.launcherx | tail -n 1)", cmds[4])
+        self.assertTrue(cmds[4].startswith("pm revoke com.gathin.tvhome android.permission.DUMP"))
+        self.assertIn("com.google.android.apps.tv.launcherx | tail -n 1)", cmds[5])
         self.assertEqual(cmds[-1], "pm list packages -d")
-        self.assertEqual(len(cmds), 9)
+        self.assertEqual(len(cmds), 10)
         self.assertFalse(any("force-stop" in c for c in cmds))
 
     def test_restore_sh_with_an_empty_list(self):
@@ -599,7 +600,7 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         cmds = self.shell_commands()
         self.assertEqual(cmds[0], "pm enable com.google.android.tvlauncher")
-        self.assertEqual((len(cmds), cmds[-1]), (8, "pm list packages -d"))
+        self.assertEqual((len(cmds), cmds[-1]), (9, "pm list packages -d"))
 
     def test_disable_sh_with_an_empty_list(self):
         code, out, err = self.run_tool(["bash", os.path.join(self.repo, "tools", "disable.sh"),

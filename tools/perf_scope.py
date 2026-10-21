@@ -86,7 +86,7 @@ FILE_RULES = [
     ((JAVA + "Transitions.java", JAVA + "HomeMotion.java"),
      E("warm", trace="home launch", why="Home's motion as it comes back (warm) and as an app opens (no scenario: "
                                         "trace it)")),
-    ((JAVA + "HomeButtonService.java", RES + "xml/home_button_service.xml"),
+    ((JAVA + "HomeButtonService.java", JAVA + "VolumeHold.java", RES + "xml/home_button_service.xml"),
      E(check="tv", trace="home remote",
        why="the Home button service: no scenario goes through it (warm starts the launcher directly, adb keys skip "
            "it, and it's off on an Android TV emulator), so check it on the TV with the remote")),
@@ -289,6 +289,8 @@ MEMBER_RULES = {
         (("activity:.SettingsActivity", "category:android.intent.category.LEANBACK_LAUNCHER"),
          E("cold jank mem", keys="grid", trace="keys:grid", why="Home Settings, a TV app of the launcher's own: one "
                                                                 "more tile, loaded at start")),
+        (("uses-permission:android.permission.DUMP",),
+         E(check="tv", trace="home remote", why="the Home button service's held volume keys: check them on the TV")),
     ],
     RES + "layout/activity_main.xml": [
         (("root",), E("*", why="the screen's root")),
