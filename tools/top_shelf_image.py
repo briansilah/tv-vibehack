@@ -2,8 +2,8 @@
 """Put an app's Apple TV Top Shelf image on the TV, for the launcher's top shelf.
 
 On Apple TV, an app without Top Shelf content of its own (YouTube, for one) shows a static image behind the dock
-while it's focused in the top row. The launcher shows the same for the apps in config.xml's top_shelf_images, once
-the image is on the TV. This makes it from a screenshot of an Apple TV's home screen with that app focused, and puts
+while it's focused in the top row. The launcher shows the same for the apps in config.xml's top_shelf_images, and the
+apps set to Static Image in its Home Settings, once the image is on the TV. This makes it from a screenshot of an Apple TV's home screen with that app focused, and puts
 it on the TV. The image is yours: it never goes in the repository.
 
 Take the screenshot on a Mac, with the Apple TV paired with Xcode (on the Apple TV: Settings > Remotes and Devices >
@@ -13,7 +13,7 @@ recording of the Apple TV works too (File > New Movie Recording, with the Apple 
 then in Preview File > New from Clipboard).
 
     python3 tools/top_shelf_image.py Screenshot.png                  YouTube's image, onto the TV
-    python3 tools/top_shelf_image.py Screenshot.png --package PKG    another app's (list it in top_shelf_images)
+    python3 tools/top_shelf_image.py Screenshot.png --package PKG    another app's (Static Image in Home Settings)
     python3 tools/top_shelf_image.py Screenshot.png --out shelf.jpg  only write the image, for a look first
     python3 tools/top_shelf_image.py art.png --whole                 a picture that's the art already (an app's
                                                                      Top Shelf Image Wide): cut to tvOS's view only

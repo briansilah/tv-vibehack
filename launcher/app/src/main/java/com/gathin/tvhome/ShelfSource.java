@@ -164,6 +164,8 @@ final class ShelfSource {
     private final Map<String, ShelfFeeds.LogoSpec> logos;
     /** Apps whose top shelf is a static image (config.xml, top_shelf_images): the URL it's fetched from, or "". */
     private final Map<String, String> images;
+    /** What each app's top shelf shows: chosen in Home Settings, else config.xml's default. */
+    private final ShelfChoices choices;
     /** Static images put on the TV: {@code <package>.jpg} (or .png, .webp) in the launcher's external files. */
     static final String IMAGE_DIR = "top-shelf";
     private static final String[] IMAGE_TYPES = {".jpg", ".png", ".webp"};
@@ -185,6 +187,10 @@ final class ShelfSource {
     private final Map<String, App> coverApps = new HashMap<>();
     /** Covers being made, and who's waiting for each. */
     private final Map<String, List<Done<Cover>>> coversLoading = new HashMap<>();
+    /** The choice each cover was made for: one made for another is as good as none ({@link #cover}). */
+    private final Map<String, ShelfChoice> madeFor = new HashMap<>();
+    /** Counts forgetCovers: a cover begun before it isn't kept. */
+    private int coverGen;
     /** Whether each cover was made for an app that may show its artwork (see {@link #artworkWanted}). */
     private final Map<String, Boolean> coverForArt = new HashMap<>();
     /**
@@ -228,6 +234,7 @@ final class ShelfSource {
         this.links = ShelfFeeds.parseLinks(linkLines);
         this.logos = ShelfFeeds.parseLogos(logoLines);
         this.images = ShelfFeeds.parseImages(imageLines);
+        this.choices = new ShelfChoices(this.ctx, images.keySet());
         this.country = ShelfFeeds.country(timeZoneRegion(), Locale.getDefault().getCountry());
         this.countryName = ShelfFeeds.GLOBAL.equals(country) ? ""
                 : new Locale("", country.toUpperCase(Locale.ROOT)).getDisplayCountry();
@@ -255,10 +262,14 @@ final class ShelfSource {
         };
     }
 
-    /** The app's suggested titles, its own first, or null if none (yet). */
+    /** The app's suggested titles, its own first, or null if none (yet) or it shows something else. */
     List<ShelfFeeds.Item> items(String pkg) {
-        // An app with a static image shows only that, as on tvOS.
-        if (images.containsKey(pkg)) return null;
+        // An app with a static image (YouTube's), or another choice than suggestions, shows only that, as on tvOS.
+        return choices.get(pkg).suggests() ? titles(pkg) : null;
+    }
+
+    /** The app's suggested titles whatever its top shelf shows, or null if none (yet): for Home Settings' preview. */
+    List<ShelfFeeds.Item> titles(String pkg) {
         List<ShelfFeeds.Item> l = combined.get(pkg);
         if (l == null) {
             l = ShelfFeeds.combine(ownItems.get(pkg), feedItems.get(pkg), ShelfFeeds.MAX_ITEMS);
@@ -279,9 +290,46 @@ final class ShelfSource {
         return f == null ? null : ShelfFeeds.caption(f, country, countryName);
     }
 
-    /** Whether the app's top shelf is a static image (config.xml, top_shelf_images): its cover art until it has one. */
-    boolean staticImage(String pkg) {
-        return images.containsKey(pkg);
+    /**
+     * Whether the app's top shelf is one picture that stays, as YouTube's static image (config.xml, top_shelf_images)
+     * or a picture chosen in Home Settings, rather than titles: Up from it then moves to a button that opens the app.
+     */
+    boolean staticPicture(String pkg) {
+        return choices.get(pkg).staticPicture();
+    }
+
+    /** What the app's top shelf shows. */
+    ShelfChoice choice(String pkg) {
+        return choices.get(pkg);
+    }
+
+    ShelfChoices choices() {
+        return choices;
+    }
+
+    /**
+     * The app's top shelf choice changed (Home Settings): its titles and cover are made again for it, and its feed
+     * fetched if it now suggests titles and hasn't lately. Whoever shows it asks again.
+     */
+    void choiceChanged(String pkg) {
+        combined.remove(pkg);
+        // Its covers go (one being made for the old choice is dropped when it's done: see madeFor).
+        java.util.Iterator<String> it = covers.keySet().iterator();
+        while (it.hasNext()) {
+            String key = it.next();
+            if (!AppOrder.packageOf(key).equals(pkg)) continue;
+            it.remove();
+            madeFor.remove(key);
+        }
+        if (choices.get(pkg).suggests() && feeds.containsKey(pkg)) lastFetch = 0;
+    }
+
+    /** All apps' choice changed (Home Settings): every app's titles and cover are made again. */
+    void allChoicesChanged() {
+        combined.clear();
+        covers.clear();
+        madeFor.clear();
+        lastFetch = 0;
     }
 
     /** The dock's apps changed: fetches their feeds if they're new and stale. */
@@ -349,14 +397,14 @@ final class ShelfSource {
      */
     void refresh() {
         if (!started) return;
-        if (!images.isEmpty()) checkImages();
+        checkImages();
         if (System.currentTimeMillis() - lastOwnRead > OWN_READ_MS) readOwn();
         if (fetching > 0) return;
         long now = System.currentTimeMillis();
         if (now - lastFetch < RETRY_MS) return;
         List<ShelfFeeds.Feed> stale = new ArrayList<>();
         for (ShelfFeeds.Feed f : feeds.values()) {
-            if (!wanted.contains(f.pkg) || images.containsKey(f.pkg)) continue;
+            if (!wanted.contains(f.pkg) || !choices.get(f.pkg).suggests()) continue;
             Long at = fetchedAt.get(f.pkg);
             boolean otherCountry = f.byCountry() && !country.equals(fetchedFor.get(f.pkg));
             if (otherCountry || !ShelfFeeds.fresh(at == null ? 0 : at, now, FEED_TTL_MS)) stale.add(f);
@@ -936,23 +984,24 @@ final class ShelfSource {
 
     // ---- cover art -----------------------------------------------------------------------------------------
 
-    /** The app's cover art if made already, or null. */
+    /** The app's cover art if made already for its top shelf choice, or null. */
     Cover cover(String key) {
-        return covers.get(key);
+        Cover c = covers.get(key);
+        return c != null && choices.get(AppOrder.packageOf(key)).equals(madeFor.get(key)) ? c : null;
     }
 
     /**
-     * Whether the app's cover may be its artwork: it has one, and no titles to show. An app showing titles falls back
-     * on its cover art while one loads, as before: a full-screen artwork decoded for each dock app (8 MB a picture)
-     * would be memory spent on what hardly shows.
+     * Whether the app's cover may be its artwork: it has one, its choice allows it, and it has no titles to show.
+     * An app showing titles falls back on its cover art while one loads, as before: a full-screen artwork decoded for
+     * each dock app (8 MB a picture) would be memory spent on what hardly shows.
      */
     boolean artworkWanted(String pkg) {
-        return titlesRead && ShelfArt.has(pkg) && items(pkg) == null;
+        return titlesRead && ShelfArt.has(pkg) && choices.get(pkg).triesArtwork() && items(pkg) == null;
     }
 
     /**
-     * Makes the app's cover art in the background, unless it has it (made for whether it has titles now);
-     * {@code done} gets it (null on failure).
+     * Makes the app's cover art in the background, unless it has it: the picture its top shelf choice shows (none
+     * for the glow), made for whether it has titles now. {@code done} gets it (null on failure, or for the glow).
      */
     void makeCover(final App app, final Done<Cover> done) {
         if (!titlesRead && ShelfArt.has(app.pkg)) {
@@ -960,10 +1009,21 @@ final class ShelfSource {
             return;
         }
         final boolean art = artworkWanted(app.pkg);
-        Cover c = covers.get(app.key);
-        Boolean madeFor = coverForArt.get(app.key);
-        if (c != null && (c.image || madeFor == null || madeFor == art)) {
+        Cover c = cover(app.key);
+        Boolean artFor = coverForArt.get(app.key);
+        if (c != null && (c.image || artFor == null || artFor == art)) {
             if (done != null) done.done(c);
+            return;
+        }
+        final ShelfChoice choice = choices.get(app.pkg);
+        // Made again for titles that came or went: it shows meanwhile, and the new one changes in place.
+        final boolean again = c != null;
+        if (!again) {
+            covers.remove(app.key);   // one made for another choice
+            madeFor.remove(app.key);
+        }
+        if (!choice.picture()) {
+            if (done != null) done.done(null);
             return;
         }
         List<Done<Cover>> waiting = coversLoading.get(app.key);
@@ -971,28 +1031,33 @@ final class ShelfSource {
             if (done != null) waiting.add(done);
             return;
         }
-        waiting = new ArrayList<>();
-        if (done != null) waiting.add(done);
-        coversLoading.put(app.key, waiting);
+        final List<Done<Cover>> waiters = new ArrayList<>();
+        if (done != null) waiters.add(done);
+        coversLoading.put(app.key, waiters);
         coverApps.put(app.key, app);
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
-        final String imageUrl = images.get(app.pkg);
-        // Made again for titles that came or went: the one showing changes in place.
-        final boolean again = c != null;
+        final String imageUrl = imageUrl(app.pkg, choice);
+        final int gen = coverGen;
         WORK.execute(() -> {
-            final Cover result = buildCover(app, art, imageUrl, spec, svgFile);
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
             main.post(() -> {
-                List<Done<Cover>> waiters = coversLoading.remove(app.key);
-                if (result != null) {
+                if (coversLoading.get(app.key) == waiters) coversLoading.remove(app.key);
+                if (!choice.equals(choices.get(app.pkg))) {
+                    // The choice changed meanwhile: make the new one for whoever's waiting.
+                    for (Done<Cover> d : waiters) makeCover(app, d);
+                    return;
+                }
+                // Not kept if the apps changed meanwhile (forgetCovers): it may be from an old banner.
+                boolean keep = gen == coverGen;
+                if (result != null && keep) {
                     covers.put(app.key, result);
+                    madeFor.put(app.key, choice);
                     coverForArt.put(app.key, art);
                     if (again) listener.onCover(app.key);
                 }
-                if (waiters != null) {
-                    for (Done<Cover> d : waiters) d.done(result);
-                }
-                if (result != null && result.image) return;
+                for (Done<Cover> d : waiters) d.done(result);
+                if (!keep || (result != null && result.image)) return;
                 if (imageUrl != null) fetchImage(app, imageUrl);
                 if (result != null && svgFile != null && !svgFile.exists()) fetchLogo(app, spec, svgFile);
             });
@@ -1000,10 +1065,38 @@ final class ShelfSource {
     }
 
     /**
-     * The app's static image if it has one on the TV, else its artwork ({@code art}: see {@link #artworkWanted}), else
-     * its cover art, or null. Worker thread.
+     * Home Settings' preview: the picture the app's top shelf would show with {@code choice} (null for the glow),
+     * from what's on the TV, without keeping it.
      */
-    private Cover buildCover(App app, boolean art, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
+    void previewCover(final App app, final ShelfChoice choice, final Done<Cover> done) {
+        if (!choice.picture()) {
+            done.done(null);
+            return;
+        }
+        final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
+        final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
+        final String imageUrl = imageUrl(app.pkg, choice);
+        // With suggestions, its artwork shows only if it has no titles, as on Home.
+        final boolean art = ShelfArt.has(app.pkg) && choice.triesArtwork() && (!choice.suggests() || titles(app.pkg) == null);
+        WORK.execute(() -> {
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
+            main.post(() -> done.done(result));
+        });
+    }
+
+    /** Where a static image may come from: config.xml's URL, or "" for one put on the TV only; null for no image. */
+    private String imageUrl(String pkg, ShelfChoice choice) {
+        if (choice.kind != ShelfChoice.Kind.IMAGE) return null;
+        String url = images.get(pkg);
+        return url != null ? url : "";
+    }
+
+    /**
+     * The picture for the app's choice: for its static image, the one on the TV; then, if {@code art} (see
+     * {@link #artworkWanted}), its artwork; else its cover art; or null. Worker thread.
+     */
+    private Cover buildCover(App app, ShelfChoice choice, boolean art, String imageUrl, ShelfFeeds.LogoSpec spec,
+                             File svgFile) {
         File f = imageUrl == null ? null : staticImageFile(app.pkg, imageUrl);
         Cover made = imageCover(f);
         try {
@@ -1147,7 +1240,9 @@ final class ShelfSource {
                         failed.put(url, System.currentTimeMillis());
                         return;
                     }
-                    if (!covers.containsKey(app.key)) return;   // apps changed meanwhile
+                    if (cover(app.key) == null || choices.get(app.pkg).kind != ShelfChoice.Kind.IMAGE) {
+                        return;   // apps or the choice changed meanwhile
+                    }
                     covers.put(app.key, new Cover(made.backdrop, null, true, stamp));
                     listener.onCover(app.key);
                 });
@@ -1162,11 +1257,13 @@ final class ShelfSource {
     private void checkImages() {
         final Map<String, String> made = new HashMap<>();
         final Map<String, String> pkgs = new HashMap<>();
+        final Map<String, String> urls = new HashMap<>();
         for (Map.Entry<String, Cover> e : covers.entrySet()) {
             App a = coverApps.get(e.getKey());
             if (a != null && e.getValue().stamp != null && !coversLoading.containsKey(e.getKey())) {
                 made.put(e.getKey(), e.getValue().stamp);
                 pkgs.put(e.getKey(), a.pkg);
+                urls.put(a.pkg, imageUrl(a.pkg, ShelfChoice.IMAGE));
             }
         }
         if (made.isEmpty()) return;
@@ -1174,7 +1271,7 @@ final class ShelfSource {
             final List<String> changed = new ArrayList<>();
             for (Map.Entry<String, String> e : made.entrySet()) {
                 String pkg = pkgs.get(e.getKey());
-                if (!stamp(staticImageFile(pkg, images.get(pkg))).equals(e.getValue())) changed.add(e.getKey());
+                if (!stamp(staticImageFile(pkg, urls.get(pkg))).equals(e.getValue())) changed.add(e.getKey());
             }
             if (!changed.isEmpty()) main.post(() -> {
                 for (String key : changed) remakeCover(key);
@@ -1182,25 +1279,36 @@ final class ShelfSource {
         });
     }
 
+    /** Makes the app's cover again for its choice (a new static image, or its sharp logo arrived); it changes in place. */
     private void remakeCover(final String key) {
         final App app = coverApps.get(key);
-        if (app == null || !covers.containsKey(key) || coversLoading.containsKey(key)) return;
-        coversLoading.put(key, new ArrayList<>());
+        if (app == null || cover(key) == null || coversLoading.containsKey(key)) return;
+        final List<Done<Cover>> waiters = new ArrayList<>();
+        coversLoading.put(key, waiters);
+        final ShelfChoice choice = choices.get(app.pkg);
         final ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
+        final String imageUrl = imageUrl(app.pkg, choice);
         final boolean art = artworkWanted(app.pkg);
+        final int gen = coverGen;
         WORK.execute(() -> {
-            final Cover result = buildCover(app, art, images.get(app.pkg), spec, svgFile);
+            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
             main.post(() -> {
-                List<Done<Cover>> waiters = coversLoading.remove(key);
-                if (result != null && covers.containsKey(key)) {
+                if (coversLoading.get(key) == waiters) coversLoading.remove(key);
+                if (!choice.equals(choices.get(app.pkg))) {
+                    // The choice changed meanwhile: whoever's waiting gets the new one.
+                    for (Done<Cover> d : waiters) makeCover(app, d);
+                    return;
+                }
+                boolean fresh = gen == coverGen;
+                if (result != null && fresh) {
+                    // Dropped meanwhile (choiceChanged, the choice back as it was): it's the cover all the same.
                     covers.put(key, result);
+                    madeFor.put(key, choice);
                     coverForArt.put(key, art);
                 }
-                if (waiters != null) {
-                    for (Done<Cover> d : waiters) d.done(covers.get(key));
-                }
-                if (result != null) listener.onCover(key);
+                for (Done<Cover> d : waiters) d.done(cover(key));
+                if (result != null && fresh) listener.onCover(key);
             });
         });
     }
@@ -1304,8 +1412,12 @@ final class ShelfSource {
                 main.post(() -> failed.put("logo:" + spec.slug, System.currentTimeMillis()));
                 return;
             }
-            // Made again with it: an artwork is read back from the TV, not painted again.
-            main.post(() -> remakeCover(app.key));
+            // Its cover made again for its choice, now with the sharp logo (not over a static image: it has its own).
+            // An artwork is read back from the TV, not painted again.
+            main.post(() -> {
+                Cover now = covers.get(app.key);
+                if (now != null && !now.image) remakeCover(app.key);
+            });
         });
     }
 
@@ -1371,10 +1483,13 @@ final class ShelfSource {
         return new Cover(cover.backdrop, hardware(lockup), cover.image, cover.stamp, cover.artwork);
     }
 
-    /** Apps changed: their banners may have too. */
+    /** Apps changed: their banners may have too. Covers being made now aren't kept (coverGen). */
     void forgetCovers() {
         covers.clear();
+        madeFor.clear();
         coverApps.clear();
+        coversLoading.clear();
+        coverGen++;
         coverForArt.clear();
         deferred.clear();
     }
@@ -1389,6 +1504,7 @@ final class ShelfSource {
             Map.Entry<String, Cover> e = it.next();
             if (e.getValue().artwork && !keys.contains(e.getKey())) {
                 it.remove();
+                madeFor.remove(e.getKey());
                 coverForArt.remove(e.getKey());
             }
         }
@@ -1527,6 +1643,7 @@ final class ShelfSource {
             Map.Entry<String, Cover> e = it.next();
             if ((e.getValue().image || e.getValue().artwork) && !keep.contains(e.getValue().backdrop)) {
                 it.remove();
+                madeFor.remove(e.getKey());
                 coverForArt.remove(e.getKey());
             }
         }

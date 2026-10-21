@@ -32,6 +32,24 @@ public class AppOrderTest {
 
     // ---- default order (config.xml) ---------------------------------------------------------------
 
+    private static final String SETTINGS = "com.gathin.tvhome/.SettingsActivity";
+
+    @Test
+    public void homeSettingsGoesAfterTheOtherApps() {
+        List<String> byName = list(APPLE, HOTSTAR, SETTINGS, KODI, NETFLIX, PLEX, PRIME, SPOTIFY, YOUTUBE);
+        assertEquals(list(NETFLIX, PRIME, YOUTUBE, HOTSTAR, APPLE, KODI, PLEX, SPOTIFY, SETTINGS),
+                AppOrder.arrange(byName, DOCK, null, SETTINGS));
+        // New to a saved arrangement: at the end, as installed apps go.
+        assertEquals(list(YOUTUBE, NETFLIX, KODI, SETTINGS),
+                AppOrder.arrange(list(SETTINGS, KODI, NETFLIX, YOUTUBE), DOCK, list(YOUTUBE, NETFLIX, KODI), SETTINGS));
+        // Once placed (moved into the dock, say), it stays there.
+        assertEquals(list(SETTINGS, YOUTUBE, NETFLIX, KODI),
+                AppOrder.arrange(list(SETTINGS, KODI, NETFLIX, YOUTUBE), DOCK, list(SETTINGS, YOUTUBE, NETFLIX, KODI),
+                        SETTINGS));
+        // Hidden (not installed as a tile): nothing changes.
+        assertEquals(list(NETFLIX, KODI), AppOrder.arrange(list(KODI, NETFLIX), DOCK, null, SETTINGS));
+    }
+
     @Test
     public void defaultPutsDockAppsFirstInConfiguredOrderThenTheRestByName() {
         List<String> byName = list(APPLE, HOTSTAR, KODI, NETFLIX, PLEX, PRIME, SPOTIFY, YOUTUBE);

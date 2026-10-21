@@ -117,12 +117,13 @@ git (a source zip) the version is a plain `2.0`. See what a TV has installed wit
 `launcher_tree`, `dirty`) and the install time in `build.installed`. Under `config` it records the
 system animation scales (`window`, `transition`, `animator`), which decide which transitions run, and
 what the launcher reports about itself: the Liquid Glass look in effect and `config.xml`'s, the saved
-choice, the glass tier and stand-in art. It warns when the build has no stamp, when a scale isn't 1,
+choice, the glass tier, stand-in art and how many apps' top shelf is set in Home Settings. It warns when the build has no stamp, when a scale isn't 1,
 and when a result labelled `main` isn't the current `origin/main` as it ships.
 
 **The shipped configuration, without losing the TV owner's.** `run` and `trace` start the launcher
 with `--ez default_config true`: for that process only, it shows `config.xml`'s Liquid Glass instead
-of the slider's saved choice, which stays saved, and drops stand-in art. Meanwhile `--ei liquid_glass`
+of the slider's saved choice, and `config.xml`'s top shelf for every app instead of Home Settings'
+choices, all of which stay saved, and drops stand-in art. Meanwhile `--ei liquid_glass`
 isn't saved either, which is how `--variant` measures another look. Every start passes it (a cold
 start is a new process), and the run ends with `--ez default_config false`, back to the saved choice
 without stand-in art. Don't reset a TV with `--ei liquid_glass` on its own: it saves the value as the

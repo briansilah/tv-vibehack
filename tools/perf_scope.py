@@ -126,6 +126,15 @@ FILE_RULES = [
     ((JAVA + "ShelfOrder.java",),
      E("dock mem", trace="dock", why="the top shelf: which title shows next, and which pictures stay decoded "
                                      "(plain logic with JVM tests)")),
+    ((JAVA + "ShelfChoice.java", JAVA + "ShelfChoices.java"),
+     E("dock mem", trace="dock", why="the top shelf: what each app's shows, as chosen in Home Settings (ShelfChoice "
+                                     "has JVM tests)")),
+    ((JAVA + "SettingsActivity.java", JAVA + "ShelfPreview.java", RES + "layout/activity_settings.xml",
+      RES + "layout/settings_*.xml", RES + "color/settings_*.xml", RES + "drawable/ic_chevron_right.xml"),
+     E(check="emulator", why="Home Settings, on screen only while you use it: look at it on your emulator")),
+    ((RES + "drawable/settings_banner.xml",),
+     E("cold jank mem", keys="grid", trace="keys:grid", why="Home Settings' tile: its banner loads and binds with "
+                                                            "the other apps'")),
     # Resources.
     ((RES + "values/config.xml",), E("*", why="the launcher's configuration")),   # MEMBER_RULES go finer
     ((RES + "layout/activity_main.xml", RES + "values/styles.xml"),     # MEMBER_RULES go finer
@@ -187,7 +196,8 @@ MEMBER_RULES = {
                                                                         "TV app changes)")),
         (("packageReceiver", "reloadNow"),
          E(check="emulator", why="a TV app installed or removed while Home shows: try it on your emulator")),
-        (("onNewIntent", "comeBackFromApp", "onStop", "onPause", "wasStopped", "showMode", "resumed"),
+        (("onNewIntent", "comeBackFromApp", "onStop", "onPause", "wasStopped", "showMode", "resumed",
+          "glassOnReturn", "EXTRA_GLASS_SLIDER"),
          E("warm", trace="home", why="Home coming back from an app")),
         (("onLaunchApp", "comeBack", "comeBackIfShown", "COME_BACK_MS", "onShelfAction"),
          E(check="emulator", trace="launch", why="opening an app, which no scenario does: trace it")),
@@ -197,20 +207,20 @@ MEMBER_RULES = {
         (("onDestroy",), E(check="emulator", why="only when the system ends Home")),
         (("onBackPressed", "onActionTile"),
          E("jank", keys="arrange", trace="keys:arrange", why="arranging apps")),
-        (("onTileLongPressed",), E(check="emulator", why="an app's actions (OK held)")),
+        (("onTileLongPressed", "openShelfSettings"), E(check="emulator", why="an app's actions (OK held)")),
         (("onTileFocused",), E("jank dock", keys="grid", trace="keys", why="each focus change")),
         (("gridScroll", "followPage", "pageTravel", "SAFE_TOP_DP", "TOP_BAR_FADE_DP"),
          E("jank", keys="grid", trace="keys:grid", why="scrolling the grid and the page with it")),
         (("placeHero", "heroBaseY"), E("dock", trace="dock", why="where the top shelf's name sits")),
         (("showHero", "showHero>*", "swapShelf", "swapShelf>*", "onShelfArt", "setAmbient", "onShelfCovered",
           "shelfTiming", "SHELF_*", "NAME_*", "GLOW_*", "heroShown", "nameSwapping", "shelfKey", "ambientColor",
-          "ambientFade"),
+          "ambientFade", "glowAt", "onShelfGlow"),
          E("dock", trace="dock", why="the top shelf's name and glow on a dock move")),
         (("hideHero",), E("jank dock", keys="grid", trace="dock", why="the top shelf going, down into the grid")),
         (("onShelfExit", "onTileDpadKey"),
          E("jank", keys="default corner", trace="keys:corner", why="moving focus between tiles, the shelf and the "
                                                                    "top right")),
-        (("focusTile", "focusTarget", "deferredFocus", "onTileKey"),
+        (("focusTile", "focusTarget", "deferredFocus", "afterDeferredFocus", "onTileKey"),
          E("warm jank", keys="grid", trace="keys", why="moving focus to a tile (also when Home comes "
                                                                "back)")),
         (("setGlass", "applyGlassExtra", "PREF_GLASS", "EXTRA_GLASS", "glassChoice", "glassExtra"),
@@ -230,7 +240,7 @@ MEMBER_RULES = {
          E(check="emulator", why="the Inputs menu (`tvhome:showInputs` in a trace)")),
     ],
     JAVA + "AppAdapter.java": [
-        (("reload", "preload", "dropPreload", "load", "loadApp", "show", "Loaded*", "Entry*"),
+        (("reload", "preload", "dropPreload", "load", "loadApp", "shown", "show", "Loaded*", "Entry*"),
          E("cold mem", trace="cold", why="loading the apps' banners, icons and labels")),
         (("sampleDockColours", "vividColor", "sample", "ambientColorAt"),
          E("dock mem", trace="dock", why="the glow's colour for each dock app")),
@@ -239,18 +249,22 @@ MEMBER_RULES = {
         (("releasePress",), E("warm", why="the pressed tile, released when Home comes back")),
         (("launch", "isSelect", "Holder.press", "Holder.onSelectKey"),
          E(check="emulator", trace="launch", why="opening an app from a tile, which no scenario does: trace it")),
-        (("keys", "saveOrder", "setOnOrderSaved", "move", "setArranging", "movingKey", "appCount", "isActionTile"),
+        (("keys", "saveOrder", "setOnOrderSaved", "move", "setArranging", "movingKey", "appCount", "isActionTile",
+          "PREF_ORDER"),
          E("jank", keys="arrange", trace="keys:arrange", why="arranging apps")),
         (("openAppInfo",), E(check="emulator", why="an app's actions")),
+        (("loadInOrder", "Ordered*"), E(check="emulator", why="Home Settings' list of apps")),
         (("Holder*",), E("jank dock", keys="grid", trace="keys", why="a tile's focus lift and springs")),
         (("keyAt", "positionOf", "getItemId", "getItemCount"),
          E("warm jank", trace="keys", why="looking tiles up on each focus change and on Home")),
-        (("labelAt", "bannerAt", "iconAt", "dockApps", "copy"), E("dock mem", trace="dock", why="the dock apps")),
+        (("labelAt", "bannerAt", "iconAt", "pkgAt", "dockApps", "copy"),
+         E("dock mem", trace="dock", why="the dock apps")),
         (("contains",), E(check="emulator", why="TV apps changing")),
         (("TileListener*",), E("*", why="how tiles talk to MainActivity")),
     ],
     JAVA + "Rearranger.java": [
-        (("showActions", "showActions>*", "addAction", "addAction>*", "sheet", "glassAction", "setGlassAction"),
+        (("showActions", "showActions>*", "addAction", "addAction>*", "sheet", "glassAction", "setGlassAction",
+          "shelfAction", "setTopShelfAction"),
          E(check="emulator", why="an app's actions (OK held): look at them on your emulator")),
         (("moveAcrossDock",), E("jank", keys="arrange", trace="keys:arrange", why="moving an app into or out of "
                                                                                 "the dock")),
@@ -258,8 +272,10 @@ MEMBER_RULES = {
          E("jank", keys="default arrange", trace="keys:arrange", why="every focus change and key on a tile")),
     ],
     JAVA + "TopShelf.java": [
-        (("resume", "pause", "appsChanged", "setDock"),
+        (("resume", "pause", "appsChanged", "setDock", "applyChoices"),
          E("warm dock mem", trace="dock", why="the top shelf as Home shows and hides")),
+        (("useShippedChoices", "choicesInEffect", "chosenGlow", "Host*"),
+         E("dock mem", trace="dock", why="each app's top shelf choice (Home Settings), and the glow's colour")),
         (("enterActions", "leaveActions", "liftTo", "lift", "liftAnim", "acting", "onActionKey", "labelAction"),
          E("jank dock", keys="corner", trace="keys:corner", why="the top shelf's button, Up from the dock")),
         (("act", "intentFor"), E(check="emulator", why="what the top shelf's button opens")),
@@ -270,6 +286,9 @@ MEMBER_RULES = {
     SOURCE + "AndroidManifest.xml": [
         (("uses-permission:android.permission.INTERNET", "uses-permission:android.permission.READ_TV_LISTINGS"),
          E("dock mem", trace="dock", why="the top shelf's network and TV listings")),
+        (("activity:.SettingsActivity", "category:android.intent.category.LEANBACK_LAUNCHER"),
+         E("cold jank mem", keys="grid", trace="keys:grid", why="Home Settings, a TV app of the launcher's own: one "
+                                                                "more tile, loaded at start")),
         (("uses-permission:android.permission.DUMP",),
          E(check="tv", trace="home remote", why="the Home button service's held volume keys: check them on the TV")),
     ],
