@@ -146,6 +146,9 @@ final class TopShelf implements ShelfSource.Listener {
     void start() {
         if (source == null || started) return;
         started = true;
+        // Nothing was shown or made yet, so choices that changed before now (default_config at a cold start) have
+        // nothing to redo.
+        source.choices().takeChanged();
         source.start();
         preloadDock();
         if (current != null) want(current);
