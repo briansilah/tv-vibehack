@@ -40,6 +40,21 @@ final class AppOrder {
     }
 
     /**
+     * As {@link #arrange(List, List, List)}, with {@code last} (Home Settings) after the other apps rather than among
+     * them by name, as a settings app goes after the apps: by default, and when it's new to a saved arrangement. Once
+     * the user has placed it, it stays where they put it.
+     */
+    static List<String> arrange(List<String> alphabetical, List<String> dockApps, List<String> saved, String last) {
+        List<String> names = alphabetical;
+        if (last != null && alphabetical.contains(last)) {
+            names = new ArrayList<>(alphabetical);
+            names.remove(last);
+            names.add(last);
+        }
+        return arrange(names, dockApps, saved);
+    }
+
+    /**
      * The dock apps first, in their configured order, then everything else by name. Dock apps that aren't
      * installed are skipped, so the next apps by name fill their slots.
      */

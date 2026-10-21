@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A Home Settings row: what it is, its value or "Default", and a check (the current choice) or a chevron (opens
+     more). Focused, it turns white, as the rows of an app's actions. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:layout_marginTop="10dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="28dp"
+    android:paddingEnd="20dp"
+    android:background="@drawable/sheet_action_bg"
+    android:focusable="true"
+    android:clickable="true">
+
+    <TextView
+        android:id="@+id/rowLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:duplicateParentState="true"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="@color/settings_text"
+        style="@style/Text.Headline"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/rowValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:duplicateParentState="true"
+        android:singleLine="true"
+        android:textColor="@color/settings_text_dim"
+        style="@style/Text.Callout"
+        android:includeFontPadding="false" />
+
+    <ImageView
+        android:id="@+id/rowIcon"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="8dp"
+        android:duplicateParentState="true"
+        android:tint="@color/settings_text"
+        android:contentDescription="@null" />
+</LinearLayout>

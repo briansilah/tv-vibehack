@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A section of Home Settings: its name, and what it's about. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="30dp"
+    android:paddingStart="28dp"
+    android:paddingEnd="20dp"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/headerName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#99FFFFFF"
+        style="@style/Text.Overline"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/headerAbout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="#73FFFFFF"
+        style="@style/Text.Caption1"
+        android:visibility="gone" />
+</LinearLayout>

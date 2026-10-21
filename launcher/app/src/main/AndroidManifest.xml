@@ -45,7 +45,25 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
+        <!-- Home Settings: the launcher's own settings. A TV app of its own, so it's a tile in the grid as tvOS's
+             Settings app is on its Home Screen (AppAdapter shows it; hidden_apps can hide it), and the Top Shelf row of
+             an app's actions opens it on that app. Never kept in the background: Home or another app ends it. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/home_settings"
+            android:icon="@drawable/ic_settings"
+            android:banner="@drawable/settings_banner"
+            android:exported="true"
+            android:taskAffinity="com.gathin.tvhome.settings"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|uiMode"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
         <!-- Screensaver: pick it in Settings, or `settings put secure screensaver_components
              com.gathin.tvhome/.ClockDream` over adb. -->
         <service

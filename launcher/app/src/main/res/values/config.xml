@@ -15,7 +15,8 @@
         <item>in.startv.hotstar</item>
     </string-array>
 
-    <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
+    <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). The launcher's own
+         Home Settings is a tile too; com.gathin.tvhome here hides it. -->
     <string-array name="hidden_apps">
         <item>com.mediatek.wwtv.tvcenter</item>
         <item>com.mitv.gallery</item>
@@ -59,10 +60,13 @@
             feed below; or, for an app in top_shelf_images, its static image instead;
          2. its cover art: its logo, cut out of its banner, on shapes in its colours;
          3. otherwise the ambient glow and its name.
-         false: always the glow and name, with no network use. -->
+         false: always the glow and name, with no network use.
+         Home Settings on the TV changes this per app: suggestions, a static image, the glow alone, or the app's
+         artwork, cover art or a colour. -->
     <bool name="top_shelf_art">true</bool>
 
     <!-- Apps whose top shelf is one static image, as tvOS shows YouTube's, instead of suggestions: "package [| URL]".
+         This is the default; Home Settings on the TV can change it for any app.
          The image is the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's
          home screen), else one fetched once from the https URL and kept on the TV. Until it has one, the app shows
          its cover art. Up from the app moves to a button that opens it. -->

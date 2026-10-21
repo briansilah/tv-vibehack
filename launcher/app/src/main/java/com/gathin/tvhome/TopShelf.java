@@ -26,6 +26,7 @@ import java.util.List;
  *   app's static Top Shelf image.</li>
  *   <li>Neither (yet): the ambient glow and the app's name, which MainActivity draws as before.</li>
  * </ol>
+ * Home Settings changes this per app ({@link ShelfChoice}): suggestions, one picture, or the glow alone.
  * The art follows focus at once: a dock move cross-fades to what's already decoded and fetches the rest in the
  * background, fading it in if focus is still there when it arrives. Main thread.
  */
@@ -43,6 +44,9 @@ final class TopShelf implements ShelfSource.Listener {
 
         /** Focus leaves the shelf's button: Up to the top right corner, else back to the dock. */
         void onShelfExit(boolean up);
+
+        /** The app's top shelf choice changed while it shows (Home Settings): its glow's colour may have too. */
+        void onShelfGlow(String key);
     }
 
     private static final int NONE = 0, COVER = 1, CONTENT = 2;
@@ -121,6 +125,7 @@ final class TopShelf implements ShelfSource.Listener {
         this.action = action;
         this.host = host;
         this.source = enabled ? new ShelfSource(ctx, feeds, links, logos, images, this) : null;
+        if (source != null) source.choices().watch();
         action.setOnClickListener(v -> act());
         action.setOnKeyListener(this::onActionKey);
         // Grows from its left edge, which stays in line with the title above it.
@@ -149,6 +154,7 @@ final class TopShelf implements ShelfSource.Listener {
     void resume() {
         resumed = true;
         if (!started) return;
+        applyChoices();
         source.refresh();
         // The pictures dropped while Home was hidden; after Home's first frames.
         handler.removeCallbacks(preloadDock);
@@ -166,6 +172,55 @@ final class TopShelf implements ShelfSource.Listener {
     /** The apps changed (installed, updated): their banners, so their covers, may have too. */
     void appsChanged() {
         if (source != null) source.forgetCovers();
+    }
+
+    /**
+     * With {@code on}, config.xml's top shelf choices for every app, the ones saved in Home Settings kept but unused:
+     * tools/perf.py's --ez default_config true, which measures the launcher as it ships.
+     */
+    void useShippedChoices(boolean on) {
+        if (source == null) return;
+        source.choices().useShipped(on);
+        if (started) applyChoices();
+    }
+
+    /** How many choices made in Home Settings are in effect (each app's, and all apps'): for tools/perf.py's log. */
+    int choicesInEffect() {
+        return source == null ? 0 : source.choices().inEffect();
+    }
+
+    /** All apps' choice in effect, or "-" for each app's own: for tools/perf.py's log. */
+    String allChoice() {
+        ShelfChoice c = source == null ? null : source.choices().all();
+        return c == null ? "-" : c.encode();
+    }
+
+    /** The glow's colour chosen for the app in Home Settings, or 0 for its own. */
+    int chosenGlow(String pkg) {
+        if (source == null || pkg == null) return 0;
+        ShelfChoice c = source.choice(pkg);
+        return c.kind == ShelfChoice.Kind.COLOUR ? c.colour : 0;
+    }
+
+    /**
+     * Choices made in Home Settings since Home last showed: those apps' art is made again, and the app showing
+     * changes to its new choice at once.
+     */
+    private void applyChoices() {
+        java.util.Set<String> changed = source.choices().takeChanged();
+        if (changed.isEmpty()) return;
+        boolean all = changed.contains(ShelfChoices.ALL);
+        if (all) {
+            source.allChoicesChanged();
+        } else {
+            for (String pkg : changed) source.choiceChanged(pkg);
+        }
+        if (!shown || current == null || !(all || changed.contains(current.pkg))) return;
+        leaveActions();
+        visit(current);
+        display(choose(current), 0L, null, true);
+        host.onShelfGlow(current.key);
+        want(current);
     }
 
     /** The dock's apps: after the app list (re)loaded, or apps moved in or out of the dock. */
@@ -250,8 +305,9 @@ final class TopShelf implements ShelfSource.Listener {
      */
     boolean enterActions() {
         if (!shown || current == null) return false;
-        // An app with a static image (config.xml, top_shelf_images) has one too: it opens the app.
-        boolean opensApp = tier == COVER && source.staticImage(current.pkg);
+        // An app whose top shelf is one picture (YouTube's static image, or a picture chosen in Home Settings) has one
+        // too: it opens the app.
+        boolean opensApp = tier == COVER && source.staticPicture(current.pkg);
         if (!opensApp && (tier != CONTENT || showingItem == null)) return false;
         acting = true;
         handler.removeCallbacks(advance);
