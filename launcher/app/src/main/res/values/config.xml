@@ -71,7 +71,7 @@
          This is the default; Home Settings on the TV can change it for any app.
          The image is the one you put on the TV with tools/top_shelf_image.py (from a screenshot of an Apple TV's
          home screen), else one fetched once from the https URL and kept on the TV. Until it has one, the app shows
-         its artwork (or cover art). Up from the app moves to a button that opens it. -->
+         its artwork (or cover art). Up from the app goes straight to the top right corner. -->
     <string-array name="top_shelf_images" translatable="false">
         <item>com.google.android.youtube.tv</item>
     </string-array>
