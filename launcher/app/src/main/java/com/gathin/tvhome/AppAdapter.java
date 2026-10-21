@@ -125,7 +125,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** The focused tile's name sits this far below its resting place, clear of the scaled tile. */
     private static final float NAME_SHIFT_DP = 12f;
     /** The user's arrangement (see {@link AppOrder#encode}); absent until they first rearrange. */
-    static final String PREF_ORDER = "app_order";
+    private static final String PREF_ORDER = "app_order";
     /** Rebind payload: the tile's slot changed (dock or grid), or arranging started, stopped or picked up an app. */
     private static final Object PAYLOAD_SLOT = new Object();
     private static final int TYPE_APP = 0;

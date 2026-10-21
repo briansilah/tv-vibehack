@@ -245,8 +245,8 @@ go at the end, as on Apple TV; apps you uninstall drop out and the rest close up
 ### Home Settings
 
 The launcher's own settings, on the TV. As Settings is an app on Apple TV's Home Screen, **Home Settings**
-is an app in the grid (a grey gear): installed with the launcher, it goes at the end of your apps, next to
-Arrange apps, and you can move it into the dock or hide it (`hidden_apps`) like any other. Google TV's own
+is an app in the grid, a gear on glass like the Arrange apps tile: installed with the launcher, it goes at the end of
+your apps, next to Arrange apps, and you can move it into the dock or hide it (`hidden_apps`) like any other. Google TV's own
 app list shows it too. On the left, Home in miniature shows what you'll get as you move through the list.
 
 - **Top Shelf**: each dock app with what its top shelf shows, then the rest of your apps (their top shelf
