@@ -287,6 +287,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 getResources().getStringArray(R.array.top_shelf_links),
                 getResources().getStringArray(R.array.top_shelf_logos),
                 getResources().getStringArray(R.array.top_shelf_images));
+        // The process's configuration, as the glass's: a rebuilt activity (a configuration change it doesn't handle)
+        // starts without the intent that set it.
+        topShelf.useShippedChoices(defaultConfig);
         corner = findViewById(R.id.corner);
         corner.setBackdrop(backdrop);
         ViewStub topBarStub = findViewById(R.id.topBarStub);
