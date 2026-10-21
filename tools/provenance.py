@@ -122,6 +122,8 @@ def variant(result):
         out.append("Liquid Glass at %s (ships at %s)" % (lc.get("glass"), lc.get("glass_default")))
     if lc.get("test_art"):
         out.append("stand-in top shelf art (glass_test_art)")
+    if lc.get("shelf_choices"):
+        out.append("%s apps' top shelf as chosen in Home Settings, not config.xml's" % lc.get("shelf_choices"))
     return out
 
 

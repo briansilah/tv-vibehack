@@ -30,7 +30,8 @@ import java.util.List;
  * can still go to, while the others step back.
  *
  * <ul>
- * <li>Hold OK on an app for its actions, full screen as on Google TV: Move, Move to (or out of) Dock, App info.
+ * <li>Hold OK on an app for its actions, full screen as on Google TV: Move, Move to (or out of) Dock, App info,
+ *     Top Shelf (Home Settings on its choice).
  * <li>Move picks the app up. The arrows move it a slot or a row at a time, the dock being just the first row;
  *     OK puts it down and saves, Back puts it back where it was.
  * <li>The Arrange apps tile after the last app arranges several in one go: OK picks an app up and puts it down,
@@ -86,6 +87,8 @@ final class Rearranger {
     private PopupWindow sheet;
     /** The actions sheet's last row, for every app: how see-through the glass is (MainActivity.showGlassSlider). */
     private Runnable glassAction;
+    /** The Top Shelf row: Home Settings on that app's choice. Null with the top shelf's art off. */
+    private java.util.function.Consumer<String> shelfAction;
 
     Rearranger(Activity activity, FrameLayout root, RecyclerView grid, AppAdapter adapter,
                AppAdapter.TileListener tiles, int columns) {
@@ -106,6 +109,10 @@ final class Rearranger {
 
     void setGlassAction(Runnable action) {
         glassAction = action;
+    }
+
+    void setTopShelfAction(java.util.function.Consumer<String> action) {
+        shelfAction = action;
     }
 
     // ---- an app's actions (OK held) ---------------------------------------------------------------
@@ -150,6 +157,8 @@ final class Rearranger {
                     () -> moveAcrossDock(app));
         }
         addAction(actions, popup, R.string.app_info, () -> adapter.openAppInfo(adapter.positionOf(app)));
+        final String pkg = adapter.pkgAt(position);
+        if (shelfAction != null && pkg != null) addAction(actions, popup, R.string.top_shelf, () -> shelfAction.accept(pkg));
         // Not about this app but the home screen, as iOS's Home Screen menu offers its look.
         if (glassAction != null) addAction(actions, popup, R.string.liquid_glass, glassAction);
 

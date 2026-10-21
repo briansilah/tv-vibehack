@@ -91,8 +91,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      * set it from a computer, {@code adb shell am start -n com.gathin.tvhome/.MainActivity --ei liquid_glass 50}
      * (-1 goes back to config.xml's).
      */
-    private static final String PREF_GLASS = "liquid_glass";
+    static final String PREF_GLASS = "liquid_glass";
     static final String EXTRA_GLASS = "liquid_glass";
+    /** Home Settings' Liquid Glass row: Home shows again with focus on the dock, then the slider over it. */
+    static final String EXTRA_GLASS_SLIDER = "com.gathin.tvhome.GLASS_SLIDER";
     /**
      * {@code --ez default_config true}: the launcher as it ships, for tools/perf.py, until the process ends or
      * {@code --ez default_config false}: config.xml's Liquid Glass instead of the saved choice (which stays saved), and
@@ -189,6 +191,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     /** The tile focusTile was last asked for, and its listener while the grid scrolls to it. */
     private int focusTarget = -1;
     private RecyclerView.OnScrollListener deferredFocus;
+    /** Runs once focus lands on the tile focusTile was last asked for, if the grid had to scroll to it first. */
+    private Runnable afterDeferredFocus;
+    /** Liquid Glass was picked in Home Settings: the slider shows when Home is back ({@link #EXTRA_GLASS_SLIDER}). */
+    private boolean glassOnReturn;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -272,6 +278,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
             defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
         }
+        glassOnReturn = start != null && start.getBooleanExtra(EXTRA_GLASS_SLIDER, false);
         backdrop = new LiquidGlass.Backdrop(findViewById(R.id.backdrop), LiquidGlass.tier(this),
                 new LiquidGlass.Look(glassChoice()));
         shelfInfo = findViewById(R.id.shelfInfo);
@@ -308,6 +315,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         adapter.setOnOrderSaved(() -> topShelf.setDock(adapter.dockApps()));
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
         rearranger.setGlassAction(this::showGlassSlider);
+        if (getResources().getBoolean(R.bool.top_shelf_art)) rearranger.setTopShelfAction(this::openShelfSettings);
         applyAdbExtras(getIntent());
 
         // tvOS layout: push the dock row to the bottom of the screen; the grid hides below until you press Down.
@@ -401,6 +409,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         // Read these before reload(): rebinding can move focus to the first tile and overwrite them.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
+        final boolean glass = glassOnReturn;
+        glassOnReturn = false;
         if (appsChanged) reloadApps();
         // The tiles fly in once, when the launcher starts. Like tvOS, Home afterwards just shows the
         // home screen with focus where you left it, instead of replaying the entrance every time.
@@ -414,7 +424,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         // reload() the view that holds focus may no longer show the app it had.
         grid.post(() -> {
             int pos = adapter.positionOf(returnKey);
-            focusTile(pos >= 0 ? pos : returnSlot);
+            int to = pos >= 0 ? pos : returnSlot;
+            // Liquid Glass from Home Settings: on the dock, whose glass it changes, then the slider.
+            if (glass) {
+                focusTile(to % COLUMNS);
+                if (deferredFocus != null) afterDeferredFocus = this::showGlassSlider;
+                else showGlassSlider();
+            } else {
+                focusTile(to);
+            }
             Choreographer.getInstance().postFrameCallback(frameNanos -> {
                 onFocusRestored(t0);
                 // After this first frame: the network pill's binder calls took 4-12 ms on a TV before it, and the
@@ -454,6 +472,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         super.onNewIntent(intent);
         rearranger.end();   // Home pressed while arranging: keep the new arrangement
         showMode = intent.getIntExtra(Transitions.EXTRA_SHOW, Transitions.SHOW_INTENT);
+        glassOnReturn = intent.getBooleanExtra(EXTRA_GLASS_SLIDER, false);
         applyAdbExtras(intent);
     }
 
@@ -663,7 +682,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             heroName.animate().alpha(ownTitle ? 0f : 1f).setDuration(SHELF_SHOW_NAME_MS).setInterpolator(DECELERATE)
                     .withEndAction(() -> shelfTiming.part(SHELF_TEXT, span)).start();
             if (ambientFade != null) ambientFade.cancel();
-            setAmbient(adapter.ambientColorAt(position));
+            setAmbient(glowAt(position));
             if (testArt != null) testArt.show(position);
             ambient.animate().alpha(1f).setDuration(SHELF_SHOW_GLOW_MS).setInterpolator(DECELERATE)
                     .withEndAction(() -> shelfTiming.part(SHELF_GLOW, span)).start();
@@ -702,7 +721,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                             .start();
                 }).start();
         if (testArt != null) testArt.show(position);
-        int color = adapter.ambientColorAt(position);
+        int color = glowAt(position);
         if (ambientFade != null) ambientFade.cancel();
         if (color == ambientColor) {
             shelfTiming.part(SHELF_GLOW, span);
@@ -743,6 +762,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     public void onShelfExit(boolean up) {
         if (up) btnSettings.requestFocus();
         else focusTile(lastFocused % COLUMNS);
+    }
+
+    /** The app's top shelf choice changed while it shows (Home Settings): its glow takes the colour now. */
+    @Override
+    public void onShelfGlow(String key) {
+        if (!heroShown || key == null || !key.equals(shelfKey)) return;
+        int pos = adapter.positionOf(key);
+        if (pos < 0) return;
+        if (ambientFade != null) ambientFade.cancel();
+        setAmbient(glowAt(pos));
+    }
+
+    /** The glow's colour for the app at a position: the one chosen for it in Home Settings, else its own. */
+    private int glowAt(int position) {
+        int chosen = topShelf.chosenGlow(adapter.pkgAt(position));
+        return chosen != 0 ? chosen : adapter.ambientColorAt(position);
     }
 
     /** Art fills the screen: the glow under it needn't be drawn. */
@@ -800,6 +835,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             // Into or out of the shipped configuration: the stand-in art goes, unless this intent asks for it.
             if (on != defaultConfig && !art) showTestArt(false);
             defaultConfig = on;
+            topShelf.useShippedChoices(on);
         }
         if (art) showTestArt(intent.getBooleanExtra(GlassTestArt.EXTRA, false));
         if (config || glassExtra != null) {
@@ -820,7 +856,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                     + " glass_default=" + getResources().getInteger(R.integer.liquid_glass)
                     + " glass_saved=" + prefs.getInt(PREF_GLASS, -1)
                     + " glass_tier=" + tiers[LiquidGlass.tier(this)]
-                    + " test_art=" + (testArt != null ? 1 : 0));
+                    + " test_art=" + (testArt != null ? 1 : 0)
+                    + " shelf_choices=" + topShelf.choicesInEffect());
         }
     }
 
@@ -899,9 +936,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     }
 
     private CharSequence glassLabel(int value) {
-        if (value == LiquidGlass.Look.CLEAR) return getString(R.string.glass_clear);
-        if (value == LiquidGlass.Look.TINTED) return getString(R.string.glass_tinted);
-        return getString(R.string.glass_value, value);
+        return glassLabel(this, value);
+    }
+
+    /** The slider's value as it reads: Clear, Tinted or a percentage. Also Home Settings'. */
+    static CharSequence glassLabel(Context ctx, int value) {
+        if (value == LiquidGlass.Look.CLEAR) return ctx.getString(R.string.glass_clear);
+        if (value == LiquidGlass.Look.TINTED) return ctx.getString(R.string.glass_tinted);
+        return ctx.getString(R.string.glass_value, value);
     }
 
     // ---- navigation ------------------------------------------------------------------------------
@@ -925,6 +967,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         return true;
     }
 
+    /** An app's Top Shelf in its actions: Home Settings opens on its choice, and Back comes straight back here. */
+    private void openShelfSettings(String pkg) {
+        Intent i = new Intent(this, SettingsActivity.class).putExtra(SettingsActivity.EXTRA_PACKAGE, pkg)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            onLaunchApp(i);
+        } catch (RuntimeException e) {
+            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     /** Holding Select on an app opens its actions: Move, Move to Dock, App info. */
     @Override
     public void onTileLongPressed(int position, View card) {
@@ -945,6 +998,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         if (adapter.getItemCount() == 0) return;
         final int pos = Math.max(0, Math.min(position, adapter.getItemCount() - 1));
         focusTarget = pos;
+        afterDeferredFocus = null;
         if (deferredFocus != null) {
             grid.removeOnScrollListener(deferredFocus);
             deferredFocus = null;
@@ -969,6 +1023,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 RecyclerView.ViewHolder h = rv.findViewHolderForAdapterPosition(pos);
                 View target = h != null ? h.itemView.findViewById(R.id.card) : rv.getChildAt(0);
                 if (target != null) target.requestFocus();
+                Runnable then = afterDeferredFocus;
+                afterDeferredFocus = null;
+                if (then != null) then.run();
             }
         };
         grid.addOnScrollListener(deferredFocus);

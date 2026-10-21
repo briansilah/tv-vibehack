@@ -125,7 +125,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** The focused tile's name sits this far below its resting place, clear of the scaled tile. */
     private static final float NAME_SHIFT_DP = 12f;
     /** The user's arrangement (see {@link AppOrder#encode}); absent until they first rearrange. */
-    private static final String PREF_ORDER = "app_order";
+    static final String PREF_ORDER = "app_order";
     /** Rebind payload: the tile's slot changed (dock or grid), or arranging started, stopped or picked up an app. */
     private static final Object PAYLOAD_SLOT = new Object();
     private static final int TYPE_APP = 0;
@@ -238,8 +238,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         List<Callable<Entry>> tasks = new ArrayList<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) continue;
-            String pkg = ri.activityInfo.packageName;
-            if (pkg.equals(ctx.getPackageName()) || hidden.contains(pkg)) continue;
+            if (!shown(ctx, ri, hidden)) continue;
             tasks.add(() -> loadApp(pm, ri));
         }
         List<Entry> apps = new ArrayList<>(tasks.size());
@@ -253,6 +252,71 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             throw new RuntimeException(e);
         }
         return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
+    }
+
+    /** Whether an app is a tile: not hidden (config.xml), and of this app's own activities only Home Settings. */
+    private static boolean shown(Context ctx, ResolveInfo ri, Set<String> hidden) {
+        String pkg = ri.activityInfo.packageName;
+        if (hidden.contains(pkg)) return false;
+        return !pkg.equals(ctx.getPackageName()) || SettingsActivity.class.getName().equals(ri.activityInfo.name);
+    }
+
+    /** Home Settings' tile's key, as {@link Entry#key}. */
+    static String settingsKey(Context ctx) {
+        return new ComponentName(ctx, SettingsActivity.class).flattenToShortString();
+    }
+
+    /** The TV apps as Home has them: in the user's order, and how many of them are in the dock. */
+    static final class Ordered {
+        final List<Entry> apps;
+        final int dock;
+
+        Ordered(List<Entry> apps, int dock) {
+            this.apps = apps;
+            this.dock = dock;
+        }
+    }
+
+    /**
+     * The TV apps in the order Home shows them, without Home Settings itself, and how many are in the dock: for Home
+     * Settings. Loads them all, so not on the main thread.
+     */
+    static Ordered loadInOrder(Context ctx, int dockSize) {
+        PackageManager pm = ctx.getPackageManager();
+        Set<String> hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
+        Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        List<Callable<Entry>> tasks = new ArrayList<>();
+        for (ResolveInfo ri : pm.queryIntentActivities(probe, 0)) {
+            if (ri.activityInfo != null && shown(ctx, ri, hidden)) tasks.add(() -> loadApp(pm, ri));
+        }
+        List<Entry> fresh = new ArrayList<>(tasks.size());
+        try {
+            for (Future<Entry> f : LOADERS.invokeAll(tasks)) fresh.add(f.get());
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+        Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
+        Map<String, Entry> byKey = new HashMap<>();
+        List<String> byName = new ArrayList<>(fresh.size());
+        for (Entry e : fresh) {
+            if (byKey.put(e.key, e) == null) byName.add(e.key);
+        }
+        SharedPreferences prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
+        List<String> order = AppOrder.arrange(byName,
+                Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps)),
+                AppOrder.decode(prefs.getString(PREF_ORDER, null)), settingsKey(ctx));
+        List<Entry> out = new ArrayList<>(order.size());
+        int dock = 0;
+        for (int i = 0; i < order.size(); i++) {
+            Entry e = byKey.get(order.get(i));
+            if (e.pkg.equals(ctx.getPackageName())) continue;
+            out.add(e);
+            if (i < dockSize) dock++;
+        }
+        return new Ordered(out, dock);
     }
 
     private static Entry loadApp(PackageManager pm, ResolveInfo ri) {
@@ -279,7 +343,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         for (Entry e : fresh) {
             if (byKey.put(e.key, e) == null) byName.add(e.key);
         }
-        List<String> order = AppOrder.arrange(byName, favourites, AppOrder.decode(prefs.getString(PREF_ORDER, null)));
+        List<String> order = AppOrder.arrange(byName, favourites, AppOrder.decode(prefs.getString(PREF_ORDER, null)),
+                settingsKey(ctx));
         items.clear();
         for (String key : order) items.add(byKey.get(key));
         notifyDataSetChanged();
@@ -474,6 +539,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return isActionTile(position) ? ACTION_ID : items.get(position).key.hashCode();
     }
 
+    /** The package of the app at a position, or null. */
+    String pkgAt(int position) {
+        return position >= 0 && position < items.size() ? items.get(position).pkg : null;
+    }
+
     /** Stable key for the app at a position (its component), or null. */
     String keyAt(int position) {
         return position >= 0 && position < items.size() ? items.get(position).key : null;
@@ -602,7 +672,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return t;
     });
 
-    private static int vividColor(Drawable live) {
+    static int vividColor(Drawable live) {
         if (live == null) return AmbientColor.FALLBACK;
         // Draw a private copy: changing the bounds of the drawable an ImageView shows would blank the tile.
         return sample(live.getConstantState() != null ? live.getConstantState().newDrawable().mutate() : live);

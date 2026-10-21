@@ -57,4 +57,43 @@
     <string name="shelf_search_in">Search in %1$s</string>
     <!-- %1$s: the app. Opens the app, not the title (also under an app's static top shelf image). -->
     <string name="shelf_open_app">Open %1$s</string>
+
+    <!-- Home Settings (SettingsActivity): the launcher's own settings, a tile in the grid like tvOS's Settings app. -->
+    <string name="home_settings">Home Settings</string>
+    <string name="top_shelf">Top Shelf</string>
+    <string name="top_shelf_about">What shows behind the Dock while one of its apps is focused.</string>
+    <string name="other_apps">Other Apps</string>
+    <string name="other_apps_about">Their top shelf shows once you move them into the Dock.</string>
+    <string name="appearance">Appearance</string>
+    <string name="top_shelf_off">The top shelf\'s art is off on this TV (top_shelf_art in config.xml): every app shows the glow in its colour.</string>
+    <string name="settings_default">Default</string>
+    <string name="colour">Colour</string>
+    <!-- What an app's top shelf shows. -->
+    <string name="shelf_suggestions">Suggestions</string>
+    <string name="shelf_static">Static Image</string>
+    <string name="shelf_original">Original</string>
+    <string name="shelf_custom">Custom</string>
+    <string name="shelf_artwork">Artwork</string>
+    <string name="shelf_cover_art">Cover Art</string>
+    <!-- Under the preview, for the choice in focus. %1$s: the app. -->
+    <string name="about_suggestions">What %1$s suggests, full screen: what you were watching first, then what\'s popular. A new title every 10 seconds.</string>
+    <string name="about_suggestions_none">What %1$s suggests, once it has something to show. Until then, its art.</string>
+    <string name="about_static">One picture that stays, as Apple TV shows YouTube\'s. Up from %1$s opens it.</string>
+    <string name="about_original">%1$s\'s own colour, with its name.</string>
+    <string name="about_custom">Its artwork, its cover art, or a colour of your choice.</string>
+    <string name="about_artwork">Artwork made for %1$s. Up from it opens the app.</string>
+    <string name="about_cover_art">%1$s\'s logo on shapes in its colours. Up from it opens the app.</string>
+    <string name="about_colour">A colour of your choice, with %1$s\'s name.</string>
+    <string name="about_glass">How see-through the Dock and the top right are. It opens on Home, so you see them change.</string>
+    <!-- The custom colours (ShelfChoice.PALETTE), for screen readers. -->
+    <string-array name="colour_names">
+        <item>Red</item>
+        <item>Orange</item>
+        <item>Yellow</item>
+        <item>Green</item>
+        <item>Teal</item>
+        <item>Blue</item>
+        <item>Purple</item>
+        <item>Pink</item>
+    </string-array>
 </resources>

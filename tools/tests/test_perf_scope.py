@@ -262,6 +262,18 @@ class PlanTests(unittest.TestCase):
         p = plan_for(ps.Change(ps.JAVA + "ShelfOrder.java", None, "final class ShelfOrder {\n}\n", None, None))
         self.assertPlan(p, ["dock", "mem"])
 
+    def test_home_settings(self):
+        # What each app's top shelf shows: the dock's moves and memory.
+        p = plan_for(ps.Change(ps.JAVA + "ShelfChoice.java", None, "final class ShelfChoice {\n}\n", None, None))
+        self.assertPlan(p, ["dock", "mem"])
+        # The settings themselves: on screen only while you use them, so no scenario.
+        for path in (ps.JAVA + "SettingsActivity.java", ps.JAVA + "ShelfPreview.java",
+                     ps.RES + "layout/settings_row.xml", ps.RES + "color/settings_text.xml"):
+            self.assertPlan(plan_for(ps.Change(path, "a\n", "b\n", [1], [1])), [], check="emulator")
+        # Its tile in the grid loads and binds with the other apps'.
+        self.assertPlan(plan_for(ps.Change(ps.RES + "drawable/settings_banner.xml", "a\n", "b\n", [1], [1])),
+                        ["cold", "jank", "mem"], ["grid"])
+
     def test_class_rule(self):
         old = "class ProfileCorner {\n    void open() {\n        a();\n    }\n}\n"
         new = old.replace("a();", "b();")
