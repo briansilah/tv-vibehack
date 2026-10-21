@@ -216,12 +216,15 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         List<ShelfChoice> pictures = new ArrayList<>();
         if (ShelfSource.hasArtwork(e.pkg)) pictures.add(ShelfChoice.ARTWORK);
         pictures.add(ShelfChoice.COVER_ART);
+        View lastPicture = null;
         for (ShelfChoice c : pictures) {
             final ShelfChoice pick = c;
             View r = row(name(c), null, c.equals(now) ? R.drawable.ic_check : 0, () -> pick(pick),
                     () -> showPreview(e, pick));
             if (target == null || c.equals(now)) target = r;
+            lastPicture = r;
         }
+        lastPicture.setId(View.generateViewId());
         header(R.string.colour, 0);
         String[] names = getResources().getStringArray(R.array.colour_names);
         LinearLayout swatches = null;
@@ -239,6 +242,12 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             View s = swatch(pick, pick.equals(now), i < names.length ? names[i] : null, e);
             swatches.addView(s);
             if (pick.equals(now)) target = s;
+            // Down from the rows above goes to the first colour, as down a list; up from the first row, back up.
+            if (i < SWATCHES_PER_ROW) s.setNextFocusUpId(lastPicture.getId());
+            if (i == 0) {
+                s.setId(View.generateViewId());
+                lastPicture.setNextFocusDownId(s.getId());
+            }
         }
         enter(target);
     }
@@ -461,18 +470,27 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         }
     }
 
-    /** The dock as the preview draws it: the app in its slot, or in the last one if it isn't in the dock. */
+    /**
+     * The dock as the preview draws it: the app in its slot, or, for one that isn't in the dock, in its last slot,
+     * as if moved there (its top shelf shows only from the dock).
+     */
     private List<Drawable> dockWith(AppAdapter.Entry e) {
         List<Drawable> out = new ArrayList<>(dockBanners);
-        if (slotOf(e) < 0 && !out.isEmpty()) out.set(out.size() - 1, copy(bannerOf(e)));
-        else if (out.isEmpty()) out.add(copy(bannerOf(e)));
+        if (dockIndex(e) >= 0) return out;
+        if (out.isEmpty()) out.add(copy(bannerOf(e)));
+        else out.set(out.size() - 1, copy(bannerOf(e)));
         return out;
     }
 
     private int slotOf(AppAdapter.Entry e) {
+        int i = dockIndex(e);
+        return i >= 0 ? i : Math.max(0, dockBanners.size() - 1);
+    }
+
+    /** Where the app is in the dock, or -1. */
+    private int dockIndex(AppAdapter.Entry e) {
         int i = apps.indexOf(e);
-        if (i >= 0 && i < dockCount) return i;
-        return Math.max(0, dockBanners.size() - 1);
+        return i < dockCount ? i : -1;
     }
 
     private ShelfSource.App shelfApp(AppAdapter.Entry e) {

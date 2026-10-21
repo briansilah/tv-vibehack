@@ -131,6 +131,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private static final int TYPE_APP = 0;
     /** The tile after the last app: Arrange apps, or Done while arranging. */
     private static final int TYPE_ACTION = 1;
+    /** Home Settings: the launcher's own, so it looks like the action tile (glass, its gear and name), not an app. */
+    private static final int TYPE_SETTINGS = 2;
     private static final long ACTION_ID = Long.MAX_VALUE;
 
     private final Context ctx;
@@ -325,6 +327,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         try {
             Drawable banner = ri.activityInfo.loadBanner(pm);
             if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+            // Home Settings draws its gear and name on glass, as the Arrange apps tile (its banner is for other
+            // launchers' app lists).
+            if (SettingsActivity.class.getName().equals(ri.activityInfo.name)) banner = null;
             Drawable icon = ri.loadIcon(pm);
             String label = String.valueOf(ri.loadLabel(pm));
             return new Entry(label, new ComponentName(pkg, ri.activityInfo.name), banner, icon,
@@ -431,13 +436,16 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             h.icon.setVisibility(View.VISIBLE);
             h.label.setVisibility(View.VISIBLE);
             h.card.setOnClickListener(view -> listener.onActionTile());
+        } else if (viewType == TYPE_SETTINGS) {
+            h.card.setBackgroundResource(R.drawable.action_tile_bg);
         }
         return h;
     }
 
     @Override
     public int getItemViewType(int position) {
-        return isActionTile(position) ? TYPE_ACTION : TYPE_APP;
+        if (isActionTile(position)) return TYPE_ACTION;
+        return items.get(position).pkg.equals(ctx.getPackageName()) ? TYPE_SETTINGS : TYPE_APP;
     }
 
     @Override
@@ -475,8 +483,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     private void bindSlot(Holder h, int position, boolean animate) {
         boolean action = isActionTile(position);
-        // The dock has no names; the action tile carries its own.
-        h.name.setVisibility(position < dockSize || action ? View.INVISIBLE : View.VISIBLE);
+        // The dock has no names; the action tile and Home Settings carry their own.
+        boolean ownName = action || getItemViewType(position) == TYPE_SETTINGS;
+        h.name.setVisibility(position < dockSize || ownName ? View.INVISIBLE : View.VISIBLE);
         if (action) {
             h.icon.setImageResource(arranging ? R.drawable.ic_check : R.drawable.ic_arrange);
             h.label.setText(arranging ? R.string.done : R.string.arrange_apps);

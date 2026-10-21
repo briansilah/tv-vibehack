@@ -48,6 +48,7 @@
         <activity
             android:name=".SettingsActivity"
             android:label="@string/home_settings"
+            android:icon="@drawable/ic_settings"
             android:banner="@drawable/settings_banner"
             android:exported="true"
             android:taskAffinity="com.gathin.tvhome.settings"
