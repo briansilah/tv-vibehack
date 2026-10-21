@@ -92,8 +92,9 @@ final class ShelfSource {
     }
 
     /**
-     * An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out); or its static
-     * Top Shelf image ({@code image}), full screen with its logo in the picture.
+     * An app's cover art: a soft backdrop in its colours and its logo (null if it couldn't be cut out), or its
+     * artwork ({@code artwork}, see ShelfArt) and logo; or its static Top Shelf image ({@code image}), full screen
+     * with its logo in the picture.
      */
     static final class Cover {
         final Bitmap backdrop;
@@ -101,16 +102,23 @@ final class ShelfSource {
         final boolean image;
         /** For an app with a static image: which file it was made from ("" for none), to notice a new one. */
         final String stamp;
+        /** Its artwork: a full-screen picture, like a static image. */
+        final boolean artwork;
 
         Cover(Bitmap backdrop, Bitmap logo) {
             this(backdrop, logo, false, null);
         }
 
         Cover(Bitmap backdrop, Bitmap logo, boolean image, String stamp) {
+            this(backdrop, logo, image, stamp, false);
+        }
+
+        Cover(Bitmap backdrop, Bitmap logo, boolean image, String stamp, boolean artwork) {
             this.backdrop = backdrop;
             this.logo = logo;
             this.image = image;
             this.stamp = stamp;
+            this.artwork = artwork;
         }
     }
 
@@ -926,11 +934,12 @@ final class ShelfSource {
         });
     }
 
-    /** The app's static image if it has one on the TV, else its cover art, or null. Worker thread. */
+    /** The app's static image if it has one on the TV, else its artwork, else its cover art, or null. Worker thread. */
     private Cover buildCover(App app, String imageUrl, ShelfFeeds.LogoSpec spec, File svgFile) {
         File f = imageUrl == null ? null : staticImageFile(app.pkg, imageUrl);
         Cover made = imageCover(f);
         try {
+            if (made == null) made = artwork(app);
             if (made == null) made = renderCover(ctx, app);
             // The app's vector logo, if it's on the TV already, drawn sharp in place of the banner's.
             if (made != null && !made.image && svgFile != null && svgFile.exists()) {
@@ -941,7 +950,92 @@ final class ShelfSource {
         }
         if (made == null || imageUrl == null) return made;
         // Which picture it was made from (or failed to be), so a new one put on the TV is noticed (checkImages).
-        return new Cover(made.backdrop, made.logo, made.image, stamp(f));
+        return new Cover(made.backdrop, made.logo, made.image, stamp(f), made.artwork);
+    }
+
+    /**
+     * The app's artwork (ShelfArt) and its logo cut from its banner, as for its cover art; or null if it has none
+     * or it couldn't be painted. Painting takes a moment, so it's done once per install of the launcher and kept on
+     * the TV, then read back like a static image. Worker thread.
+     */
+    private Cover artwork(App app) {
+        String key = ShelfArtworks.key(app.pkg);
+        if (key == null) return null;
+        try {
+            int w = BACKDROP_W, h = BACKDROP_H;
+            File f = artworkFile(key, w, h);
+            Bitmap art = null;
+            if (f.isFile()) {
+                try {
+                    art = decodeArtwork(f);
+                } catch (IOException e) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
+            if (art == null) {
+                long start = Perf.now();
+                int[] px = ShelfArt.render(app.pkg, w, h);
+                if (px == null) return null;
+                art = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888);
+                Perf.log("shelf_artwork", start, "pkg=" + app.pkg + " size=" + w + "x" + h);
+                saveArtwork(art, f, key);
+            }
+            // Its logo: the vector one, if it's on the TV, is drawn over this in buildCover; else the banner's.
+            ShelfFeeds.LogoSpec spec = logos.get(app.pkg);
+            boolean vector = spec != null && new File(dir, "logo-" + spec.slug + ".svg").exists();
+            return new Cover(hardware(art), vector ? null : bannerLogo(ctx, app), false, null, true);
+        } catch (RuntimeException | OutOfMemoryError e) {
+            return null;
+        }
+    }
+
+    /** Where an artwork is kept, per size and per install of the launcher (a new one may paint it differently). */
+    private File artworkFile(String key, int w, int h) {
+        if (installStamp == null) {
+            long t = 0L;
+            try {
+                t = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).lastUpdateTime;
+            } catch (PackageManager.NameNotFoundException | RuntimeException ignored) {
+            }
+            installStamp = Long.toString(t, 36);
+        }
+        return new File(dir, "artwork-" + key + "-" + w + "x" + h + "-" + installStamp + ".jpg");
+    }
+
+    private volatile String installStamp;
+
+    private static Bitmap decodeArtwork(File f) throws IOException {
+        if (Build.VERSION.SDK_INT >= 28) return ImageDecoder.decodeBitmap(ImageDecoder.createSource(f));
+        Bitmap b = BitmapFactory.decodeFile(f.getPath());
+        if (b == null) throw new IOException("undecodable");
+        return b;
+    }
+
+    /** Keeps a painted artwork on the TV, in place of any older one of it. */
+    private void saveArtwork(Bitmap art, File f, String key) {
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        File tmp = new File(dir, f.getName() + ".part");
+        try (OutputStream out = new FileOutputStream(tmp)) {
+            if (!art.compress(Bitmap.CompressFormat.JPEG, 95, out)) throw new IOException("not encoded");
+        } catch (IOException | RuntimeException e) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            return;
+        }
+        if (!tmp.renameTo(f)) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            return;
+        }
+        File[] old = dir.listFiles((d, name) -> name.startsWith("artwork-" + key + "-") && !name.equals(f.getName()));
+        if (old != null) {
+            for (File o : old) {
+                //noinspection ResultOfMethodCallIgnored
+                o.delete();
+            }
+        }
     }
 
     /**
@@ -1138,23 +1232,8 @@ final class ShelfSource {
                 main.post(() -> failed.put("logo:" + spec.slug, System.currentTimeMillis()));
                 return;
             }
-            WORK.execute(() -> {
-                Cover old = null;
-                try {
-                    Cover base = renderCover(ctx, app);
-                    old = base == null ? null : withLogo(ctx, base, app, spec, svgFile);
-                } catch (RuntimeException | OutOfMemoryError ignored) {
-                }
-                final Cover result = old;
-                if (result == null) return;
-                main.post(() -> {
-                    Cover now = covers.get(app.key);
-                    if (now == null || now.image) return;   // apps changed meanwhile, or its image came
-                    covers.put(app.key, now.stamp == null ? result
-                            : new Cover(result.backdrop, result.logo, false, now.stamp));
-                    listener.onCover(app.key);
-                });
-            });
+            // Made again with it: an artwork is read back from the TV, not painted again.
+            main.post(() -> remakeCover(app.key));
         });
     }
 
@@ -1177,6 +1256,11 @@ final class ShelfSource {
         android.graphics.RectF bounds = new android.graphics.RectF();
         path.computeBounds(bounds, true);
         float s = markH / 24f;
+        if (spec.wordmark && bounds.width() > 0f && bounds.height() > 0f) {
+            // A wordmark is the whole logo: as large as it fits, a wide flat one (F1's) as wide as a long name.
+            s = Math.min(160f / bounds.height(), 440f / bounds.width());
+            markH = bounds.height() * s;
+        }
         float markW = Math.max(1f, bounds.width() * s);
         int color = spec.color;
         float[] hsv = new float[3];
@@ -1212,7 +1296,7 @@ final class ShelfSource {
             float baseline = 2 + markH / 2f - (fm.ascent + fm.descent) / 2f;
             c.drawText(label, 2 + markW + gap, baseline, text);
         }
-        return new Cover(cover.backdrop, hardware(lockup));
+        return new Cover(cover.backdrop, hardware(lockup), cover.image, cover.stamp, cover.artwork);
     }
 
     /** Apps changed: their banners may have too. */
@@ -1222,6 +1306,60 @@ final class ShelfSource {
     }
 
     private static Cover renderCover(Context ctx, App app) {
+        Banner banner = banner(ctx, app);
+        if (banner == null) return null;
+        int[] palette = CoverArt.palette(banner.px, 3);
+        Bitmap logo = banner.logo();
+
+        Bitmap back = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(back);
+        c.drawColor(CoverArt.base(palette));
+        int n = 5;
+        int[] colours = CoverArt.blobColours(palette, n);
+        float[][] blobs = CoverArt.blobs(app.pkg.hashCode(), n);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        for (int i = 0; i < n; i++) {
+            float cx = blobs[i][0] * COVER_W, cy = blobs[i][1] * COVER_H, r = blobs[i][2] * COVER_W;
+            int col = colours[i] & 0x00FFFFFF;
+            p.setShader(new RadialGradient(cx, cy, r, new int[]{0xC7000000 | col, 0x52000000 | col, col},
+                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+            c.drawCircle(cx, cy, r, p);
+        }
+        scrim(c, COVER_W, COVER_H, 0.55f, false);
+        return new Cover(hardware(back), logo == null ? null : hardware(logo));
+    }
+
+    /** The app's logo cut out of its banner, as on its cover art, or null. Worker thread. */
+    private static Bitmap bannerLogo(Context ctx, App app) {
+        Banner banner = banner(ctx, app);
+        Bitmap logo = banner == null ? null : banner.logo();
+        return logo == null ? null : hardware(logo);
+    }
+
+    /** An app's banner (or icon), drawn. */
+    private static final class Banner {
+        final Drawable d;
+        final int[] px;
+        final int w, h;
+
+        Banner(Drawable d, int[] px, int w, int h) {
+            this.d = d;
+            this.px = px;
+            this.w = w;
+            this.h = h;
+        }
+
+        /** Its logo without the background, or null. */
+        Bitmap logo() {
+            // An adaptive banner (Stremio's) has its logo on its own layer: no background to cut away.
+            int[] logoPx = d instanceof AdaptiveIconDrawable && ((AdaptiveIconDrawable) d).getForeground() != null
+                    ? draw(((AdaptiveIconDrawable) d).getForeground(), w, h, true) : px;
+            CoverArt.Logo cut = CoverArt.cutOut(logoPx, w, h);
+            return cut == null ? null : Bitmap.createBitmap(cut.argb, cut.w, cut.h, Bitmap.Config.ARGB_8888);
+        }
+    }
+
+    private static Banner banner(Context ctx, App app) {
         Drawable d = null;
         if (app.info != null && app.bannerRes != 0) {
             // The banner's sharpest version: TV banners are often 320 x 180, which a logo the size of a third of the
@@ -1256,30 +1394,7 @@ final class ShelfSource {
         }
         w = Math.max(16, w);
         h = Math.max(9, h);
-        int[] px = draw(d, w, h, false);
-        int[] palette = CoverArt.palette(px, 3);
-        // An adaptive banner (Stremio's) has its logo on its own layer: no background to cut away.
-        int[] logoPx = d instanceof AdaptiveIconDrawable && ((AdaptiveIconDrawable) d).getForeground() != null
-                ? draw(((AdaptiveIconDrawable) d).getForeground(), w, h, true) : px;
-        CoverArt.Logo cut = CoverArt.cutOut(logoPx, w, h);
-        Bitmap logo = cut == null ? null : Bitmap.createBitmap(cut.argb, cut.w, cut.h, Bitmap.Config.ARGB_8888);
-
-        Bitmap back = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(back);
-        c.drawColor(CoverArt.base(palette));
-        int n = 5;
-        int[] colours = CoverArt.blobColours(palette, n);
-        float[][] blobs = CoverArt.blobs(app.pkg.hashCode(), n);
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        for (int i = 0; i < n; i++) {
-            float cx = blobs[i][0] * COVER_W, cy = blobs[i][1] * COVER_H, r = blobs[i][2] * COVER_W;
-            int col = colours[i] & 0x00FFFFFF;
-            p.setShader(new RadialGradient(cx, cy, r, new int[]{0xC7000000 | col, 0x52000000 | col, col},
-                    new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-            c.drawCircle(cx, cy, r, p);
-        }
-        scrim(c, COVER_W, COVER_H, 0.55f, false);
-        return new Cover(hardware(back), logo == null ? null : hardware(logo));
+        return new Banner(d, draw(d, w, h, false), w, h);
     }
 
     /** {@code d} drawn at w x h; a layer of an adaptive drawable spreads past its bounds as the whole would. */
@@ -1301,7 +1416,7 @@ final class ShelfSource {
     }
 
     private static Bitmap hardware(Bitmap b) {
-        if (Build.VERSION.SDK_INT < 28) return b;
+        if (Build.VERSION.SDK_INT < 28 || b.getConfig() == Bitmap.Config.HARDWARE) return b;
         Bitmap hw = b.copy(Bitmap.Config.HARDWARE, false);
         if (hw == null) return b;
         b.recycle();
@@ -1317,8 +1432,8 @@ final class ShelfSource {
             if (!keep.contains(e.getValue())) bitmaps.remove(e.getKey());
         }
         pinned.values().removeIf(b -> !keep.contains(b));
-        // Static images are full-screen pictures too: made again from the TV's copy when Home shows.
-        covers.values().removeIf(c -> c.image && !keep.contains(c.backdrop));
+        // Static images and artworks are full-screen pictures too: made again from the TV's copy when Home shows.
+        covers.values().removeIf(c -> (c.image || c.artwork) && !keep.contains(c.backdrop));
     }
 
     // ---- files ---------------------------------------------------------------------------------------------

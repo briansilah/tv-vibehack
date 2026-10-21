@@ -121,7 +121,7 @@ FILE_RULES = [
        why="where a key moves focus or a moving app: plain logic with JVM tests")),
     ((JAVA + "TopShelf.java",), E("dock mem", trace="dock", why="the top shelf")),   # MEMBER_RULES go finer
     ((JAVA + "TopShelfView.java", JAVA + "ShelfSource.java", JAVA + "ShelfFeeds.java", JAVA + "ShelfInfoView.java",
-      JAVA + "CoverArt.java", JAVA + "AmbientColor.java"),
+      JAVA + "CoverArt.java", JAVA + "AmbientColor.java", JAVA + "ShelfArt.java", JAVA + "ShelfArtworks.java"),
      E("dock mem", trace="dock", why="the top shelf: its art, glow and pictures")),
     ((JAVA + "ShelfOrder.java",),
      E("dock mem", trace="dock", why="the top shelf: which title shows next, and which pictures stay decoded "

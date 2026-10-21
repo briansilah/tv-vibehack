@@ -273,7 +273,8 @@ tools/tv.py 'logcat -d -s TvHomePerf'
 Besides the timings above, the top shelf logs `shelf_fallback` when focus comes to a dock app whose title isn't
 decoded yet, so its cover art or the glow shows first, and `shelf_step`, `shelf_carousel` and `shelf_arrived` when a
 title comes on screen after Left or Right, the carousel, or a fallback: how long after the move (waiting for its
-picture), its place in the app's list (`i`, `n`) and its name.
+picture), its place in the app's list (`i`, `n`) and its name. `shelf_artwork` says how long an app's artwork took to
+paint (once per app after an install; later it's read back from the cache).
 
 ### Trace sections
 
@@ -286,7 +287,7 @@ picture), its place in the app's list (`i`, `n`) and its name.
 | `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
 | `tvhome:launch` | opening an app from a tile: starting it, then Home's push away; the `launch` log line splits it (`start_ms`, `check_ms`) |
 | `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
-| (threads) `tvhome-shelf`, `tvhome-shelf-net` | the top shelf's art: decoding pictures, cutting cover art, reading TvProvider; and fetching catalogues and pictures. Both at background priority |
+| (threads) `tvhome-shelf`, `tvhome-shelf-net` | the top shelf's art: decoding pictures, cutting cover art, painting artwork (once per app per install, then read back from the cache), reading TvProvider; and fetching catalogues and pictures. Both at background priority |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
 | `tvhome:glass.record` | Liquid Glass (`LiquidGlass`): recording its copy of the top shelf behind the dock or the top right capsule, on frames where the shelf or the glass moved or changed; the GPU then blurs it during the RenderThread's `DrawFrame` |

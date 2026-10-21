@@ -22,8 +22,8 @@ import java.util.List;
  *   the app itself publishes on the TV (what you were watching, its recommendations), then its feed's titles
  *   (config.xml, top_shelf_feeds; e.g. Netflix's Top 10 in the TV's country). See {@link ShelfSource}. An app with a
  *   static image (top_shelf_images; YouTube's, as on tvOS) shows that instead, as its cover art.</li>
- *   <li><b>Cover art</b>: the app's own logo, cut out of its banner, on soft shapes in its colours, as tvOS shows an
- *   app's static Top Shelf image.</li>
+ *   <li><b>Its artwork</b> ({@link ShelfArt}, for the apps that have one), else <b>cover art</b>: the app's own logo,
+ *   cut out of its banner, on soft shapes in its colours, as tvOS shows an app's static Top Shelf image.</li>
  *   <li>Neither (yet): the ambient glow and the app's name, which MainActivity draws as before.</li>
  * </ol>
  * The art follows focus at once: a dock move cross-fades to what's already decoded and fetches the rest in the
