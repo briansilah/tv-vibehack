@@ -43,6 +43,10 @@ DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
   ([docs/performance.md](docs/performance.md#measure-the-main-that-ships)).
 - Coding agents: [.github/skills/launcher-tv-testing](.github/skills/launcher-tv-testing/SKILL.md) says which
   checks a change needs and how to spend as little time on the TV as possible.
+  [daily-improvement](.github/skills/daily-improvement/SKILL.md) is a daily run that improves one area at a time
+  (performance, testing, UI, UX, motion, accessibility, reliability) from measurements, on an emulator only, and
+  [test-on-tv](.github/skills/test-on-tv/SKILL.md) tests its pull requests on a TV. `tools/walkthrough.py` replays
+  a change's walkthrough (D-pad keys, screenshots, clips) the same way on an emulator and on a TV.
 
 Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
