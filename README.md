@@ -217,6 +217,10 @@ feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 1
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
 
+Each app tile exposes its app name to screen readers, including banner-only tiles in the Dock.
+Home Settings and Arrange Apps are named too; the latter's accessible name changes to Done while arranging.
+The visible tile labels aren't separate screen-reader stops.
+
 **Arrange** apps on the TV itself. Hold OK on an app for its actions, in three groups: where the app
 goes, the app itself, and the whole home screen.
 

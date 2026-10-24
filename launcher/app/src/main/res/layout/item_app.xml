@@ -45,6 +45,7 @@
             android:ellipsize="end"
             android:textColor="#FFFFFFFF"
             style="@style/Text.Body"
+            android:importantForAccessibility="no"
             android:visibility="gone" />
     </FrameLayout>
 
@@ -71,5 +72,6 @@
         android:alpha="0"
         android:translationY="2dp"
         android:textColor="#F2FFFFFF"
+        android:importantForAccessibility="no"
         style="@style/Text.Body" />
 </FrameLayout>
