@@ -143,6 +143,11 @@ has the details and the key presets. The map follows this table:
   your hold needs no `main` at all.
 - Write one script with every step: `baseline ensure`, install, settle, screenshots, clips, perf runs, traces, and
   putting `main` back (`baseline install`). Dry-run it on your emulator first.
+- For the screenshots and clips, write a `tools/walkthrough.py` plan: the same D-pad keys and pictures on your
+  emulator and on the TV, each picture with what it should show. It refuses anything that breaks section 5's
+  rules, runs on a TV only with `--tv`, and on a debuggable build fails if the plan leaves a saved setting
+  changed. Daily improvement runs post theirs on the pull request, and `/test-on-tv` replays it
+  ([test-on-tv](../test-on-tv/SKILL.md)).
 - If a step fails on the TV, stop and give the TV back. Fix the problem off the TV.
 - The emulator is where you iterate, but its numbers never stand in for the TV's. When a result needs the TV and
   the TV is in use, ask whoever is using it for a slot.

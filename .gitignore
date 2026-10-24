@@ -4,6 +4,7 @@ tools/__pycache__/
 tools/tests/__pycache__/
 # perf.py results and traces are per-TV measurements
 tools/perf-results/
+tools/walkthrough-results/
 *.perfetto-trace
 launcher/.gradle/
 launcher/build/
