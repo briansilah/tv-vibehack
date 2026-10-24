@@ -490,6 +490,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             h.icon.setImageResource(arranging ? R.drawable.ic_check : R.drawable.ic_arrange);
             h.label.setText(arranging ? R.string.done : R.string.arrange_apps);
         }
+        h.card.setContentDescription(action ? h.label.getText() : items.get(position).label);
         boolean lifted = !action && items.get(position).key.equals(movingKey);
         if (lifted) {
             int n = items.size();
