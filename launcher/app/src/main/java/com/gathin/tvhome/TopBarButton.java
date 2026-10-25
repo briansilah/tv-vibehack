@@ -73,6 +73,7 @@ public class TopBarButton extends ViewGroup {
     private final SpringAnimation spring;
     private final SpringAnimation scaleX;
     private final SpringAnimation scaleY;
+    private int iconRes;
     private float expansion;
     private int expandedWidth;
 
@@ -133,6 +134,12 @@ public class TopBarButton extends ViewGroup {
         // Unchanged (the network pill is refreshed on every Home press and every minute): no layout pass, no redraw.
         if (TextUtils.equals(label.getText(), text)) return;
         label.setText(text);
+    }
+
+    void setIcon(int drawableRes) {
+        if (iconRes == drawableRes) return;
+        iconRes = drawableRes;
+        icon.setImageResource(drawableRes);
     }
 
     /** Width of the button when focused (open), for anchoring things to it. Valid after the first measure. */

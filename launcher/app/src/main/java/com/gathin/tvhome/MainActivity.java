@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
@@ -165,12 +166,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
         public void onAvailable(@NonNull Network network) {
-            handler.post(MainActivity.this::updateWifiLabel);
+            handler.post(MainActivity.this::updateNetworkIndicator);
         }
 
         @Override
         public void onLost(@NonNull Network network) {
-            handler.post(MainActivity.this::updateWifiLabel);
+            handler.post(MainActivity.this::updateNetworkIndicator);
+        }
+
+        @Override
+        public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
+            handler.post(MainActivity.this::updateNetworkIndicator);
         }
     };
     /**
@@ -227,7 +233,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
-            updateWifiLabel();
+            updateNetworkIndicator();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -440,7 +446,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 onFocusRestored(t0);
                 // After this first frame: the network pill's binder calls took 4-12 ms on a TV before it, and the
                 // network callback has kept the pill up to date meanwhile.
-                handler.post(this::updateWifiLabel);
+                handler.post(this::updateNetworkIndicator);
             });
         });
         Perf.end();
@@ -1039,14 +1045,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
 
     // ---- top bar ---------------------------------------------------------------------------------
 
-    /** Shows the Wi-Fi network name on the button (when open) if we can read it, otherwise the connection type. */
-    private void updateWifiLabel() {
-        Perf.begin("tvhome:updateWifiLabel");
-        String text = getString(R.string.wifi);
+    /** Shows the active network type and its matching icon; a network name when connected over Wi-Fi. */
+    private void updateNetworkIndicator() {
+        Perf.begin("tvhome:updateNetworkIndicator");
+        NetworkCapabilities caps = null;
+        boolean wifiSupported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI);
+        String text = getString(wifiSupported ? R.string.wifi : R.string.ethernet);
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             Network net = cm != null ? cm.getActiveNetwork() : null;
-            NetworkCapabilities caps = net != null ? cm.getNetworkCapabilities(net) : null;
+            caps = net != null ? cm.getNetworkCapabilities(net) : null;
             if (caps == null) {
                 text = getString(R.string.offline);
             } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
@@ -1062,11 +1070,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             }
         } catch (Exception ignored) {
         }
+        boolean ethernet = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+        btnWifi.setIcon(networkIcon(wifiSupported, ethernet));
         btnWifi.setLabel(text);
-        String wifi = getString(R.string.wifi);
-        btnWifi.setContentDescription(text.equals(wifi) ? wifi : getString(R.string.wifi_status, text));
+        btnWifi.setContentDescription(getString(R.string.network_status, text));
         if (btnWifi.showsCaption() && btnWifi.isFocused()) showCaption(btnWifi);
         Perf.end();
+    }
+
+    static int networkIcon(boolean wifiSupported, boolean ethernet) {
+        if (ethernet || !wifiSupported) return R.drawable.ic_ethernet;
+        return R.drawable.ic_wifi;
     }
 
     private final Runnable hideCaptionUnlessInCorner = () -> {

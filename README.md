@@ -104,7 +104,7 @@ A home screen that is yours again:
 - **The time and your profile picture in the top right**, in a small Liquid Glass capsule, as on Apple TV.
   Press Up from the dock and it opens like the header of Apple TV's Control Center: the time glides
   left and three icon buttons come out from behind the picture, each with a caption saying what it
-  does. Inputs (a dropdown of HDMI ports, AV and Live TV), Wi-Fi (showing the network you're on) and
+  does. Inputs (a dropdown of HDMI ports, AV and Live TV), Network (showing the connection you're using) and
   Settings; on Google TV, Settings opens the TV's quick settings panel, as the remote's Settings
   button does. The picture opens the TV's Accounts & Profiles.
   Down or Back closes it. Measured from Apple TV recordings, down to the spring. Set your name in
@@ -122,7 +122,8 @@ phoning home, no apps you never asked for.
 ## Supported TVs
 
 Anything running **Android TV** or **Google TV**: Xiaomi and Redmi, TCL, Hisense, Sony, OnePlus,
-Realme, Nvidia Shield and most others.
+Realme, Nvidia Shield and most others. The launcher does not require Wi-Fi hardware; Ethernet-only
+TVs are supported too.
 
 Not supported: Samsung (Tizen), LG (webOS) and Amazon Fire TV. They run different systems or
 won't let a third-party launcher take over Home.
@@ -546,4 +547,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the format and the testing we ask for
 
 MIT, see [`LICENSE`](LICENSE). The Inter typeface (© The Inter Project Authors) is under the SIL Open
 Font License 1.1, see `launcher/FONT-LICENSE-OFL.txt`; the launcher ships a subset of it, built by
-`tools/fonts.py`.
+`tools/fonts.py`. The Ethernet status icon is adapted from AOSP under Apache-2.0, see
+`launcher/ETHERNET-ICON-LICENSE.txt`.
