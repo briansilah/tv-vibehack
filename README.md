@@ -547,4 +547,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the format and the testing we ask for
 
 MIT, see [`LICENSE`](LICENSE). The Inter typeface (© The Inter Project Authors) is under the SIL Open
 Font License 1.1, see `launcher/FONT-LICENSE-OFL.txt`; the launcher ships a subset of it, built by
-`tools/fonts.py`.
+`tools/fonts.py`. The Ethernet status icon is adapted from AOSP under Apache-2.0, see
+`launcher/ETHERNET-ICON-LICENSE.txt`.
