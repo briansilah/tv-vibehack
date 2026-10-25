@@ -81,14 +81,14 @@ try {
             'am start -n com.gathin.tvhome/.MainActivity'
         ) | & $py -I ..\tools\tv.py --batch
     } else {
-        $out = & $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome'
+        $out = & $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'
         Write-Host $out
         if ("$out" -match 'Error') { throw 'could not set the new launcher as home; the stock launcher was left untouched' }
         @(
             'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
             # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
             'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
-            'cmd package set-home-activity --user 0 com.gathin.tvhome',
+            'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity',
             "pm disable-user --user 0 $StockLauncher"
         ) | & $py -I ..\tools\tv.py --batch
     }

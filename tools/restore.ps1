@@ -29,7 +29,8 @@ try {
         # Turn off the launcher's Home-button service (Google TV), keeping any other accessibility services.
         's=$(settings get secure enabled_accessibility_services | sed -E ''s#(^|:)com\.gathin\.tvhome/[^:]*##g; s#^:##''); if [ -z "$s" ] || [ "$s" = null ]; then settings delete secure enabled_accessibility_services; else settings put secure enabled_accessibility_services "$s"; fi; echo home-button-service-off',
         'appops set com.gathin.tvhome AUTO_START default 2>/dev/null; appops write-settings; echo auto-start-default',
-        "cmd package set-home-activity --user 0 $Stock",
+        # Android 9 requires the resolved HOME component, not just its package.
+        ('cmd package set-home-activity --user 0 $(cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME ' + $Stock + ' | tail -n 1)'),
         'settings put global window_animation_scale 1.0',
         'settings put global transition_animation_scale 1.0',
         'settings put global animator_duration_scale 1.0',

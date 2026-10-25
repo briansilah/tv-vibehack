@@ -630,6 +630,18 @@ class ScriptTests(unittest.TestCase):
         with open(os.path.join(REPO, "launcher", "build-and-install.sh")) as f:
             self.assertNotIn("TV_HOST:?", f.read())
 
+    def test_windows_home_commands_use_components(self):
+        with open(os.path.join(REPO, "launcher", "build-and-install.ps1")) as f:
+            install = f.read()
+        self.assertEqual(install.count("cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'"), 2)
+        self.assertNotIn("cmd package set-home-activity --user 0 com.gathin.tvhome'", install)
+        self.assertIn("com.gathin.tvhome/.HomeButtonService", install)
+        with open(os.path.join(REPO, "tools", "restore.ps1")) as f:
+            restore = f.read()
+        self.assertIn("$(cmd package resolve-activity --brief -a android.intent.action.MAIN "
+                      "-c android.intent.category.HOME ", restore)
+        self.assertNotIn('"cmd package set-home-activity --user 0 $Stock"', restore)
+
 
 if __name__ == "__main__":
     unittest.main()

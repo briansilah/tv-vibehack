@@ -138,6 +138,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     /** Top right: the time and profile picture, which opens into the top bar's buttons. */
     private ProfileCorner corner;
     private TopBarButton btnWifi;
+    private TopBarButton btnInputs;
     private TopBarButton btnSettings;
     /** Whether the Settings button's label says it opens Google TV's quick settings yet (see captionFor). */
     private boolean settingsLabelChecked;
@@ -177,6 +178,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         @Override
         public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
             handler.post(MainActivity.this::updateNetworkIndicator);
+        }
+    };
+    private final TvInputManager.TvInputCallback inputCallback = new TvInputManager.TvInputCallback() {
+        @Override
+        public void onInputAdded(String inputId) {
+            updateInputsButton();
+        }
+
+        @Override
+        public void onInputRemoved(String inputId) {
+            updateInputsButton();
         }
     };
     /**
@@ -344,7 +356,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             }
         });
 
-        TopBarButton btnInputs = topBar.findViewById(R.id.btnInputs);
+        btnInputs = topBar.findViewById(R.id.btnInputs);
         View avatar = corner.getAvatar();
         btnInputs.setOnClickListener(v -> {
             Perf.begin("tvhome:showInputs");
@@ -373,7 +385,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && v.getId() == R.id.btnInputs) return true;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                    && (v == btnInputs || (v == btnWifi && btnInputs.getVisibility() != View.VISIBLE))) return true;
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == R.id.btnSettings) {
                 avatar.requestFocus();
                 return true;
@@ -401,6 +414,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
+        TvInputManager tim = getSystemService(TvInputManager.class);
+        if (tim != null) tim.registerCallback(inputCallback, handler);
         Perf.end();
         Perf.log("create", t0, null);
     }
@@ -447,6 +462,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 // After this first frame: the network pill's binder calls took 4-12 ms on a TV before it, and the
                 // network callback has kept the pill up to date meanwhile.
                 handler.post(this::updateNetworkIndicator);
+                handler.post(this::updateInputsButton);
             });
         });
         Perf.end();
@@ -574,6 +590,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         super.onDestroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.unregisterNetworkCallback(networkCallback);
+        TvInputManager tim = getSystemService(TvInputManager.class);
+        if (tim != null) tim.unregisterCallback(inputCallback);
         unregisterReceiver(packageReceiver);
         backdrop.release();
     }
@@ -1151,6 +1169,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         } catch (ActivityNotFoundException e) {
             Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void updateInputsButton() {
+        boolean any = !liveTvPkg.isEmpty()
+                && getPackageManager().getLeanbackLaunchIntentForPackage(liveTvPkg) != null;
+        TvInputManager tim = getSystemService(TvInputManager.class);
+        if (!any && tim != null) {
+            for (TvInputInfo info : tim.getTvInputList()) {
+                if (info.isPassthroughInput()) {
+                    any = true;
+                    break;
+                }
+            }
+        }
+        if (!any && btnInputs.hasFocus()) btnWifi.requestFocus();
+        btnInputs.setVisibility(any ? View.VISIBLE : View.GONE);
     }
 
     /** Dropdown menu under the Inputs button: HDMI ports (with connection state), AV and Live TV. */
