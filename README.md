@@ -134,9 +134,12 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 |---|---|
 | Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
 | Xiaomi MiTV-AXSO0 | Android TV 9 |
+| Xiaomi Mi Box S (MIBOX4), streaming box | Android TV 9 |
 | TCL 55" 4K Google TV, 2023 (G10) | Google TV 12 |
 | SANYO ATV R2 | Android TV 9 |
 | OnePlus TV (D00) | Google TV 14 |
+| Sony BRAVIA XBR-65X900E (2017) | Android TV 9 |
+| NVIDIA SHIELD TV Pro 2019 (P2897) | Android TV 11 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -480,6 +483,9 @@ Things that bit us or contributors, so they don't bite you.
   The device then shows up under an mDNS name such as `adb-XXXX._adb-tls-connect._tcp`.
 - **No "wireless debugging" toggle** on some TVs, Xiaomi among them. USB debugging alone opens
   network ADB on port 5555.
+- **USB devices go dead while USB debugging is on**, seen on the Xiaomi Mi Box S: its firmware
+  switches the USB port to ADB device mode, which cuts the power to a USB speaker or drive. Switch
+  USB debugging off when you're done; the launcher doesn't need it.
 - **Windows PowerShell 5.1 adds a byte-order mark** to text piped into a program, which turned the
   first batch command into gibberish. `tv.py` now strips it, and the `.ps1` scripts pipe clean UTF-8.
 - **Git Bash rewrites paths** like `/data/local/tmp` into Windows paths. The scripts set
