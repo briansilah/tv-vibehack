@@ -122,7 +122,8 @@ phoning home, no apps you never asked for.
 ## Supported TVs
 
 Anything running **Android TV** or **Google TV**: Xiaomi and Redmi, TCL, Hisense, Sony, OnePlus,
-Realme, Nvidia Shield and most others.
+Realme, Nvidia Shield and most others. The launcher does not require Wi-Fi hardware; Ethernet-only
+TVs are supported too.
 
 Not supported: Samsung (Tizen), LG (webOS) and Amazon Fire TV. They run different systems or
 won't let a third-party launcher take over Home.
