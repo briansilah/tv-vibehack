@@ -302,6 +302,13 @@ class PlanTests(unittest.TestCase):
         self.assertPlan(p, ["cold", "warm"])
         self.assertIn("used by MainActivity.onResume", p["files"][0]["why"])
 
+    def test_network_indicator_is_a_warm_start_check(self):
+        old = FAKE_MAIN.replace("private void refresh()", "private void updateNetworkIndicator()")
+        new = old.replace("int x = 1;", "int x = 2;")
+        p = plan_for(change(MAIN, old, new, "x = 2", "x = 1"))
+        self.assertPlan(p, ["warm"])
+        self.assertIn("network button", p["files"][0]["why"])
+
     def test_on_create_by_statement(self):
         new = FAKE_MAIN.replace("corner = findViewById(R.id.corner);", "corner = findViewById(R.id.corner2);")
         self.assertPlan(plan_for(change(MAIN, FAKE_MAIN, new, "corner2", "R.id.corner)")),

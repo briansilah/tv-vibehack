@@ -232,7 +232,7 @@ MEMBER_RULES = {
         (("showTestArt", "testArt"), E(check="emulator", art="dock", why="stand-in art behind the glass")),
         (("showGlassSlider", "hideGlassSlider", "glassLabel", "glassPanel", "GLASS_PANEL_*"),
          E(check="emulator", why="the Liquid Glass slider: look at it on your emulator")),
-        (("updateWifiLabel", "networkCallback", "minuteTick", "MINUTE_MS"),
+        (("updateNetworkIndicator", "networkIcon", "networkCallback", "minuteTick", "MINUTE_MS"),
          E("warm", trace="home", why="the network button, refreshed after Home's first frame")),
         (("hideCaptionUnlessInCorner", "captionFor", "showCaption", "settingsLabelChecked", "TAB_CAPTION_COLOR",
           "CAPTION_*"),

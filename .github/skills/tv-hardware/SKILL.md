@@ -14,8 +14,9 @@ make Wi-Fi hardware a requirement.
   means true; omitting the feature can let a permission imply a requirement.
 - Keep permissions needed on devices with the hardware. A feature declaration does not grant a
   permission, and marking Wi-Fi optional does not replace `ACCESS_WIFI_STATE`.
-- Preserve the runtime fallback. `MainActivity.updateWifiLabel` checks Ethernet first, handles
-  a missing Wi-Fi service, and shows Offline when there is no active network.
+- Preserve the runtime fallback. `MainActivity.updateNetworkIndicator` checks Ethernet first,
+  handles a missing Wi-Fi service, shows Offline when there is no active network, and uses an
+  Ethernet glyph on Ethernet or when the device does not support Wi-Fi.
 - Check the APK with `aapt dump badging`, as well as `lintRelease`. Source declarations alone
   do not prove what an installer or catalogue sees. Feature requirements filter catalogues
   such as Google Play; Android's sideload installer does not enforce them.
