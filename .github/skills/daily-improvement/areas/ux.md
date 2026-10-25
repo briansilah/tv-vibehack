@@ -1,4 +1,4 @@
-# Thursday: UX
+# UX
 
 **Goal:** the things people do most take the fewest presses, never strand them, and say clearly what will
 happen. The person on the sofa just wants to watch something.

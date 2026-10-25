@@ -5,6 +5,8 @@ tools/tests/__pycache__/
 # perf.py results and traces are per-TV measurements
 tools/perf-results/
 tools/walkthrough-results/
+# tools/emulator.py binds a worktree to its emulator
+.tvhome-device
 *.perfetto-trace
 launcher/.gradle/
 launcher/build/

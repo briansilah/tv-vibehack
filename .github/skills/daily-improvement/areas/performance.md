@@ -1,4 +1,4 @@
-# Monday: performance
+# Performance
 
 **Goal:** Home shows sooner, moves more smoothly and uses less memory, on TVs with 1 to 2 GB of RAM and slow
 CPUs. What people feel: pressing Home, moving along the Dock, the Top Shelf catching up, scrolling the grid.
@@ -17,13 +17,16 @@ CPUs. What people feel: pressing Home, moving along the Dock, the Top Shelf catc
 
    Also read [docs/performance.md](../../../../docs/performance.md): "Findings on a TV" and "Suspected
    hotspots" list what's known to be slow and what was already tried.
-2. **Your emulator, all scenarios, for `main`:** `python3 tools/perf.py baseline ensure --quick` (from the cache
-   when another session already measured this `main`). Relative only, but it shows which scenario moves.
+2. **Your emulator, all scenarios, for `main`:** `python3 tools/emulator.py exclusive --owner daily-performance --
+   python3 tools/perf.py baseline refresh --quick`. Relative only, but it shows which scenario moves. Every
+   `perf.py` command that measures (`run`, `baseline ensure` or `refresh`, `trace`) runs inside `exclusive`, so
+   the other runs today don't skew it.
 3. **Where the time goes.** Trace what the numbers point at, then list the slowest sections:
 
    ```bash
    python3 -m venv tools/venv && tools/venv/bin/pip install -q -r tools/requirements.txt perfetto
-   tools/venv/bin/python tools/perf.py trace --action cold      # or home, dock, keys --keys grid
+   python3 tools/emulator.py exclusive --owner daily-performance -- \
+     tools/venv/bin/python tools/perf.py trace --action cold      # or home, dock, keys --keys grid
    tools/venv/bin/python tools/perf.py summarize tvhome-<time>.perfetto-trace
    ```
 

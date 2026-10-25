@@ -17,8 +17,12 @@ How it connects (options go before the command):
     --adb, TV_TRANSPORT=adb  the adb binary even with TV_HOST set; it runs `adb connect TV_HOST:TV_PORT` first.
     --serial SERIAL          the adb binary with this device.
     TV_TRANSPORT=adb_shell   adb_shell; needs TV_HOST.
+
+A worktree bound to an emulator (a .tvhome-device file at its root, written by tools/emulator.py start) talks only
+to that emulator, whatever TV_HOST, ANDROID_SERIAL or --serial say: runs that must never touch a TV can't.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +30,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KEYDIR = os.path.join(HERE, "adbkey")
 KEY = os.path.join(KEYDIR, "adbkey")
+DEVICE_FILE = ".tvhome-device"   # see the module docstring; tools/emulator.py writes it
 DEFAULT_PORT = 5555
 PROBE_PROPS = ("ro.product.model", "ro.product.device", "ro.build.version.release",
                "ro.build.version.sdk", "ro.build.display.id", "ro.product.manufacturer")
@@ -61,9 +66,28 @@ def tv_port(env):
         raise TvError("TV_PORT must be a port number, not %r" % env.get("TV_PORT")) from None
 
 
-def connect(adb=False, serial=None, timeout=120, env=None):
+def bound_device(root=None):
+    """The emulator this worktree is bound to (DEVICE_FILE), or None."""
+    path = os.path.join(root or os.path.dirname(HERE), DEVICE_FILE)
+    try:
+        with open(path) as f:
+            serial = f.read().strip()
+    except OSError:
+        return None
+    if not re.match(r"^emulator-\d+$", serial):
+        raise TvError("%s names %r, not an emulator: delete it, or bind with tools/emulator.py start" % (path, serial))
+    return serial
+
+
+def connect(adb=False, serial=None, timeout=120, env=None, root=None):
     """Connect as the module docstring describes. The result has shell(), push(), pull() and close()."""
     env = os.environ if env is None else env
+    bound = bound_device(root)
+    if bound:
+        if serial and serial != bound:
+            raise TvError("this worktree is bound to %s (%s), so it won't talk to %s"
+                          % (bound, DEVICE_FILE, serial))
+        return AdbBinary.open(bound, None, None, env)
     if choose_transport(env, adb or bool(serial)) == "adb_shell":
         return AdbShell(env["TV_HOST"], tv_port(env), timeout)
     host = env.get("TV_HOST")
