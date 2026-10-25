@@ -1,4 +1,4 @@
-# Wednesday: UI
+# UI
 
 **Goal:** every screen looks like one considered design from three metres away: aligned, legible, consistent
 spacing, type and colour, inside the TV's safe area, at the standard of Apple TV's own screens.

@@ -623,3 +623,35 @@ class ScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoundWorktreeTests(unittest.TestCase):
+    """A worktree bound to an emulator (tools/emulator.py start) talks to nothing else."""
+
+    def bound(self, text):
+        root = tempfile.mkdtemp()
+        with open(os.path.join(root, tv.DEVICE_FILE), "w") as f:
+            f.write(text)
+        return root
+
+    def test_unbound(self):
+        self.assertIsNone(tv.bound_device(tempfile.mkdtemp()))
+
+    def test_goes_to_the_bound_emulator_whatever_the_environment_says(self):
+        root = self.bound("emulator-5556\n")
+        with mock.patch.object(tv.AdbBinary, "open", return_value="dev") as open_:
+            env = {"TV_HOST": "192.168.8.23", "ANDROID_SERIAL": "192.168.8.23:5555"}
+            self.assertEqual(tv.connect(env=env, root=root), "dev")
+        open_.assert_called_once_with("emulator-5556", None, None, env)
+
+    def test_refuses_another_device(self):
+        root = self.bound("emulator-5556\n")
+        with mock.patch.object(tv.AdbBinary, "open") as open_:
+            with self.assertRaisesRegex(tv.TvError, "bound to emulator-5556"):
+                tv.connect(serial="192.168.8.23:5555", root=root)
+        open_.assert_not_called()
+
+    def test_a_file_that_names_a_tv_is_an_error(self):
+        root = self.bound("192.168.8.23:5555\n")
+        with self.assertRaisesRegex(tv.TvError, "not an emulator"):
+            tv.connect(root=root)

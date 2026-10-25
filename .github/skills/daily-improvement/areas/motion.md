@@ -1,4 +1,4 @@
-# Friday: motion and visual polish
+# Motion and visual polish
 
 **Goal:** everything that moves feels fluid, consistent and quick, like Apple TV's focus, parallax and
 transitions, and every picture is sharp, without costing frames on a slow TV.
@@ -25,8 +25,9 @@ transitions, and every picture is sharp, without costing frames on a slow TV.
    ```
 
    One-off durations and curves are candidates.
-3. **Frames.** `perf.py run --scenarios jank,dock --quick` and `trace --action dock` on your emulator: dropped
-   frames during a motion are worse than a plain cut.
+3. **Frames.** `perf.py run --scenarios jank,dock --quick` and `trace --action dock` on your emulator, each inside
+   `tools/emulator.py exclusive --owner daily-motion --`: dropped frames during a motion are worse than a plain
+   cut.
 4. **Pictures.** Top Shelf art, banners and icons: their pixel size against the size they're shown at (blurry
    when scaled up, wasted memory when far bigger); visible banding in glows and gradients; edges of rounded
    corners.

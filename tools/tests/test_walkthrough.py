@@ -334,6 +334,17 @@ class RunTest(unittest.TestCase):
         self.assertNotIn("default_config true", starts[-1])
 
 
+class SharedPlansTest(unittest.TestCase):
+    def test_the_repositorys_plans_can_run(self):
+        folder = os.path.join(os.path.dirname(HERE), "walkthroughs")
+        plans = sorted(f for f in os.listdir(folder) if f.endswith(".json"))
+        self.assertIn("core-tour.json", plans)
+        for name in plans:
+            with self.subTest(name):
+                plan = wt.load(os.path.join(folder, name))
+                self.assertNotIn("pr", plan)       # shared: a pull request's copy adds its number
+
+
 class CliTest(unittest.TestCase):
     def test_check_and_run(self):
         with tempfile.TemporaryDirectory() as d:

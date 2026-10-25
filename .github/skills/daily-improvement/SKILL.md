@@ -1,16 +1,23 @@
 ---
 name: daily-improvement
-description: Use for the launcher's daily improvement run (launcher/, tvhome), started each day by an automation or by hand as /daily-improvement [theme]. It picks the day's theme (Mon performance, Tue ease of testing, Wed UI, Thu UX, Fri motion and polish, Sat accessibility, Sun reliability and code health) and finds the most impactful problem in it from data. Then it researches best practice, measures, fixes, checks the result on its own emulator, proves a TV walkthrough there, and opens one draft pull request for /test-on-tv. It never touches the TV and runs without anyone watching.
+description: Use for the launcher's daily improvement runs (launcher/, tvhome), started each day by an automation or by hand. /daily-improvement with no area coordinates the day, starting one session per area for all seven (performance, ease of testing, UI, UX, motion and polish, accessibility, reliability and code health). /daily-improvement <area> is one of those sessions. It finds the most impactful problem in that area from data, researches best practice, measures, fixes, and checks the result on an emulator slot from tools/emulator.py. It proves a TV walkthrough there and opens one draft pull request for /test-on-tv. It never touches the TV and runs without anyone watching.
 ---
 
 # Daily improvement
 
-One small, measured improvement a day, in a different area each day. Each run finds where the launcher falls
-short the most, measures it, fixes it, measures it again, and leaves a draft pull request that Brian tests on the
-TV later with `/test-on-tv`. Everything is decided from data: numbers, screenshots, counts and the sources that
-set the bar, not taste.
+Every day, one small, measured improvement in each of seven areas. Each area's run finds where the launcher
+falls short the most in that area, measures it, fixes it, measures it again, and leaves a draft pull request that
+Brian tests on the TV later with `/test-on-tv`. Everything is decided from data: numbers, screenshots, counts and
+the sources that set the bar, not taste.
 
-The run is usually unattended (an automation in autopilot). **Nobody will answer questions**: don't use
+Two ways in:
+
+- **`/daily-improvement`** (the daily automation): coordinate the day. Start one session per area and let them
+  run: [Coordinating the day](#coordinating-the-day).
+- **`/daily-improvement <area>`**, such as `/daily-improvement ux`: one area's run, sections 1 to 11. The
+  coordinator starts these; Brian can too.
+
+The runs are usually unattended (an automation in autopilot). **Nobody will answer questions**: don't use
 `ask_user`, and don't wait for input. Decide, and write any assumption in the pull request or the backlog.
 
 ## Rules
@@ -18,60 +25,106 @@ The run is usually unattended (an automation in autopilot). **Nobody will answer
 - **`gh` on origin.** This checkout also has an `upstream` remote, someone else's repository, and `gh` picks
   it by default. Run every `gh` command with `GH_REPO=briansilah/tv-vibehack` (export it in each shell
   command: variables don't carry from one to the next).
-- **Never the TV.** Use only your own emulator: keep `TV_HOST` unset, set `ANDROID_SERIAL=emulator-<port>`
-  for every command, and never connect to, request or lease the TV, even when a step says "on the TV".
-  `tools/walkthrough.py` refuses any device that isn't an emulator unless given `--tv`; never pass it.
-  Emulator numbers are relative: compare main and your build on the same emulator, and never present them as
-  TV numbers.
+- **Never the TV.** Use only your own emulator, and never connect to, request or lease the TV, even when a step
+  says "on the TV". `tools/walkthrough.py` refuses any device that isn't an emulator unless given `--tv`; never
+  pass it. Emulator numbers are relative: compare main and your build on the same emulator, and never present
+  them as TV numbers.
+- **Share the Mac.** Up to nine runs share it (seven areas, the upstream sync and contribution runs, Brian's own
+  sessions). Start your emulator only with `tools/emulator.py start`, which waits for one of three slots, and
+  **build only while you hold one**: a slot is room for an emulator and a Gradle build. Measure with `perf.py`
+  only inside `tools/emulator.py exclusive`. Stop your emulator when you're done.
+- **Every shell command starts fresh:** begin each with `. tools/devenv.sh &&`. It sets JDK 17, the SDK and
+  `adb`, unsets `TV_HOST`, and sets `ANDROID_SERIAL` to your emulator. `tools/emulator.py start` also binds
+  your worktree to that emulator, so `tv.py`, `perf.py`, `walkthrough.py` and `build-and-install.sh` in it
+  can't reach anything else.
 - **No number, no change.** Every candidate needs evidence you collected today or that's on record: a
   measurement, a count, a screenshot measured against a guideline, a crash log, or Brian's own words. Every pull
   request says the metric's value before and after.
-- **One topic, one draft pull request, a day.** Small enough to review in ten minutes (about 300 changed lines,
-  tests, docs and skills not counted). If the best candidate is bigger, do its first useful slice and put the
+- **One topic, one draft pull request, per area per day.** Small enough to review in ten minutes (about 300
+  changed lines, tests, docs and skills not counted). If the best candidate is bigger, do its first useful slice and put the
   rest in the backlog.
 - **Never merge, never mark ready.** `/test-on-tv` does that after the TV says yes.
-- **Don't collide.** Leave alone files that open `needs-tv-test` pull requests change.
+- **Don't collide.** Leave alone files that open pull requests change, and files another area's run has
+  claimed today (section 2).
 - **Stay inside [CONTRIBUTING.md](../../../CONTRIBUTING.md):** no new launcher dependencies, no telemetry, no
   network beyond what the top shelf already does, TV-specific values in `config.xml`, deterministic D-pad
   navigation.
 - **A day with no change is a good result** when the data says nothing is worth changing, or the fix didn't
   move the number. Record it in the backlog instead of forcing a pull request.
 
-## The week
+## The areas
 
-The local day picks the theme. A theme given by hand (`/daily-improvement ux`, or a day's name) wins.
-
-| Day | Theme | Label | Playbook |
+| Area | What | Label | Playbook |
 |---|---|---|---|
-| Monday | Performance: start-up, smoothness, memory | `improve:performance` | [themes/performance.md](themes/performance.md) |
-| Tuesday | Ease of testing: faster, surer checks | `improve:testing` | [themes/testing.md](themes/testing.md) |
-| Wednesday | UI: layout, type, colour, consistency | `improve:ui` | [themes/ui.md](themes/ui.md) |
-| Thursday | UX: tasks, navigation, words | `improve:ux` | [themes/ux.md](themes/ux.md) |
-| Friday | Motion and visual polish | `improve:motion` | [themes/motion.md](themes/motion.md) |
-| Saturday | Accessibility | `improve:accessibility` | [themes/accessibility.md](themes/accessibility.md) |
-| Sunday | Reliability and code health | `improve:reliability` | [themes/reliability.md](themes/reliability.md) |
+| `performance` | Start-up, smoothness, memory | `improve:performance` | [areas/performance.md](areas/performance.md) |
+| `testing` | Ease of testing: faster, surer checks | `improve:testing` | [areas/testing.md](areas/testing.md) |
+| `ui` | Layout, type, colour, consistency | `improve:ui` | [areas/ui.md](areas/ui.md) |
+| `ux` | Tasks, navigation, words | `improve:ux` | [areas/ux.md](areas/ux.md) |
+| `motion` | Motion and visual polish | `improve:motion` | [areas/motion.md](areas/motion.md) |
+| `accessibility` | Accessibility | `improve:accessibility` | [areas/accessibility.md](areas/accessibility.md) |
+| `reliability` | Reliability and code health | `improve:reliability` | [areas/reliability.md](areas/reliability.md) |
 
-Read the day's playbook before you start: it says where to look, what to measure, which sources set the bar,
+An area's run reads its playbook before it starts: where to look, what to measure, which sources set the bar,
 and what has gone wrong before.
+
+## Coordinating the day
+
+`/daily-improvement` with no area. The coordinator only starts and follows the area runs: no emulator, no
+builds, no changes to the repository.
+
+1. **Which areas.** All seven, except an area whose backlog issue already has today's run marker (section 1)
+   that isn't `Status: abandoned`: that one ran today, or is running.
+
+   ```bash
+   export GH_REPO=briansilah/tv-vibehack            # origin: gh would pick the upstream remote
+   D=$(date +%F)
+   for i in $(gh issue list --label improvement-backlog --state open --json number --jq '.[].number'); do
+     gh api repos/{owner}/{repo}/issues/$i/comments --paginate \
+       --jq ".[] | select(.body | contains(\"<!-- daily-improvement $D -->\")) | select(.body | test(\"Status: abandoned\") | not) | \"$i \(.id)\""
+   done
+   gh issue list --label improvement-backlog --state open --json number,labels --jq '.[] | "\(.number) \([.labels[].name] | join(","))"'
+   ```
+
+2. **Start one session per area**, all at once: `tools/emulator.py` makes them take turns on the Mac, three at a
+   time, and each does its reading and research while it waits. With the app's `create_session` tool, for each
+   area: name `Daily <Area>, <date>`, `kickoff.mode` `autopilot`, `notify_on_idle` `once`, no `base_branch`
+   (they branch off `main`), and this kickoff prompt:
+
+   ```text
+   /daily-improvement <area>
+
+   Run the daily-improvement skill (.github/skills/daily-improvement/SKILL.md) for the <area> area only:
+   sections 1 to 11, unattended. Never touch the TV. Start your emulator with tools/emulator.py and build only
+   while you hold its slot. End with one draft pull request labelled needs-tv-test, or a backlog note when
+   nothing is worth changing. When done, reply in one line: the area, the pull request or "no change", and why.
+   ```
+
+3. **Follow them.** As each one finishes (its reply, or the idle notification), note its result. Once all have,
+   or by the end of the day, finish with a table: area, pull request or "no change" or "blocked", and the
+   number that moved. Don't redo an area's work, and don't message the runs unless one asks something.
+4. **No `create_session`** (the tool isn't there, or it fails): run one area yourself, the one for today's
+   weekday (Monday `performance`, Tuesday `testing`, Wednesday `ui`, Thursday `ux`, Friday `motion`, Saturday
+   `accessibility`, Sunday `reliability`), as sections 1 to 11 say, and say that the others didn't run.
 
 ## 1. Set up
 
 ```bash
-date '+%A %F'                                   # the theme, and today's run marker
+date +%F                                        # today's run marker
 git fetch -q origin && git merge -q --no-edit origin/main
 ```
 
-- **Labels and the backlog issue.** Each theme has one open issue labelled `improvement-backlog` and its
-  `improve:<theme>` label, titled `Improvement backlog: <Theme>`. Find it with
-  `gh issue list --label improvement-backlog --label improve:<theme> --state open`. If it's missing, create it,
+- **Labels and the backlog issue.** Each area has one open issue labelled `improvement-backlog` and its
+  `improve:<area>` label, titled `Improvement backlog: <Area>`. Find it with
+  `gh issue list --label improvement-backlog --label improve:<area> --state open`. If it's missing, create it,
   with the body in [The backlog issue](#the-backlog-issue). Create any missing label first (colours don't
-  matter): `needs-tv-test`, `tv-tested`, `tv-failed`, `improvement-backlog`, `improve:<theme>`.
+  matter): `needs-tv-test`, `tv-tested`, `tv-failed`, `improvement-backlog`, `improve:<area>`.
 - **Once a day.** Runs can overlap (a catch-up after the Mac wakes, a run started by hand), so claim the day:
   post your run comment with the marker `<!-- daily-improvement <YYYY-MM-DD> -->` and `Status: scouting`,
   keep its id, then list today's markers again. The comment with the lowest id that isn't abandoned runs; any
   other stops, deletes its own comment (`gh api -X DELETE repos/{owner}/{repo}/issues/comments/<id>`) and says
-  so. A marker still at `Status: scouting` and not updated for six hours is a run that died: edit it to
-  `Status: abandoned`, and it no longer counts.
+  so. A marker that isn't finished (a pull request, `no change` or `blocked`) and hasn't been updated for eight
+  hours is a run that died: edit it to `Status: abandoned`, and it no longer counts. While `tools/emulator.py`
+  makes you wait, say so: `Status: waiting for an emulator slot`.
 
   ```bash
   export GH_REPO=briansilah/tv-vibehack            # origin: gh would pick the upstream remote
@@ -80,22 +133,33 @@ git fetch -q origin && git merge -q --no-edit origin/main
     --jq '.[] | select(.body | contains("<!-- daily-improvement <YYYY-MM-DD> -->")) | "\(.id) \(.updated_at) \(.body | test("Status: abandoned"))"'
   ```
 
-- **The queue.** With seven or more open `needs-tv-test` pull requests
-  (`gh pr list --label needs-tv-test --state open`), Brian is behind on TV tests: scout and update the backlog,
-  but don't open another pull request.
-- **Build tools.** JDK 17 and the Android SDK: `JAVA_HOME` and `ANDROID_HOME` unless `java -version` says 17,
-  and `launcher/local.properties` with `sdk.dir`. The local `tv-lease` skill, where present, has this Mac's
-  paths (adb isn't on PATH); use none of its TV parts.
+- **The queue.** With two or more open `needs-tv-test` pull requests of this area
+  (`gh pr list --label needs-tv-test --label improve:<area> --state open`), Brian is behind on TV tests for it:
+  scout and update the backlog, but don't open another pull request.
+- **Build tools.** `. tools/devenv.sh` (JDK 17, the SDK, `adb`, `launcher/local.properties`), and the tools'
+  venv: `python3 -m venv tools/venv && tools/venv/bin/pip install -q -r tools/requirements.txt` (which
+  `launcher/build-and-install.sh` needs). The local `tv-lease` skill has this Mac's paths if one is missing; use
+  none of its TV parts.
 
 ## 2. Read what's known
 
 - **The backlog issue**: its ranked candidates, and what earlier runs measured, tried, and dropped as "tried,
   no gain".
-- **Earlier pull requests of this theme**: `gh pr list --label improve:<theme> --state all --limit 20`. One
+- **Earlier pull requests of this area**: `gh pr list --label improve:<area> --state all --limit 20`. One
   labelled `tv-failed` comes first: read why in its comments. If the reason is fixable, today's work is that
   pull request, not a new one: see [Fixing a pull request that failed on the TV](#fixing-a-pull-request-that-failed-on-the-tv).
 - **Open pull requests' files**, to stay off them:
   `gh pr list --state open --json number,files --jq '.[] | "\(.number) \(.files[].path)"'`.
+- **Today's other areas.** The other runs today write the files they'll change in their run comment, on a line
+  `Files: <path>, <path>` (section 3). Stay off those too; read them again just before you claim your own:
+
+  ```bash
+  export GH_REPO=briansilah/tv-vibehack
+  for i in $(gh issue list --label improvement-backlog --state open --json number --jq '.[].number'); do
+    gh api repos/{owner}/{repo}/issues/$i/comments --paginate \
+      --jq ".[] | select(.body | contains(\"<!-- daily-improvement $(date +%F) -->\")) | .body" | grep '^Files:'
+  done
+  ```
 - **What Brian has said.** His messages in earlier sessions on this repository are the best record of what
   bothers him. With the `session_store_sql` tool, if it's there: first the sessions, then their turns (never
   scan all turns):
@@ -111,22 +175,27 @@ git fetch -q origin && git merge -q --no-edit origin/main
   ORDER BY timestamp DESC LIMIT 50
   ```
 
-  Swap in the theme's words. Quote him in the evidence, with the date.
+  Swap in the area's words. Quote him in the evidence, with the date.
 - **Repository docs that record findings**: [docs/performance.md](../../../docs/performance.md) (findings on
   a TV, suspected hotspots), [docs/transitions.md](../../../docs/transitions.md), the README's Troubleshooting
   and Questions, and open issues (`gh issue list --state open`).
 
 ## 3. Scout: where it hurts most
 
-Start your own emulator, as [launcher-tv-testing](../launcher-tv-testing/SKILL.md) says: AVD `tvperf`, a free
-even port from 5554 to 5584 (check with `adb devices` and `lsof`), headless, `-read-only`, from an async shell
-that stays open. Then build and install `main` as it is (your branch hasn't changed yet):
+Take an emulator slot. `start` waits until one of the Mac's three is free, which can take an hour or two on a
+busy day, so start it in an async shell, do the reading in section 2 and the research for known candidates
+meanwhile, and read its output when it's done. It prints the emulator's serial once it has booted:
 
 ```bash
-unset TV_HOST
-export ANDROID_SERIAL=emulator-5562            # yours; check: case "$ANDROID_SERIAL" in emulator-*) ;; *) exit 1;; esac
-(cd launcher && ./gradlew -q assembleDebug assembleRelease testDebugUnitTest)
-adb install -r launcher/app/build/outputs/apk/debug/app-debug.apk    # the debug build lets walkthrough.py check settings
+python3 tools/emulator.py start --owner daily-<area>     # prints e.g. emulator-5556, and binds this worktree to it
+```
+
+It stops your emulator after six hours unless you `tools/emulator.py renew <serial>`. Then, holding the slot,
+build and install `main` as it is (your branch hasn't changed yet):
+
+```bash
+. tools/devenv.sh && (cd launcher && ./gradlew -q assembleDebug assembleRelease testDebugUnitTest) \
+  && adb install -r launcher/app/build/outputs/apk/debug/app-debug.apk   # debug: walkthrough.py can check settings
 ```
 
 Collect the signals the playbook lists, then write the candidates down as a table, with ICE scores
@@ -143,15 +212,19 @@ Collect the signals the playbook lists, then write the candidates down as a tabl
   below 3: measure it first.
 - **Ease**: 5, a few lines; 3, one feature across a few files; 1, a redesign (split it).
 
-Pick the highest score that fits one small pull request, stays off open pull requests' files, and isn't
-"tried, no gain" in the backlog unless there's new evidence. Everything else goes to the backlog.
+Pick the highest score that fits one small pull request, stays off open pull requests' files and today's
+claims, and isn't "tried, no gain" in the backlog unless there's new evidence. Everything else goes to the
+backlog. **Claim it at once:** edit your run comment to `Status: fixing` with a line `Files: <path>, <path>`
+naming the files you expect to change, then read today's claims again (section 2): when another run claimed
+one of your files too, the claim with the lower comment id keeps it, and the other run picks something else.
+If you later need a file another run has claimed, pick something else.
 
 ## 4. Research: what the best do
 
 Before changing anything, find out what good looks like, from primary sources: Apple's Human Interface
 Guidelines and WWDC sessions (the launcher follows Apple TV), Google's TV design and TV app quality guidelines,
 Android's performance and accessibility docs, WCAG 2.2, Nielsen Norman Group. The playbook lists the ones for
-the theme. Use `web_search` and `web_fetch`; read the page, not a summary of it.
+the area. Use `web_search` and `web_fetch`; read the page, not a summary of it.
 
 - **Check the repository's skills first.** [ux-writing](../ux-writing/SKILL.md) already holds Apple's UX
   writing rules and the launcher's word list. Follow what a skill says rather than researching it again.
@@ -180,8 +253,7 @@ in `values-de`. Update the README and docs that describe what you changed.
 ## 7. Check it
 
 ```bash
-(cd launcher && ./gradlew assembleDebug assembleRelease testDebugUnitTest)
-python3 -m unittest discover -s tools/tests
+tools/ci.sh                     # what ci.yml runs: GitHub Actions is off on this fork, so this is the CI
 ```
 
 Then on your emulator:
@@ -189,18 +261,23 @@ Then on your emulator:
 - **The metric again**, the same way, with your build. It must reach the target, or at least beat `main` by
   more than the noise. If it doesn't, try once more; if it still doesn't, drop it: back out the change, record
   "tried, no gain" with the numbers in the backlog, and finish without a pull request.
-- **Nothing else got slower.** In this order, on your emulator
-  ([launcher-tv-testing](../launcher-tv-testing/SKILL.md), sections 2 and 3, explain each):
+- **Nothing else got slower.** `python3 tools/perf.py plan` says which scenarios. Then measure `main` and
+  yours back to back, inside the Mac's measuring lock, so other runs' builds and measurements don't skew one of
+  the two ([launcher-tv-testing](../launcher-tv-testing/SKILL.md), sections 2 and 3, explain each step):
 
   ```bash
-  python3 tools/perf.py plan
-  python3 tools/perf.py baseline ensure --scenarios auto --quick      # main: cached, or installed and measured now
-  launcher/build-and-install.sh                                        # your release build (needs tools/venv)
-  python3 tools/perf.py run --label <topic> --scenarios auto --quick
+  . tools/devenv.sh && python3 tools/emulator.py exclusive --owner daily-<area> -- sh -c '
+    python3 tools/perf.py baseline refresh --scenarios auto --quick &&    # main, measured now
+    launcher/build-and-install.sh &&                                     # your release build
+    python3 tools/perf.py run --label <topic> --scenarios auto --quick'
   python3 tools/perf.py compare --against main tools/perf-results/<topic>.json
   ```
 
-  A number that's worse beyond the noise is a problem to fix before shipping, not a footnote.
+  A number that's worse beyond the noise is a problem to fix before shipping, not a footnote. Other runs'
+  builds can still load the Mac while you measure: when a difference is small, measure both again.
+- **Nothing else broke.** When you changed launcher code, the shared core tour must still pass on your debug
+  build: `python3 tools/walkthrough.py run tools/walkthroughs/core-tour.json --out <files>/core-tour`. Look at
+  its pictures as you look at your own.
 - **It looks and moves right**: before and after screenshots of every screen you changed; D-pad from every edge
   of what you touched.
 
@@ -220,7 +297,7 @@ for your change with the format in [tools/walkthrough.py](../../../tools/walkthr
 
 ```bash
 python3 tools/walkthrough.py check plan.json
-adb install -r launcher/app/build/outputs/apk/debug/app-debug.apk      # your debug build: it lets the run check settings
+. tools/devenv.sh && adb install -r launcher/app/build/outputs/apk/debug/app-debug.apk   # your debug build
 python3 tools/walkthrough.py run plan.json --out <files>/walk-after
 ```
 
@@ -231,7 +308,7 @@ would be skipped). Look at every screenshot yourself: each must show what its `e
 
 - Commit on this session's branch (with the Co-authored-by trailer), push, and open a **draft** pull request
   with the app's `create_pull_request` tool (draft) or `gh pr create --draft`. Labels: `needs-tv-test` and
-  `improve:<theme>`.
+  `improve:<area>`.
 - The description follows [pull-requests](../pull-requests/SKILL.md) and the template: **Why** with the
   evidence and the number before, and `Backlog: #<issue>`; **What**; **How tested** with the local checks, the
   emulator's numbers marked as the emulator's, before and after screenshots (upload them with the
@@ -247,7 +324,7 @@ would be skipped). Look at every screenshot yourself: each must show what its `e
 
 ### Fixing a pull request that failed on the TV
 
-Work on its branch, in this worktree: `git fetch origin <branch> && git checkout -B <your branch> origin/<branch>`,
+Work on its branch, in this worktree: `git fetch -q origin && git checkout -B <your branch> origin/<branch>`,
 then merge `origin/main`. Fix what the `/test-on-tv` comment says, check it as in sections 7 and 8, push with
 `git push origin HEAD:<branch>`, post a new walkthrough comment if the plan changed (the newest one counts),
 and update How tested. Then put it back in the queue:
@@ -260,7 +337,8 @@ Edit your run comment (`gh api -X PATCH repos/{owner}/{repo}/issues/comments/<id
 
 ```markdown
 <!-- daily-improvement 2026-10-26 -->
-**2026-10-26, Monday: performance.** Status: #41 (draft, needs TV) | no change | blocked: <why>
+**2026-10-26: performance.** Status: scouting | fixing | #41 (draft, needs TV) | no change | blocked: <why>
+Files: launcher/app/src/main/java/com/gathin/tvhome/AppAdapter.java
 
 Picked: <candidate>, <metric> <before> → <after> on the emulator (target <target>).
 
@@ -281,23 +359,24 @@ and mark dropped ones "tried, no gain" with the date and the numbers.
 
 ## 11. Clean up
 
-Stop your emulator (`kill` the PID `pgrep -f -- '[q]emu.*-port <port>'` prints; never anyone else's), delete
-temporary files outside the session's files folder, and leave the worktree as it is. Finish with two or three
-sentences: the theme, what changed and by how much (or why nothing did), and the pull request.
+Stop your emulator (`python3 tools/emulator.py stop <serial>`, which also unbinds the worktree; never anyone
+else's), delete temporary files outside the session's files folder, and leave the worktree as it is. Finish with two or three
+sentences: the area, what changed and by how much (or why nothing did), and the pull request.
 
 ## When something goes wrong
 
 - `main` doesn't build, the emulator won't boot, or `gh` fails: say so in the run comment (`Status: blocked`)
   and stop. Never fall back to the TV.
-- An emulator port is taken: pick another free one; never stop someone else's emulator.
+- No emulator slot came free (`start` gives up after six hours): record `Status: blocked: no emulator slot` and
+  stop. Never stop someone else's emulator.
 - Out of time or budget: ship what's measured and done, or record where you stopped in the backlog.
 
 ## The backlog issue
 
-Title `Improvement backlog: <Theme>`, labels `improvement-backlog` and `improve:<theme>`. Its body:
+Title `Improvement backlog: <Area>`, labels `improvement-backlog` and `improve:<area>`. Its body:
 
 ```markdown
-The daily improvement run's candidates for <theme> (.github/skills/daily-improvement), best first.
+The daily improvement run's candidates for <area> (.github/skills/daily-improvement), best first.
 Each run adds a comment with its data; this table is the current state.
 
 | Candidate | Evidence | I | C | E | Score | Status |
