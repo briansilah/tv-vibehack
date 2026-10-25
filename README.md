@@ -140,6 +140,7 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 | OnePlus TV (D00) | Google TV 14 |
 | Sony BRAVIA XBR-65X900E (2017) | Android TV 9 |
 | NVIDIA SHIELD TV Pro 2019 (P2897) | Android TV 11 |
+| Xiaomi MiTV-MOOR2 (venom) | Google TV 11 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -510,6 +511,16 @@ Things that bit us or contributors, so they don't bite you.
   `appops get com.gathin.tvhome AUTO_START` says `allow`; run
   `appops set com.gathin.tvhome AUTO_START allow; appops write-settings`. The second command
   matters: Android saves app ops up to 30 minutes later, and `adb reboot` loses unsaved ones.
+- **Xiaomi MiTV-MOOR2's setup wizard also answers Home**, seen upstream after disabling the stock launcher on Google TV
+  (Xiaomi MiTV-MOOR2). Another system app answers HOME: `com.google.android.tungsten.setupwraith`,
+  with `.MainActivity` at intent-filter priority 4 and `.RecoveryActivity` at priority 1. You
+  cannot outrank it, and the obvious workarounds don't help: Android ignores `android:priority` on
+  HOME filters for apps that aren't on the system image, `cmd package set-home-activity` prints
+  `Success` without changing anything (not even after a reboot), and `pm disable-user` on one of
+  setupwraith's components is refused with a SecurityException. Upstream disabled the whole
+  `com.google.android.tungsten.setupwraith` package to free the slot. This fork instead keeps Google
+  TV's launcher enabled and uses HomeButtonService: do not disable either package to take over Home.
+  If you disabled the setup wizard previously, re-enable it before a factory reset.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`
