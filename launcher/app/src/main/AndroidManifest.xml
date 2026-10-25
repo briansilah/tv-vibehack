@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -19,7 +20,7 @@
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <!-- Google TV's Home button service (VolumeHold): reads `dumpsys input` to tell whether a volume key is still
          held, so a held key keeps changing the volume. Granted over adb at install time. -->
-    <uses-permission android:name="android.permission.DUMP" />
+    <uses-permission android:name="android.permission.DUMP" tools:ignore="ProtectedPermissions" />
 
     <application
         android:label="@string/app_name"

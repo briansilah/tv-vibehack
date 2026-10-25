@@ -81,6 +81,8 @@ android {
         // The launcher is sideloaded over ADB, never published to Google Play, so Play's minimum targetSdk
         // does not apply; without this, lintVitalRelease fails assembleRelease.
         disable 'ExpiredTargetSdkVersion'
+        // Upstream locales arrive before translations of the fork's own screens; Android falls back to English.
+        warning 'MissingTranslation'
     }
 
     compileOptions {

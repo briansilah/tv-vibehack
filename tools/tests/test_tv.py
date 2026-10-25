@@ -152,6 +152,11 @@ class FakeRun:
 
 
 class AdbBinaryTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(tv, "bound_device", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def fake(self, answer):
         run = FakeRun(answer)
         patcher = mock.patch.object(tv.subprocess, "run", run)
@@ -236,6 +241,11 @@ class AdbBinaryTests(unittest.TestCase):
 
 
 class AdbShellTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(tv, "bound_device", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_missing_package(self):
         with mock.patch.dict(sys.modules, {"adb_shell": None, "adb_shell.adb_device": None}):
             with self.assertRaisesRegex(tv.TvError, "pip install -r tools/requirements.txt"):
@@ -534,7 +544,7 @@ class ScriptTests(unittest.TestCase):
         return [a[3] for a in self.adb_calls() if a[:1] == ["-s"] and a[2] == "shell"]
 
     def test_probe_without_tv_host(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--probe"])
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--probe"])
         self.assertEqual(code, 0, err)
         self.assertIn("ro.product.model = Smart TV Pro", out)
         self.assertIn("device " + MDNS, err)
@@ -542,7 +552,7 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(all(a[:2] == ["-s", MDNS] for a in self.adb_calls()[1:]))   # the space survives
 
     def test_batch_keeps_reading_stdin(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--batch"],
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--batch"],
                                        b"getprop ro.product.model\npm path com.example.none\npm list packages -d\n")
         self.assertEqual(code, 0, err)
         self.assertEqual(out, "$ getprop ro.product.model\nSmart TV Pro\n$ pm path com.example.none\n"
@@ -550,12 +560,12 @@ class ScriptTests(unittest.TestCase):
 
     def test_no_device(self):
         self.env["FAKE_ADB_DEVICES"] = "List of devices attached\n\n"
-        code, _, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--probe"])
+        code, _, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--probe"])
         self.assertEqual(code, 1)
         self.assertIn("tv.py: adb lists no device", err)
 
     def test_b64push_uses_adb_push(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "b64push.py"), __file__,
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "b64push.py"), __file__,
                                         "/data/local/tmp/x.py"])
         self.assertEqual(code, 1, err)   # the fake TV has no md5sum, so no MATCH; the push itself happened
         self.assertIn(["-s", MDNS, "push", __file__, "/data/local/tmp/x.py"], self.adb_calls())
