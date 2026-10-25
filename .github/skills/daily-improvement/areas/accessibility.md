@@ -1,4 +1,4 @@
-# Saturday: accessibility
+# Accessibility
 
 **Goal:** everyone can use Home: with TalkBack, with larger text, with less motion, from far away, and without
 telling colours apart. Many contributors set this up for their parents (CONTRIBUTING).

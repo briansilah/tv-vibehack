@@ -33,7 +33,12 @@ Go up a step only once the step below says the change is good:
 
 ### Your own emulator
 
-Several agents can each run an emulator at once, so nobody waits for anyone else's. Use an Android TV system image
+Several agents can each run an emulator at once, so nobody waits for anyone else's. When several sessions run at
+the same time, as the daily runs do, start yours with `tools/emulator.py start --owner <you>`: it waits for one of
+a few slots, so the Mac doesn't run out of memory, picks a free port, and prints the serial once it has booted
+(`tools/emulator.py stop <serial>` when you're done). It also binds your worktree to that emulator, so the tools
+in it can't reach a TV; `. tools/devenv.sh` sets `ANDROID_SERIAL` to it in each fresh shell. Otherwise, by hand:
+use an Android TV system image
 (API 34, 1920×1080, about 2 GB of RAM, like a real TV). Start yours headless on a free even port from 5554 to 5584,
 the emulator's own range (adb looks for emulators only there when it starts). Check the port is free first:
 `adb devices` doesn't list `emulator-<port>`, and `lsof -nP -iTCP:<port> -iTCP:<port+1> -sTCP:LISTEN` prints

@@ -1,4 +1,4 @@
-# Tuesday: ease of testing
+# Ease of testing
 
 **Goal:** every change can be checked faster and more surely, by agents and by people, with fewer things that
 only a person at the TV can check. Better tests and tools make every other day's work cheaper.

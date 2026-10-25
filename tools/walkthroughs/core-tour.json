@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "title": "Core tour: Home, the Dock, the grid, an app's actions, Home Settings, Arrange Apps, a cold start",
+  "default_config": true,
+  "steps": [
+    {
+      "launcher": true,
+      "glass_test_art": true
+    },
+    {
+      "to_first_dock_app": true
+    },
+    {
+      "wait": 1
+    },
+    {
+      "screenshot": "home",
+      "expect": "Home: the first Dock app highlighted with its Top Shelf behind the Dock; the clock and profile at the top right"
+    },
+    {
+      "record": "dock-moves",
+      "seconds": 7,
+      "expect": "Along the Dock and back: the highlight springs from app to app and the Top Shelf follows each one",
+      "steps": [
+        {
+          "keys": "RIGHT RIGHT RIGHT LEFT LEFT LEFT",
+          "interval": 0.8
+        }
+      ]
+    },
+    {
+      "keys": "DOWN"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "screenshot": "grid",
+      "expect": "The first app below the Dock highlighted, with its name below it; the grid's tiles aligned in four columns"
+    },
+    {
+      "keys": "UP"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "longpress": "CENTER"
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "screenshot": "actions",
+      "expect": "The first Dock app's actions in groups: where the app goes (Move first), the app itself (Change Top Shelf…, App Info), then Adjust Liquid Glass…"
+    },
+    {
+      "keys": "BACK"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "activity": "SettingsActivity"
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "expect_top": "SettingsActivity"
+    },
+    {
+      "screenshot": "home-settings",
+      "expect": "Home Settings: its rows (the Top Shelf for all apps and for each app, Liquid Glass), nothing cut off"
+    },
+    {
+      "keys": "BACK"
+    },
+    {
+      "launcher": true
+    },
+    {
+      "wait": 1
+    },
+    {
+      "keys": "DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "screenshot": "arrange",
+      "expect": "The grid's last tile, Arrange Apps, highlighted, with the Home Settings tile before it"
+    },
+    {
+      "keys": "CENTER"
+    },
+    {
+      "keys": "DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN DOWN RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "screenshot": "arranging",
+      "expect": "Arranging: the Arrange Apps header and its hints at the top; the last tile reads Done with a checkmark; no app picked up"
+    },
+    {
+      "keys": "BACK"
+    },
+    {
+      "wait": 1
+    },
+    {
+      "screenshot": "arranged",
+      "expect": "The last tile reads Arrange Apps again, the header gone, the apps in the same order as before"
+    },
+    {
+      "to_first_dock_app": true
+    },
+    {
+      "cold_restart": true
+    },
+    {
+      "to_first_dock_app": true
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "screenshot": "after-restart",
+      "expect": "Home again after a cold start: the first Dock app highlighted, the usual Dock and Top Shelf, no arranging header"
+    }
+  ],
+  "perf": {
+    "scenarios": "auto"
+  }
+}

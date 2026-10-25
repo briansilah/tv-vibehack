@@ -1,4 +1,4 @@
-# Sunday: reliability and code health
+# Reliability and code health
 
 **Goal:** Home never crashes, never hangs and never shows a broken state, whatever the TV, the network or the
 apps installed; and the code stays small and easy to change.
