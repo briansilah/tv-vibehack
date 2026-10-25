@@ -18,3 +18,4 @@ or adopted differently, and why: the only record of it.
 
 | Date | Upstream | What the fork did | Why |
 |---|---|---|---|
+| 2026-10-25 | [Spanish translation (cleanyourtv#46)](https://github.com/Gathin23/cleanyourtv/pull/46) | Kept every Spanish key and restored the five corresponding English greeting/date resources, without restoring the old header. | The fork replaced the greeting header with its Top Shelf. Default resources keep the complete translation valid without changing the fork's layout. Spanish falls back to English for the fork-only strings. |
