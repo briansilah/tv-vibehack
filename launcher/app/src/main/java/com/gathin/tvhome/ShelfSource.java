@@ -1413,8 +1413,10 @@ final class ShelfSource {
         }
         src.recycle();
         // A dark ground (tvOS's #242424 behind YouTube's) turns true black, for a mini-LED or OLED TV.
+        long start = Perf.now();
         int knee = groundTop(out, top);
         if (knee >= 0) toe(out, knee, TrueBlack.toeEnd(knee));
+        Perf.log("shelf_image_black", start, "knee=" + knee);
         return out;
     }
 
@@ -1423,13 +1425,13 @@ final class ShelfSource {
 
     /** The top of the near-black ground of a picture's first {@code rows} rows (TrueBlack.groundTop), or -1. */
     static int groundTop(Bitmap b, int rows) {
-        int w = b.getWidth(), strip = Math.max(1, STRIP_PIXELS / Math.max(1, w));
-        int[] px = new int[w * strip], hist = new int[256];
+        int w = b.getWidth();
+        int[] px = new int[w], hist = new int[256];
         rows = Math.min(rows, b.getHeight());
-        for (int y = 0; y < rows; y += strip) {
-            int n = Math.min(strip, rows - y);
-            b.getPixels(px, 0, w, 0, y, w, n);
-            TrueBlack.count(px, w * n, hist);
+        // Every fourth row says as much about its ground as all of them.
+        for (int y = 0; y < rows; y += 4) {
+            b.getPixels(px, 0, w, 0, y, w, 1);
+            TrueBlack.count(px, w, hist);
         }
         return TrueBlack.groundTop(hist);
     }
