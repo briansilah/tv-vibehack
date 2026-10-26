@@ -31,6 +31,7 @@ A plan (JSON):
        {"keys": "BACK"},
        {"activity": "SettingsActivity", "package": "com.netflix.ninja"},
        {"expect_top": "SettingsActivity"},
+       {"expect_text": "Picture"},
        {"record": "dock-moves", "seconds": 6, "expect": "The Top Shelf follows each Dock app",
         "steps": [{"keys": "BACK"}, {"keys": "RIGHT RIGHT LEFT LEFT", "interval": 0.8}]},
        {"cold_restart": true},
@@ -42,7 +43,10 @@ Steps: launcher (shows Home; "glass_test_art": true or false), activity (MainAct
 "package" opens Home Settings on that app), keys (UP DOWN LEFT RIGHT CENTER BACK MENU; "interval" in seconds),
 longpress (one key), wait (seconds), screenshot and record (a name, and "expect": what it should show; record takes
 "seconds" up to 30 and the "steps" to do while it records), cold_restart (another app in front, `am kill`, Home
-again), expect_top (text the resumed activity must contain), to_first_dock_app (from anywhere on Home).
+again), expect_top (text the resumed activity must contain), expect_text (an exact text label in the launcher's
+current UI hierarchy; saves the XML, fails if absent), to_first_dock_app (from anywhere on Home).
+Use wait before expect_text when a screen is still loading. It checks labels, not layout, focus or motion:
+keep screenshots and recordings for those, and use the device's language in the expected text.
 "default_config": true shows config.xml's look for the process instead of the owner's saved choices. "perf" is for
 /test-on-tv: perf.py's --scenarios ("auto" by default) and, rarely, --variant.
 """
@@ -56,6 +60,7 @@ import re
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -86,6 +91,7 @@ STEPS = {
     "record": ("seconds", "expect", "steps"),
     "cold_restart": (),
     "expect_top": (),
+    "expect_text": (),
     "to_first_dock_app": (),
 }
 
@@ -159,6 +165,8 @@ def _step_problems(step, where, names, inside_record=False):
                 problems += _step_problems(s, "%s step %d" % (where, i), names, inside_record=True)
     if kind == "expect_top" and (not isinstance(v, str) or not v.strip()):
         problems.append("%s: the text the resumed activity must contain, such as SettingsActivity" % where)
+    if kind == "expect_text" and (not isinstance(v, str) or not v.strip()):
+        problems.append("%s: an exact text label in the launcher's current UI hierarchy" % where)
     return problems
 
 
@@ -238,6 +246,8 @@ def describe_step(step):
         return "another app in front, am kill, Home again (a cold start)"
     if kind == "expect_top":
         return "the resumed activity contains %s" % v
+    if kind == "expect_text":
+        return "the launcher's UI contains the exact text %r" % v
     return "go to the first Dock app"
 
 
@@ -420,6 +430,21 @@ class Runner:
             result["top"] = top
             if v not in top:
                 raise PlanError("the resumed activity is %r, not %s" % (top, v))
+        elif kind == "expect_text":
+            remote, local = self.capture("text", "xml")
+            self.shell("rm -f %s && uiautomator dump %s" % (remote, remote), retry=True)
+            result["file"] = self.pull(remote, local)
+            try:
+                root = ET.parse(local).getroot()
+            except (OSError, ET.ParseError) as e:
+                raise PlanError("could not read the UI hierarchy: %s" % e) from None
+            if root.tag != "hierarchy":
+                raise PlanError("the UI dump has no hierarchy root")
+            labels = sorted({node.get("text") for node in root.iter("node")
+                             if node.get("package") == PKG and node.get("text")})
+            if v not in labels:
+                raise PlanError("the launcher's UI has no exact text %r; found %s (dump: %s)"
+                                % (v, repr(labels), result["file"]))
         elif kind == "cold_restart":
             other = perf.resolve_other_app(self.sh, self.other_app, self.log)
             perf.open_other_app(self.sh, other)
