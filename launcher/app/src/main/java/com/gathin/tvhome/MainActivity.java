@@ -56,8 +56,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid; the focused tile grows on a soft shadow.
@@ -186,15 +188,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             handler.post(MainActivity.this::updateNetworkIndicator);
         }
     };
+    private final Set<Network> vpnNetworks = new HashSet<>();
     private final ConnectivityManager.NetworkCallback vpnCallback = new ConnectivityManager.NetworkCallback() {
         @Override
         public void onAvailable(@NonNull Network network) {
-            handler.post(MainActivity.this::updateNetworkIndicator);
+            handler.post(() -> {
+                vpnNetworks.add(network);
+                updateNetworkIndicator();
+            });
         }
 
         @Override
         public void onLost(@NonNull Network network) {
-            handler.post(MainActivity.this::updateNetworkIndicator);
+            handler.post(() -> {
+                vpnNetworks.remove(network);
+                updateNetworkIndicator();
+            });
         }
 
         @Override
@@ -1114,17 +1123,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         Perf.begin("tvhome:updateNetworkIndicator");
         boolean wifiSupported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI);
         String text = getString(wifiSupported ? R.string.wifi : R.string.ethernet);
-        boolean vpn = false, online = false, ethernet = false, wifi = false;
+        boolean vpn = !vpnNetworks.isEmpty(), online = false, ethernet = false, wifi = false;
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             // A VPN may be the active network, or exclude this app: inspect the underlying networks too.
             for (Network net : cm != null ? cm.getAllNetworks() : new Network[0]) {
                 NetworkCapabilities caps = cm.getNetworkCapabilities(net);
                 if (caps == null) continue;
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                    vpn = true;
-                    continue;
-                }
+                // onLost can arrive while getAllNetworks still contains the old VPN: callbacks own its status.
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue;
                 if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
                 online = true;
                 ethernet |= caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
