@@ -15,7 +15,8 @@ hold one, so a few sessions at once don't run this Mac out of memory. Every runn
 started it. At most TVHOME_MAX_EMULATORS (3) run at once. The emulator runs on its own, so it outlives the
 command that started it: stop it when you're done. Past its --hours (renew to keep it), the next `start` stops it.
 The tool owns exactly the process group it launched, and checks that its port's listener is that group's, so it
-never mistakes or stops someone else's emulator.
+never mistakes or stops someone else's emulator. Only the worktree that started an emulator can stop or renew it:
+after one stops, its serial goes to the next session's, which another's old `stop` mustn't reach.
 
 `start` binds the worktree it runs from to the emulator: it writes the serial to .tvhome-device at the worktree's
 root (git-ignored). tools/tv.py, and every tool that connects through it (perf.py, walkthrough.py, b64push.py,
@@ -141,8 +142,9 @@ class Host:
 class Slots:
     """The slots file (slots.json) under a lock (lock), in the state directory."""
 
-    def __init__(self, directory, host, log=None, maximum=None):
+    def __init__(self, directory, host, log=None, maximum=None, root=None):
         self.dir, self.host = directory, host
+        self.root = root or os.path.dirname(HERE)    # the worktree whose tools these are: who's asking
         self.log = log or (lambda m: print(m, file=sys.stderr))
         self.max = maximum or int(os.environ.get(MAX_ENV) or DEFAULT_MAX)
         os.makedirs(directory, exist_ok=True)
@@ -236,6 +238,7 @@ class Slots:
                                     "-no-audio", "-no-boot-anim"], log)
             now = self.host.now()
             slot = {"serial": serial, "port": port, "pid": pid, "pgid": pid, "owner": owner, "avd": avd,
+                    "root": self.root,
                     "started": now, "expires": now + hours * 3600, "log": log}   # launched in a session of its own
             self._write(slots + [slot])
             return slot
@@ -280,24 +283,29 @@ class Slots:
         with self._locked():
             self._write([s for s in self._read() if s["serial"] != serial])
 
+    def _mine(self, slots, serial):
+        """The slot for serial, if this worktree started it. A serial alone isn't enough: once an emulator is gone,
+        its port and serial go to the next session that starts one."""
+        found = [s for s in slots if s["serial"] == serial]
+        if not found:
+            raise EmulatorError("%s wasn't started by emulator.py: stop it the way it was started, and never "
+                                "someone else's" % serial)
+        if found[0].get("root", self.root) != self.root:
+            raise EmulatorError("%s is %s's now, started from %s: yours is gone, so there's nothing to stop"
+                                % (serial, found[0]["owner"], found[0]["root"]))
+        return found[0]
+
     def renew(self, serial, hours):
         with self._locked():
             slots = self._read()
-            mine = [s for s in slots if s["serial"] == serial]
-            if not mine:
-                raise EmulatorError("%s wasn't started by emulator.py" % serial)
-            mine[0]["expires"] = self.host.now() + hours * 3600
+            self._mine(slots, serial)["expires"] = self.host.now() + hours * 3600
             self._write(slots)
         self.log("%s kept for %g more hours" % (serial, hours))
 
     def stop(self, serial):
         with self._locked():
             slots = self._read()
-            mine = [s for s in slots if s["serial"] == serial]
-            if not mine:
-                raise EmulatorError("%s wasn't started by emulator.py: stop it the way it was started, and never "
-                                    "someone else's" % serial)
-            self._terminate(mine[0])
+            self._terminate(self._mine(slots, serial))
             self._write([s for s in slots if s["serial"] != serial])
         self.log("stopped %s" % serial)
 
