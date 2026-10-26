@@ -25,7 +25,7 @@ writes the three fonts and launcher/FONT-LICENSE-OFL.txt, from pinned downloads.
     python3 tools/fonts.py                          rebuild the fonts in Inter
     python3 tools/fonts.py --family geist           ... or in another typeface (see FAMILIES)
     python3 tools/fonts.py --source Inter.ttf       use a local copy of the variable font
-    python3 tools/fonts.py --check                  only check the subset covers every launcher string (no fontTools)
+    python3 tools/fonts.py --check                  check strings against the subset and declared system fallback
 """
 import argparse
 import glob
@@ -122,6 +122,8 @@ def parse_ranges(spec):
 
 
 UNICODES = parse_ranges(UNICODE_RANGES)
+# CJK is deliberately provided by Android's font fallback, not the small Latin typeface.
+SYSTEM_FALLBACK = parse_ranges("U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF")
 
 
 def string_resources(res=RES):
@@ -140,11 +142,11 @@ def string_resources(res=RES):
 
 
 def missing_characters(res=RES, unicodes=UNICODES):
-    """Characters in the launcher's strings that the font subset would leave out: {char: [file, ...]}."""
+    """Characters outside the subset and explicit system fallback: {char: [file, ...]}."""
     missing = {}
     for path, text in string_resources(res):
         for ch in text:
-            if ch in "\n\t" or ord(ch) in unicodes:
+            if ch in "\n\t" or ord(ch) in unicodes or ord(ch) in SYSTEM_FALLBACK:
                 continue
             missing.setdefault(ch, [])
             if path not in missing[ch]:
@@ -198,7 +200,7 @@ def main(argv=None):
     parser.add_argument("--source", help="local copy of the variable font instead of downloading it")
     parser.add_argument("--family", default=FAMILY, choices=sorted(FAMILIES))
     parser.add_argument("--out", default=FONT_DIR, help="output directory (default: the launcher's res/font)")
-    parser.add_argument("--check", action="store_true", help="only check every launcher string is covered")
+    parser.add_argument("--check", action="store_true", help="check strings against the subset and system fallback")
     args = parser.parse_args(argv)
 
     missing = missing_characters()
@@ -208,7 +210,7 @@ def main(argv=None):
         print("Add them to UNICODE_RANGES in tools/fonts.py and rebuild the fonts.", file=sys.stderr)
         return 1
     if args.check:
-        print("Every character in the launcher's strings is in the font subset.")
+        print("Every launcher character is in the font subset or the declared Android system fallback.")
         return 0
 
     family = FAMILIES[args.family]

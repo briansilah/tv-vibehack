@@ -27,6 +27,10 @@ class HardwareTests(unittest.TestCase):
                if f.get(ANDROID + "name") == "android.hardware.location.gps"]
         self.assertEqual(len(gps), 1)
         self.assertEqual(gps[0].get(ANDROID + "required"), "false")
+        location = [f for f in manifest.findall("uses-feature")
+                    if f.get(ANDROID + "name") == "android.hardware.location"]
+        self.assertEqual(len(location), 1)
+        self.assertEqual(location[0].get(ANDROID + "required"), "false")
 
 
 if __name__ == "__main__":
