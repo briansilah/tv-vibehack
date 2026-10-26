@@ -14,8 +14,9 @@ import android.view.View;
 /**
  * What the top shelf says about its picture, over the art and outside the dock's glass: for suggested content, a
  * small caption ("Top 10 on Netflix · Kenya") above the title's logo (or its name, without one), bottom left above
- * the dock as tvOS places it; for cover art, the app's logo, centred above the dock. Full screen and drawn by
- * hand, so changing it redraws only this view: no layout. MainActivity moves it with the page.
+ * the dock as tvOS places it; for cover art and artwork, the app's logo where YouTube's Apple TV image has its own
+ * (every app's in the same place). Full screen and drawn by hand, so changing it redraws only this view: no layout.
+ * MainActivity moves it with the page.
  */
 public class ShelfInfoView extends View {
 
@@ -130,13 +131,16 @@ public class ShelfInfoView extends View {
 
     private void drawCover(Canvas canvas, int w) {
         if (logo == null) return;
-        // Centred in the space above the dock, a little above its middle, as tvOS places YouTube's.
+        // Every app's in the same place, YouTube's: the middle of its logo where YouTube's Apple TV image has its
+        // logo, which is the artworks' calm middle, mapped to the screen as TopShelfView maps the picture.
         float maxW = w * 0.3f, maxH = Math.max(1f, bottom * 0.3f);
         // Never larger than the banner had it, so it stays sharp.
         float s = Math.min(1f, Math.min(maxW / logo.getWidth(), maxH / logo.getHeight()));
         float lw = logo.getWidth() * s, lh = logo.getHeight() * s;
-        float cy = bottom * 0.46f;
-        dst.set((w - lw) / 2f, cy - lh / 2f, (w + lw) / 2f, cy + lh / 2f);
+        float k = Math.max(w / ShelfArt.DW, getHeight() / ShelfArt.DH);
+        float cx = (w - ShelfArt.DW * k) / 2f + ShelfArt.CALM_X * k;
+        float cy = (getHeight() - ShelfArt.DH * k) / 2f + ShelfArt.CALM_Y * k;
+        dst.set(cx - lw / 2f, cy - lh / 2f, cx + lw / 2f, cy + lh / 2f);
         canvas.drawBitmap(logo, null, dst, logoPaint);
     }
 }

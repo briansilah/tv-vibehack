@@ -305,13 +305,16 @@ it has:
      [Streaming Catalogs](https://github.com/rleroi/Stremio-Streaming-Catalogs-Addon) add-on. Pictures
      come from Stremio's image service (metahub).
 2. **Its artwork**, for the apps that have one: a picture made for the app, in the manner of
-   YouTube's on Apple TV (big flat shapes running off the edges, dry-brush strokes and a scribble,
-   around a calm middle, on true black), from its brand's colours and the shapes of its identity,
-   with its logo over it. Below.
+   YouTube's on Apple TV (big flat shapes running off the sides and all along the top, dry-brush
+   strokes and a scribble, around a calm middle, on true black), from its brand's colours and the
+   shapes of its identity, with its logo over it. Below.
 3. **Cover art**: the app's logo on soft shapes in its colours, on black, like an app's static Top Shelf image
    on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
    in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
    or offline, the logo cut out of the app's banner, never shown larger than it is.
+
+   With artwork or cover art, every app's logo and name sit in the same place: where YouTube's Apple
+   TV picture has its own, centred across and a little below the middle of the space above the dock.
 4. Otherwise the app's name over the ambient glow, as before.
 
 **Artwork.** About 30 apps have one: those on the TV this was made for (YouTube, YouTube Music,

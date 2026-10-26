@@ -163,8 +163,10 @@ public class ShelfPreview extends View {
         } else if (mode == COVER && logo != null && !logo.isRecycled()) {
             float maxW = w * 0.3f, maxH = dockTop * 0.3f;
             float k = Math.min(1f, Math.min(maxW / logo.getWidth(), maxH / logo.getHeight()));
-            float lw = logo.getWidth() * k, lh = logo.getHeight() * k, cy = dockTop * 0.46f;
-            dst.set((w - lw) / 2f, cy - lh / 2f, (w + lw) / 2f, cy + lh / 2f);
+            float lw = logo.getWidth() * k, lh = logo.getHeight() * k;
+            // Where Home puts it: YouTube's logo's place, the artworks' calm middle (ShelfInfoView).
+            float cx = ShelfArt.CALM_X / ShelfArt.DW * w, cy = ShelfArt.CALM_Y / ShelfArt.DH * h;
+            dst.set(cx - lw / 2f, cy - lh / 2f, cx + lw / 2f, cy + lh / 2f);
             canvas.drawBitmap(logo, null, dst, paint);
         }
         drawDock(canvas);
