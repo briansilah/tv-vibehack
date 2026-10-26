@@ -105,17 +105,19 @@ public class ShelfArtTest {
     @Test
     public void fillsTheEdgesAndStaysMidToDark() {
         int band = (int) (W * 0.18f);
+        int topX0 = (int) (W * 0.3f), topX1 = (int) (W * 0.7f), topY = (int) (H * 0.2f);
         for (String key : ShelfArtworks.keys()) {
             int[] px = render(key);
             int ground = 0xFF000000;
-            int painted = 0, left = 0, right = 0;
+            int painted = 0, left = 0, right = 0, top = 0;
             float sum = 0f;
             for (int i = 0; i < px.length; i++) {
-                int p = px[i], x = i % W;
+                int p = px[i], x = i % W, y = i / W;
                 boolean paint = CoverArt.distance(p, ground) > 0.12f;
                 if (paint) painted++;
                 if (paint && x < band) left++;
                 if (paint && x >= W - band) right++;
+                if (paint && y < topY && x >= topX0 && x < topX1) top++;
                 sum += luma(p);
             }
             float share = painted / (float) px.length;
@@ -125,6 +127,9 @@ public class ShelfArtTest {
             float sides = band * H;
             assertTrue(key + " left edge bare: " + left / sides, left / sides > 0.45f);
             assertTrue(key + " right edge bare: " + right / sides, right / sides > 0.45f);
+            // And along the top, over the logo, all the way across: YouTube's is about half painted there.
+            float over = (topX1 - topX0) * topY;
+            assertTrue(key + " top edge bare over the logo: " + top / over, top / over > 0.35f);
             // The dock's glass and white titles sit on it.
             assertTrue(key + " too light", sum / px.length < 0.42f);
         }

@@ -16,11 +16,12 @@ final class ShelfArt {
     /** The design space. */
     static final float DW = 1920f, DH = 1080f;
     /**
-     * The calm middle, which recipes leave to the ground: an ellipse half the screen wide around the logo, which
-     * ShelfInfoView centres above the dock (its middle at 0.46 of the dock's top, about 312 at 1080p), at most 576 x
-     * 203 with the app's name.
+     * The calm middle, which recipes leave to the ground: an ellipse half the screen wide around the logo. Its
+     * centre is where YouTube's Apple TV image has its logo (x 960, y 441 at 1080p), and ShelfInfoView puts every
+     * app's logo there, at most 576 x 203 with the app's name. Above it, along the screen's top edge, shapes run
+     * all the way across, as in YouTube's.
      */
-    static final float CALM_X = 960f, CALM_Y = 312f, CALM_RX = 480f, CALM_RY = 200f;
+    static final float CALM_X = 960f, CALM_Y = 441f, CALM_RX = 480f, CALM_RY = 200f;
 
     /** A picture: paints itself on an easel. */
     interface Recipe {

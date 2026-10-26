@@ -19,10 +19,10 @@ import java.util.Set;
 /**
  * The artworks, one per app, each its own composition from the app's brand: its hue with a few harmonised
  * neighbours and one accent, and abstract motifs from its identity (stripes, arcs, ribbons, petals). All in one
- * manner: six to nine big shapes overlapping in clusters that run off the screen's edges, around the calm middle
- * where the logo goes ({@link ShelfArt#CALM_X}), all on true black; mostly flat paint, a few long dry-brush strokes
- * in a close tone, a bold scribble or two. All original: no app's own pictures or logos, traced or otherwise; the logo
- * comes at runtime, as for cover art.
+ * manner: about a dozen big shapes overlapping in clusters that run off the screen's sides and all along its top,
+ * as YouTube's Apple TV image does, around the calm middle where the logo goes ({@link ShelfArt#CALM_X}), all on
+ * true black; mostly flat paint, a few long dry-brush strokes in a close tone, a bold scribble or two. All original:
+ * no app's own pictures or logos, traced or otherwise; the logo comes at runtime, as for cover art.
  */
 final class ShelfArtworks {
 
@@ -156,6 +156,10 @@ final class ShelfArtworks {
         ShelfArt.Shape screen = rect(1810f, 150f, 780f, 540f, 12f, 140f);
         e.fill(screen, paint(red, 12f));
         e.scribble(1790f, 290f, 170f, 13f, 3.5f, 102f, flat(cream), screen);
+        // Along the top, over the logo: a coral pebble, a red screen hanging off the edge, a cream pill.
+        e.fill(circle(760f, 40f, 160f), paint(coral, 0f));
+        e.fill(rect(1080f, 10f, 600f, 250f, -5f, 90f), paint(red, -5f));
+        e.fill(pill(940f, 190f, 1180f, 160f, 54f), paint(cream, -7f));
         e.fill(circle(1460f, -40f, 120f), paint(pink, 0f));
         // Under the dock: a cream pill, a red one.
         e.fill(pill(-120f, 1020f, 640f, 940f, 260f), paint(red, -6f));
@@ -181,7 +185,11 @@ final class ShelfArtworks {
             e.fill(ShelfArt.arc(2100f, 300f, 230f + i * 130f, 96f, 112f, 248f), paint(rip[i], 90f));
         }
         e.fill(circle(2100f, 300f, 140f), paint(rose, 0f));
+        // Along the top, over the logo: a coral disc rippling down from the edge.
+        e.fill(circle(980f, -170f, 270f), paint(coral, 90f));
+        e.fill(ShelfArt.arc(980f, -170f, 340f, 76f, 22f, 158f), paint(red, 90f));
         e.fill(circle(1460f, -40f, 130f), paint(orange, 0f));
+        e.fill(circle(700f, 130f, 56f), paint(rose, 0f));
         // Under the dock: a wave across, a rose pebble.
         e.fill(ribbon(new float[]{-160f, 1020f, 520f, 740f, 1260f, 1180f, 2120f, 860f}, 240f, 220f), paint(plum, -6f));
         e.fill(ribbon(new float[]{-160f, 1100f, 560f, 860f, 1240f, 1220f, 2120f, 960f}, 60f, 50f), paint(coral, -6f));
@@ -206,6 +214,10 @@ final class ShelfArtworks {
         e.fill(circle(1720f, 40f, 250f).and(moon), paint(white, 30f));
         e.fill(circle(1960f, 610f, 170f), paint(steel, 0f));
         e.fill(circle(1520f, 580f, 70f), paint(indigo, 0f));
+        // Along the top, over the logo: a steel squircle hanging off the edge, a white one, an indigo pebble.
+        e.fill(rect(1010f, 0f, 580f, 320f, 7f, 130f), paint(steel, 7f));
+        e.fill(rect(1320f, 110f, 200f, 200f, 7f, 64f), paint(white, 7f));
+        e.fill(circle(740f, 110f, 70f), paint(indigo, 0f));
         // Under the dock.
         e.fill(pill(-100f, 1000f, 760f, 930f, 280f), paint(steel, -5f));
         e.fill(rect(1360f, 1000f, 980f, 320f, -6f, 150f), paint(graphite, -6f));
@@ -226,6 +238,11 @@ final class ShelfArtworks {
         // Top right: chevrons running off the edge, a rust pebble.
         e.fill(chevron(2080f, 260f, 430f, 230f), paint(charcoal, 45f));
         e.fill(chevron(1960f, 330f, 330f, 150f), paint(light, -45f));
+        // Along the top, over the logo: a charcoal band off the edge, chevrons marching along it.
+        e.fill(pill(540f, -30f, 1400f, -30f, 190f), paint(charcoal, 0f));
+        e.fill(chevron(820f, 40f, 150f, 100f), paint(gold, -45f));
+        e.fill(chevron(1060f, 40f, 150f, 100f), paint(amber, 45f));
+        e.fill(chevron(1300f, 40f, 150f, 100f), paint(light, -45f));
         e.fill(circle(1440f, -40f, 140f), paint(rust, 0f));
         // Under the dock: a chevron band.
         e.fill(pill(-120f, 1010f, 640f, 960f, 280f), paint(gold, -4f));
@@ -249,6 +266,11 @@ final class ShelfArtworks {
         e.fill(rect(1900f, 110f, 660f, 660f, 45f, 110f), paint(deep, -45f));
         e.fill(rect(1700f, 470f, 320f, 320f, 45f, 70f), paint(magenta, 45f));
         e.fill(circle(1960f, 640f, 140f), paint(lilac, 0f));
+        // Along the top, over the logo: a violet diamond hanging off the edge, a lilac and a magenta one either side.
+        e.fill(rect(1010f, -100f, 440f, 440f, 45f, 90f), paint(violet, 45f));
+        e.fill(rect(770f, 80f, 190f, 190f, 45f, 46f), paint(lilac, -45f));
+        e.fill(rect(1300f, 60f, 220f, 220f, 45f, 52f), paint(magenta, 45f));
+        e.fill(circle(1130f, 190f, 34f), paint(mint, 0f));
         // Under the dock.
         e.fill(rect(560f, 1100f, 560f, 560f, 45f, 100f), paint(violet, 45f));
         e.fill(rect(1300f, 1060f, 420f, 420f, 45f, 80f), paint(magenta, -45f));
@@ -273,6 +295,10 @@ final class ShelfArtworks {
         e.fill(circle(2010f, 300f, 130f), paint(lime, 30f));
         e.fill(circle(1830f, 480f, 130f), paint(green, 30f));
         e.fill(circle(1650f, 300f, 130f), paint(yellow, 30f));
+        // Along the top, over the logo: a green capsule off the edge, a lime one across it, a yellow button.
+        e.fill(pill(820f, -40f, 1400f, -60f, 260f), paint(green, -2f));
+        e.fill(pill(700f, 90f, 1100f, 60f, 150f), paint(lime, -4f));
+        e.fill(circle(1250f, 140f, 58f), paint(yellow, 0f));
         // Under the dock.
         e.fill(pill(-120f, 980f, 700f, 1040f, 280f), paint(teal, 4f));
         e.fill(pill(1060f, 1060f, 1980f, 940f, 300f), paint(green, -8f));
@@ -298,6 +324,10 @@ final class ShelfArtworks {
         e.fill(face, paint(light, 30f));
         e.fill(circle(1880f + 300f * (float) Math.cos(Math.toRadians(205)),
                 200f + 300f * (float) Math.sin(Math.toRadians(205)), 78f), paint(teal, 0f));
+        // Along the top, over the logo: a slider, its slate track off the edge, a light bar and a teal knob.
+        e.fill(pill(600f, -20f, 1320f, -20f, 200f), paint(slate, 0f));
+        e.fill(pill(700f, 140f, 1140f, 140f, 90f), paint(light, 0f));
+        e.fill(circle(1140f, 140f, 62f), paint(teal, 0f));
         // Under the dock.
         e.fill(pill(-120f, 1000f, 820f, 1000f, 260f), paint(steel, 0f));
         e.fill(pill(1040f, 960f, 2100f, 960f, 300f), paint(slate, 0f));
@@ -321,6 +351,11 @@ final class ShelfArtworks {
         e.fill(rect(1830f, 60f, 600f, 300f, -8f, 50f), paint(navy, -8f));
         e.fill(rect(1890f, 260f, 560f, 280f, -8f, 50f), paint(red, -8f));
         e.fill(rect(1950f, 470f, 520f, 240f, -8f, 50f), paint(ice, -8f));
+        // Along the top, over the logo: a row of tabs hanging off the edge.
+        e.fill(rect(800f, 20f, 320f, 240f, -4f, 50f), paint(ice, -4f));
+        e.fill(rect(1080f, 0f, 320f, 230f, -4f, 50f), paint(sky, -4f));
+        e.fill(rect(1320f, 10f, 240f, 190f, -4f, 50f), paint(red, -4f));
+        e.fill(circle(660f, 170f, 50f), paint(coral, 0f));
         e.fill(circle(1430f, -30f, 120f), paint(coral, 0f));
         // Under the dock.
         e.fill(rect(500f, 1000f, 1100f, 300f, -4f, 70f), paint(navy, -4f));
@@ -343,6 +378,10 @@ final class ShelfArtworks {
         e.fill(ShelfArt.ring(1870f, 220f, 400f, 90f), paint(deep, 30f));
         e.fill(circle(1870f, 220f, 290f), paint(orange, 30f));
         e.fill(circle(1960f, 330f, 170f), paint(peach, 30f));
+        // Along the top, over the logo: frames hanging off the edge, a red pebble.
+        e.fill(rect(720f, -10f, 320f, 260f, -8f, 40f), paint(teal, -8f));
+        e.fill(rect(1040f, 20f, 540f, 300f, 5f, 40f), paint(peach, 5f));
+        e.fill(circle(1330f, 150f, 64f), paint(red, 0f));
         e.fill(circle(1460f, -30f, 120f), paint(red, 0f));
         // Under the dock.
         e.fill(rect(-40f, 1000f, 700f, 320f, 6f, 40f), paint(deep, 6f));
@@ -367,6 +406,9 @@ final class ShelfArtworks {
         e.fill(circle(1960f, 460f, 300f), paint(deep, 30f));
         e.fill(rect(1820f, 80f, 760f, 300f, -10f, 70f), paint(slate, -10f));
         e.fill(rect(1900f, 300f, 560f, 200f, -10f, 60f), paint(light, -10f));
+        // Along the top, over the logo: a red band off the edge, a light one under it.
+        e.fill(rect(1000f, 30f, 900f, 180f, -6f, 60f), paint(red, -6f));
+        e.fill(rect(930f, 180f, 560f, 64f, -6f, 30f), paint(light, -6f));
         e.fill(circle(1470f, -20f, 110f), paint(blue, 0f));
         // Under the dock.
         e.fill(rect(1300f, 980f, 1200f, 260f, -5f, 60f), paint(slate, -5f));
@@ -390,6 +432,10 @@ final class ShelfArtworks {
         e.fill(circle(1960f, 520f, 260f), paint(navy, 30f));
         e.fill(circle(1840f, 120f, 360f), paint(blue, -30f));
         e.fill(ellipse(1560f, 470f, 140f, 80f, -30f), paint(ice, -30f));
+        // Along the top, over the logo: a blue disc off the edge, a smaller smile round it, an amber pebble.
+        e.fill(circle(1000f, -160f, 310f), paint(blue, 30f));
+        e.fill(ShelfArt.arc(1000f, -160f, 350f, 56f, 30f, 150f), paint(ice, 0f));
+        e.fill(circle(720f, 70f, 64f), paint(amber, 0f));
         e.fill(circle(1430f, -30f, 110f), paint(amber, 0f));
         // Under the dock: the smile, from side to side.
         e.fill(ShelfArt.arc(960f, 220f, 840f, 160f, 34f, 146f), paint(blue, 0f));
@@ -404,6 +450,10 @@ final class ShelfArtworks {
         e.ground(BLACK);
         // The arc, over the top, in a glow.
         e.glow(960f, 60f, 700f, hsl(226, 0.6f, 0.30f), 0.35f);
+        // Along the top, over the logo: the night under the arc, a royal cloud and a violet one, a teal moon.
+        e.fill(ellipse(1080f, -40f, 380f, 180f, 4f), paint(royal, 4f));
+        e.fill(ellipse(780f, 20f, 200f, 110f, -10f), paint(violet, -10f));
+        e.fill(circle(1300f, 130f, 70f), paint(teal, 0f));
         // Top left: navy and violet, a royal disc, sparkles.
         e.fill(circle(40f, 260f, 440f), paint(navy, 30f));
         e.fill(ellipse(240f, -30f, 330f, 180f, -12f), paint(violet, -12f));
@@ -441,6 +491,11 @@ final class ShelfArtworks {
         e.fill(pill(1900f, -60f, 2100f, 500f, 200f), paint(indigo, 68f));
         e.fill(pill(1480f, 40f, 1540f, 180f, 80f), paint(lilac, 68f));
         e.fill(circle(1960f, 620f, 120f), paint(cyan, 0f));
+        // Along the top, over the logo: more pills of light falling from the edge.
+        e.fill(pill(700f, -100f, 790f, 150f, 130f), paint(violet, 68f));
+        e.fill(pill(900f, -100f, 960f, 110f, 120f), paint(cyan, 68f));
+        e.fill(pill(1080f, -100f, 1150f, 160f, 150f), paint(blue, 68f));
+        e.fill(pill(1290f, -100f, 1330f, 60f, 90f), paint(lilac, 68f));
         // Under the dock.
         e.fill(pill(-100f, 1000f, 840f, 940f, 280f), paint(violet, -4f));
         e.fill(circle(1260f, 1000f, 230f).minus(circle(1260f, 1000f, 110f)), paint(blue, 0f));
@@ -464,6 +519,11 @@ final class ShelfArtworks {
         e.fill(circle(2000f, 500f, 260f), paint(deep, 30f));
         e.fill(circle(1820f, 140f, 340f), paint(pink, -30f));
         e.fill(circle(1540f, 480f, 90f), paint(lime, 0f));
+        // Along the top, over the logo: sound arcs spreading down from the edge, a lime pebble.
+        e.fill(circle(980f, -260f, 290f), paint(deep, 90f));
+        e.fill(ShelfArt.arc(980f, -260f, 350f, 70f, 40f, 140f), paint(mint, 90f));
+        e.fill(ShelfArt.arc(980f, -260f, 440f, 70f, 40f, 140f), paint(green, 90f));
+        e.fill(circle(1330f, 70f, 64f), paint(lime, 0f));
         // Under the dock: a wave across.
         e.fill(ribbon(new float[]{-160f, 960f, 600f, 1180f, 1300f, 820f, 2120f, 1060f}, 150f, 150f), paint(green, 0f));
         e.fill(circle(1960f, 820f, 140f), paint(mint, 0f));
@@ -488,6 +548,11 @@ final class ShelfArtworks {
             e.fill(rect(x, y, 520f, 100f, 0f, 14f), paint(i % 2 == 0 ? deep : i == 1 ? lilac : purple, 0f));
         }
         e.fill(rect(1540f, 560f, 70f, 70f, 0f, 10f), paint(coral, 0f));
+        // Along the top, over the logo: slices off the edge, shifted, a coral bit.
+        e.fill(rect(1000f, 20f, 600f, 110f, 0f, 16f), paint(purple, 0f));
+        e.fill(rect(940f, 120f, 440f, 80f, 0f, 14f), paint(lilac, 0f));
+        e.fill(rect(1080f, 190f, 240f, 50f, 0f, 10f), paint(deep, 0f));
+        e.fill(rect(1300f, 150f, 56f, 56f, 0f, 8f), paint(coral, 0f));
         // Under the dock.
         e.fill(rect(600f, 1010f, 1100f, 300f, 0f, 30f), paint(deep, 0f));
         e.fill(rect(1500f, 960f, 600f, 300f, 0f, 30f), paint(lilac, 0f));
@@ -518,6 +583,15 @@ final class ShelfArtworks {
             float y = 470f + i * 34f, x0 = 1560f + (i % 3) * 80f;
             e.fill(pill(x0, y, 2100f, y, 12f + (i % 2) * 8f), flat(i % 2 == 0 ? orange : peach));
         }
+        // Along the top, over the logo: an orange cloud off the edge, halftone dots raining from it.
+        e.fill(ellipse(980f, -20f, 420f, 170f, 3f), paint(orange, 3f));
+        for (int gy = 0; gy < 5; gy++) {
+            for (int gx = 0; gx < 16; gx++) {
+                float x = 620f + gx * 48f + (gy % 2) * 24f, y = 30f + gy * 44f;
+                float r = 19f * (1f - gy / 5.5f) * (1f - Math.abs(x - 980f) / 520f);
+                if (r > 2f) e.fill(circle(x, y, r), flat(peach));
+            }
+        }
         // Under the dock.
         e.fill(ellipse(400f, 1050f, 560f, 240f, -6f), paint(orange, -6f));
         e.fill(circle(1500f, 1040f, 260f), paint(deep, 0f));
@@ -539,6 +613,9 @@ final class ShelfArtworks {
         e.fill(circle(1900f, 200f, 380f), paint(sky, -30f));
         e.fill(circle(1960f, 590f, 220f), paint(blue, -30f));
         e.fill(circle(1600f, -30f, 130f), paint(ice, 0f));
+        // Along the top, over the logo: a blue sky off the edge, a sky one in it, under the arch.
+        e.fill(ellipse(960f, -60f, 560f, 230f, 0f), paint(blue, 0f));
+        e.fill(ellipse(980f, -100f, 360f, 170f, 0f), paint(sky, 0f));
         // The arch of stars, over the logo.
         for (int i = 0; i <= 12; i++) {
             double a = Math.toRadians(192 + i * 13);
@@ -570,6 +647,13 @@ final class ShelfArtworks {
             e.fill(d, paint(f[i], 30f * i));
             if (i == 0) e.scribble(60f, 130f, 140f, 13f, 3f, 80f, flat(f[4]), d);
         }
+        // Along the top, over the logo: more of them, drifting across to the fan.
+        float[][] top = {{980f, -30f, 160f}, {760f, 50f, 115f}, {1190f, 70f, 100f}, {1330f, 0f, 80f},
+                {880f, 180f, 40f}};
+        int[] tc = {5, 2, 1, 3, 0};
+        for (int i = 0; i < top.length; i++) {
+            e.fill(circle(top[i][0], top[i][1], top[i][2]), paint(f[tc[i]], 30f * i));
+        }
         // Under the dock.
         e.fill(pill(500f, 1040f, 1300f, 1040f, 240f), paint(f[4], 0f));
         e.fill(circle(1500f, 960f, 120f), paint(f[0], 0f));
@@ -591,6 +675,10 @@ final class ShelfArtworks {
         e.fill(circle(1980f, 560f, 230f), paint(deep, 30f));
         e.fill(pill(1800f, -400f, 1800f, 240f, 520f).minus(pill(1800f, -400f, 1800f, 200f, 220f)), paint(green, 90f));
         e.fill(circle(1480f, 540f, 90f), paint(cream, 0f));
+        // Along the top, over the logo: a green arch hanging off the edge, a mint disc, a cream pebble.
+        e.fill(circle(1310f, 10f, 140f), paint(mint, 30f));
+        e.fill(pill(990f, -400f, 990f, -30f, 400f).minus(pill(990f, -400f, 990f, -50f, 170f)), paint(green, 90f));
+        e.fill(circle(760f, 130f, 52f), paint(cream, 0f));
         // Under the dock.
         e.fill(pill(560f, 1060f, 1360f, 1000f, 240f), paint(deep, -4f));
         e.fill(pill(1500f, 960f, 2100f, 960f, 220f), paint(mint, 0f));
@@ -610,6 +698,10 @@ final class ShelfArtworks {
         // Top right: a purple blob off the edge, a lilac oval, a pink pebble.
         e.fill(ellipse(1860f, 120f, 420f, 300f, -20f), paint(purple, -20f));
         e.fill(ellipse(1980f, 520f, 220f, 160f, 30f), paint(lilac, 30f));
+        // Along the top, over the logo: a purple blob off the edge, a gold oval and a lilac one peeping from it.
+        e.fill(ellipse(1010f, -40f, 400f, 200f, -4f), paint(purple, -4f));
+        e.fill(ellipse(820f, 90f, 80f, 110f, 14f), paint(gold, 104f));
+        e.fill(ellipse(1250f, 110f, 110f, 76f, 30f), paint(lilac, 30f));
         e.fill(circle(1500f, -20f, 120f), paint(pink, 0f));
         // Under the dock.
         e.fill(ellipse(560f, 1070f, 560f, 220f, -5f), paint(plum, -5f));
@@ -633,6 +725,11 @@ final class ShelfArtworks {
         e.fill(circle(1960f, 520f, 230f), paint(deep, 30f));
         e.fill(circle(1830f, 140f, 340f), paint(purple, -30f));
         e.fill(circle(1520f, 400f, 70f), paint(cyan, 0f));
+        // Along the top, over the logo: a purple world off the edge, its yellow ring, moons.
+        e.fill(circle(1000f, -150f, 320f), paint(purple, 40f));
+        e.fill(ellipse(1000f, -60f, 520f, 150f, 6f).outline(40f).minus(circle(1000f, -150f, 320f)), paint(yellow, 6f));
+        e.fill(circle(690f, 150f, 48f), paint(cyan, 0f));
+        e.fill(circle(1310f, 170f, 56f), paint(pink, 0f));
         e.fill(circle(1450f, -10f, 110f), paint(yellow, 0f));
         // Under the dock.
         e.fill(ellipse(500f, 1070f, 560f, 230f, -5f), paint(purple, -5f));
@@ -655,6 +752,10 @@ final class ShelfArtworks {
         e.fill(poly(1700f, -200f, 2120f, -200f, 2120f, 760f, 1440f, 760f), paint(grey, 74f).wobble(2f));
         e.fill(poly(1820f, -200f, 1930f, -200f, 1660f, 760f, 1550f, 760f), paint(white, 74f).wobble(2f));
         e.fill(poly(1990f, -200f, 2050f, -200f, 1780f, 760f, 1720f, 760f), flat(neon).wobble(2f));
+        // Along the top, over the logo: a grey slab off the edge, cut square, a white and a neon slash.
+        e.fill(poly(800f, -200f, 1260f, -200f, 1150f, 180f, 690f, 180f), paint(mid, 74f).wobble(2f));
+        e.fill(poly(1320f, -200f, 1380f, -200f, 1290f, 110f, 1230f, 110f), flat(neon).wobble(2f));
+        e.fill(poly(640f, -200f, 700f, -200f, 620f, 80f, 560f, 80f), paint(white, 74f).wobble(2f));
         // Under the dock.
         e.fill(poly(700f, 1200f, 1150f, 1200f, 1330f, 640f, 880f, 640f), paint(mid, 74f).wobble(2f));
         e.fill(poly(1350f, 1200f, 1440f, 1200f, 1620f, 640f, 1530f, 640f), flat(neon).wobble(2f));
@@ -675,6 +776,10 @@ final class ShelfArtworks {
                 .strokes(hsl(300, 0.80f, 0.60f), -40f));
         e.fill(sparkle(1720f, 260f, 210f), flat(white));
         e.fill(sparkle(1460f, 40f, 46f), flat(cyan));
+        // Along the top, over the logo: a glow from blue to pink off the edge, sparkles under it.
+        e.fill(ellipse(1000f, -40f, 420f, 190f, -4f), ink(blue).gradient(pink, 600f, 0f, 1400f, 0f));
+        e.fill(sparkle(1250f, 170f, 40f), flat(white));
+        e.fill(sparkle(740f, 160f, 30f), flat(cyan));
         // Under the dock.
         e.fill(ellipse(560f, 1070f, 600f, 230f, -4f), ink(blue).gradient(violet, 100f, 0f, 1100f, 0f));
         e.fill(ellipse(1500f, 1050f, 480f, 210f, 6f), ink(violet).gradient(pink, 1100f, 0f, 1900f, 0f));
@@ -699,6 +804,11 @@ final class ShelfArtworks {
         e.fill(ShelfArt.arc(1900f, 120f, 400f, 40f, 95f, 205f), paint(ice, 0f));
         e.fill(circle(1900f, 120f, 330f), paint(blue, -30f));
         e.fill(circle(1460f, 470f, 70f), paint(orange, 0f));
+        // Along the top, over the logo: ripples spreading down round a blue disc off the edge, an orange pebble.
+        e.fill(ShelfArt.arc(980f, -160f, 340f, 50f, 22f, 158f), paint(cyan, 0f));
+        e.fill(ShelfArt.arc(980f, -160f, 260f, 80f, 15f, 165f), paint(ice, 0f));
+        e.fill(circle(980f, -160f, 210f), paint(blue, -30f));
+        e.fill(circle(1310f, 110f, 52f), paint(orange, 0f));
         // Under the dock.
         e.fill(ellipse(620f, 1070f, 600f, 230f, -4f), paint(blue, -4f));
         e.fill(circle(1460f, 1000f, 200f), paint(ice, 0f));
@@ -733,6 +843,18 @@ final class ShelfArtworks {
             }
         }
         e.fill(circle(1460f, -20f, 120f), paint(gold, 0f));
+        // Along the top, over the logo: a red disc off the edge, another collar's rows of beads round it.
+        e.fill(circle(980f, -180f, 330f), paint(red, 30f));
+        for (int row = 0; row < 2; row++) {
+            float r = 360f + row * 40f;
+            int n = Math.round((float) (Math.PI * r * 140f / 180f / 38f));
+            for (int k = 0; k <= n; k++) {
+                double a = Math.toRadians(20 + 140.0 * k / n);
+                e.fill(circle(980f + r * (float) Math.cos(a), -180f + r * (float) Math.sin(a), 16f),
+                        flat(beads[(k / 3 + row + 1) % beads.length]));
+            }
+        }
+        e.fill(circle(680f, 60f, 70f), paint(gold, 0f));
         // Under the dock.
         e.fill(ribbon(new float[]{-160f, 1080f, 500f, 860f, 1200f, 1140f, 2120f, 880f}, 230f, 200f), paint(red, -5f));
         e.fill(circle(1840f, 1060f, 170f), paint(green, 0f));
@@ -754,6 +876,10 @@ final class ShelfArtworks {
         // Top right: two tiles off the edge, a coral pebble.
         e.fill(rect(1900f, 80f, 600f, 600f, -8f, 110f), paint(deep, -8f));
         e.fill(rect(1700f, 470f, 300f, 300f, -8f, 64f), paint(sky, -8f));
+        // Along the top, over the logo: tiles hanging off the edge.
+        e.fill(rect(920f, -20f, 380f, 300f, 8f, 70f), paint(sky, 8f));
+        e.fill(rect(1190f, 40f, 260f, 260f, 8f, 60f), paint(light, 8f));
+        e.fill(rect(730f, 140f, 120f, 120f, 8f, 30f), paint(deep, 8f));
         e.fill(circle(1460f, -20f, 120f), paint(coral, 0f));
         // Under the dock.
         e.fill(rect(900f, 1060f, 1300f, 380f, -4f, 110f), paint(light, -4f));
@@ -781,6 +907,14 @@ final class ShelfArtworks {
         ShelfArt.Shape sun = circle(1830f, 130f, 340f);
         e.fill(sun, paint(light, -30f));
         e.scribble(1820f, 270f, 140f, 13f, 3f, 70f, flat(deep), sun);
+        // Along the top, over the logo: a band across, striped, a deep pebble.
+        ShelfArt.Shape over = pill(600f, 40f, 1340f, -10f, 210f);
+        e.fill(over, paint(orange, -4f));
+        for (int i = 0; i < 6; i++) {
+            float x = 700f + i * 130f;
+            e.fill(poly(x, -200f, x + 60f, -200f, x - 40f, 260f, x - 100f, 260f).and(over), flat(cream));
+        }
+        e.fill(circle(1340f, 150f, 70f), paint(deep, 0f));
         // Under the dock: a band, striped.
         ShelfArt.Shape low = pill(400f, 1060f, 1700f, 960f, 220f);
         e.fill(low, paint(orange, -4f));
@@ -799,6 +933,10 @@ final class ShelfArtworks {
         int red = hsl(357, 0.86f, 0.48f), crimson = hsl(351, 0.70f, 0.30f), fold = hsl(352, 0.80f, 0.36f),
                 coral = hsl(7, 0.84f, 0.63f), blush = hsl(352, 0.72f, 0.82f), amber = hsl(36, 0.92f, 0.60f);
         e.ground(BLACK);
+        // Along the top, over the logo: a crimson valance across, a red swag of curtain under it, its fold.
+        e.fill(pill(420f, -40f, 1500f, -40f, 200f), paint(crimson, 0f));
+        e.fill(ribbon(new float[]{500f, -40f, 760f, 210f, 1160f, 210f, 1420f, -40f}, 150f, 150f), paint(red, 0f));
+        e.fill(ribbon(new float[]{520f, -90f, 760f, 140f, 1160f, 140f, 1400f, -90f}, 64f, 64f), paint(fold, 0f));
         // Top left: a crimson disc, a coral scribble on it; a red ribbon sweeping down past it, folding.
         e.fill(circle(130f, 120f, 330f), paint(crimson, 50f));
         float[] left = {420f, -200f, 520f, 160f, 280f, 420f, -160f, 560f};
@@ -832,6 +970,12 @@ final class ShelfArtworks {
         int red = hsl(2, 0.92f, 0.47f), maroon = hsl(352, 0.62f, 0.27f), orange = hsl(16, 0.94f, 0.58f),
                 white = hsl(30, 0.30f, 0.93f), carbon = hsl(228, 0.12f, 0.24f), yellow = hsl(46, 0.98f, 0.58f);
         e.ground(BLACK);
+        // Along the top, over the logo: speed lines streaming from under the slab, cut on the slant at the front.
+        int[] streak = {orange, white, red};
+        for (int i = 0; i < 3; i++) {
+            float y = 40f + i * 72f, x = 1250f - i * 120f;
+            e.fill(poly(420f, y - 22f, x + 70f, y - 22f, x, y + 26f, 420f, y + 40f).grow(6f), paint(streak[i], -2f));
+        }
         // Top left: a red slab rushing in, three speed lines streaming off it, a yellow scribble.
         ShelfArt.Shape slab = poly(-200f, -200f, 700f, -200f, 420f, 420f, -200f, 560f).grow(30f);
         e.fill(circle(-40f, 520f, 260f), paint(maroon, 30f));
@@ -888,8 +1032,10 @@ final class ShelfArtworks {
         e.fill(tri, paint(deep, 28f));
         e.scribble(150f, 220f, 240f, 13f, 4.5f, 28f, flat(green), tri);
         e.fill(ellipse(40f, 620f, 250f, 140f, 20f), paint(yellow, 20f));
-        // Along the top: a blue arc.
-        e.fill(ellipse(1050f, -50f, 300f, 140f, 4f), paint(blue, 4f));
+        // Along the top: a blue arc, a yellow play triangle beside it.
+        e.fill(ellipse(1080f, -30f, 360f, 180f, 4f), paint(blue, 4f));
+        e.fill(poly(620f, -40f, 870f, 90f, 620f, 220f).grow(26f), paint(yellow, 28f));
+        e.fill(circle(1330f, 160f, 50f), paint(teal, 0f));
         // Top right: a green triangle pointing in, a yellow disc.
         ShelfArt.Shape g = poly(2240f, -200f, 1440f, 230f, 2240f, 700f).grow(56f);
         e.fill(g, paint(green, -30f));
