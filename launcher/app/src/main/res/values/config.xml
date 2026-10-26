@@ -28,6 +28,9 @@
     <!-- Show the Solar Hijri (Shamsi) date used in Iran and Afghanistan above the Gregorian date at the
          top left. Off keeps the fork's uncluttered Top Shelf and expanding top right unchanged. -->
     <bool name="shamsi_date">false</bool>
+    <!-- Optional VPN app the network button opens (hold for Wi-Fi settings). Empty: opens Wi-Fi settings.
+         For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
+    <string name="vpn_app" translatable="false"></string>
 
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>

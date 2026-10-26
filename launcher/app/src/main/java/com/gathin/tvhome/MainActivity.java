@@ -22,12 +22,16 @@ import android.net.Uri;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.util.Log;
 import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.ContextThemeWrapper;
@@ -109,6 +113,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
     private static final String USER_SETTINGS = "android.settings.USER_SETTINGS";
     private String liveTvPkg;
+    private String vpnApp;
 
     private AppAdapter adapter;
     private RecyclerView grid;
@@ -166,6 +171,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+        @Override
+        public void onAvailable(@NonNull Network network) {
+            handler.post(MainActivity.this::updateNetworkIndicator);
+        }
+
+        @Override
+        public void onLost(@NonNull Network network) {
+            handler.post(MainActivity.this::updateNetworkIndicator);
+        }
+
+        @Override
+        public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
+            handler.post(MainActivity.this::updateNetworkIndicator);
+        }
+    };
+    private final ConnectivityManager.NetworkCallback vpnCallback = new ConnectivityManager.NetworkCallback() {
         @Override
         public void onAvailable(@NonNull Network network) {
             handler.post(MainActivity.this::updateNetworkIndicator);
@@ -282,6 +303,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
         liveTvPkg = getString(R.string.live_tv_package).trim();
+        vpnApp = getString(R.string.vpn_app).trim();
 
         root = findViewById(R.id.root);
         homeMotion = new HomeMotion(root);
@@ -372,7 +394,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                 Perf.end();
             }
         });
-        btnWifi.setOnClickListener(v -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
+        btnWifi.setOnClickListener(v -> openNetworkPill());
+        btnWifi.setOnLongClickListener(v -> {
+            open(new Intent(Settings.ACTION_WIFI_SETTINGS));
+            return true;
+        });
         btnSettings.setOnClickListener(v -> openSettings());
         avatar.setOnClickListener(v -> openProfile());
 
@@ -419,7 +445,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         }
 
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
-        if (cm != null) cm.registerDefaultNetworkCallback(networkCallback);
+        if (cm != null) {
+            cm.registerDefaultNetworkCallback(networkCallback);
+            cm.registerNetworkCallback(new NetworkRequest.Builder()
+                    .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+                    .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                    .build(), vpnCallback);
+        }
         TvInputManager tim = getSystemService(TvInputManager.class);
         if (tim != null) tim.registerCallback(inputCallback, handler);
         Perf.end();
@@ -596,7 +628,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     protected void onDestroy() {
         super.onDestroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
-        if (cm != null) cm.unregisterNetworkCallback(networkCallback);
+        if (cm != null) {
+            cm.unregisterNetworkCallback(networkCallback);
+            cm.unregisterNetworkCallback(vpnCallback);
+        }
         TvInputManager tim = getSystemService(TvInputManager.class);
         if (tim != null) tim.unregisterCallback(inputCallback);
         unregisterReceiver(packageReceiver);
@@ -1077,18 +1112,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     /** Shows the active network type and its matching icon; a network name when connected over Wi-Fi. */
     private void updateNetworkIndicator() {
         Perf.begin("tvhome:updateNetworkIndicator");
-        NetworkCapabilities caps = null;
         boolean wifiSupported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI);
         String text = getString(wifiSupported ? R.string.wifi : R.string.ethernet);
+        boolean vpn = false, online = false, ethernet = false, wifi = false;
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            Network net = cm != null ? cm.getActiveNetwork() : null;
-            caps = net != null ? cm.getNetworkCapabilities(net) : null;
-            if (caps == null) {
+            // A VPN may be the active network, or exclude this app: inspect the underlying networks too.
+            for (Network net : cm != null ? cm.getAllNetworks() : new Network[0]) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+                if (caps == null) continue;
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                    vpn = true;
+                    continue;
+                }
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+                online = true;
+                ethernet |= caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+                wifi |= caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+            }
+            if (!online) {
                 text = getString(R.string.offline);
-            } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                vpn = false;
+            } else if (ethernet) {
                 text = getString(R.string.ethernet);
-            } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            } else if (wifi) {
                 WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 WifiInfo info = wm != null ? wm.getConnectionInfo() : null;
                 String ssid = info != null ? info.getSSID() : null;
@@ -1097,11 +1144,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
                     if (!ssid.isEmpty() && !ssid.contains("unknown") && !ssid.equals("0x")) text = ssid;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (SecurityException e) {
+            Log.w("tvhome", "Cannot read network status", e);
         }
-        boolean ethernet = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
         btnWifi.setIcon(networkIcon(wifiSupported, ethernet));
-        btnWifi.setLabel(text);
+        if (vpn) {
+            String badge = getString(R.string.vpn);
+            SpannableString label = new SpannableString(text + " " + badge);
+            label.setSpan(new VpnBadge(getDrawable(R.drawable.ic_lock), density),
+                    text.length() + 1, label.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            btnWifi.setLabel(label);
+            text += " " + badge;
+        } else {
+            btnWifi.setLabel(text);
+        }
         btnWifi.setContentDescription(getString(R.string.network_status, text));
         if (btnWifi.showsCaption() && btnWifi.isFocused()) showCaption(btnWifi);
         Perf.end();
@@ -1110,6 +1166,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     static int networkIcon(boolean wifiSupported, boolean ethernet) {
         if (ethernet || !wifiSupported) return R.drawable.ic_ethernet;
         return R.drawable.ic_wifi;
+    }
+
+    private void openNetworkPill() {
+        Intent i = vpnApp.isEmpty() ? null : getPackageManager().getLeanbackLaunchIntentForPackage(vpnApp);
+        if (i == null && !vpnApp.isEmpty()) i = getPackageManager().getLaunchIntentForPackage(vpnApp);
+        open(i != null ? i : new Intent(Settings.ACTION_WIFI_SETTINGS));
     }
 
     private final Runnable hideCaptionUnlessInCorner = () -> {
