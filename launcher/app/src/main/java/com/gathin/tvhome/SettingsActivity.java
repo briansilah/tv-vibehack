@@ -10,10 +10,13 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -239,6 +242,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
                         choices.setAll(c);
                         showRoot(ALL_ROW);
                     }, () -> previewAll(c));
+            choiceAccessibility(r, chosen);
             if (target == null || chosen) target = r;
         }
         enter(target);
@@ -282,6 +286,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             final ShelfChoice pick = c;
             View r = row(name(c), c.equals(def) ? getString(R.string.settings_default) : null,
                     c.equals(now) ? R.drawable.ic_check : 0, () -> pick(pick), () -> showPreview(e, pick));
+            choiceAccessibility(r, c.equals(now));
             if (c.kind == focus) target = r;
         }
         final ShelfChoice customLook = custom ? now : firstCustom(e);
@@ -310,6 +315,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
             final ShelfChoice pick = c;
             View r = row(name(c), null, c.equals(now) ? R.drawable.ic_check : 0, () -> pick(pick),
                     () -> showPreview(e, pick));
+            choiceAccessibility(r, c.equals(now));
             if (target == null || c.equals(now)) target = r;
             lastPicture = r;
         }
@@ -392,6 +398,26 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
 
     // ---- rows ------------------------------------------------------------------------------------------------
 
+    /** A saved choice is checked, independently of the row highlighted for preview. */
+    private static void choiceAccessibility(View view, boolean chosen) {
+        view.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override
+            public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setClassName(RadioButton.class.getName());
+                info.setCheckable(true);
+                info.setChecked(chosen);
+            }
+
+            @Override
+            public void onInitializeAccessibilityEvent(View host, AccessibilityEvent event) {
+                super.onInitializeAccessibilityEvent(host, event);
+                event.setClassName(RadioButton.class.getName());
+                event.setChecked(chosen);
+            }
+        });
+    }
+
     private void clear() {
         list.removeAllViews();
         scroll.scrollTo(0, 0);
@@ -449,6 +475,7 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         s.setFocusable(true);
         s.setClickable(true);
         s.setContentDescription(name);
+        choiceAccessibility(s, chosen);
         s.setOnClickListener(x -> pick(c));
         s.setOnFocusChangeListener((x, has) -> {
             dot.setStroke(has ? Math.round(3 * density) : 0, 0xFFFFFFFF);
