@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -44,6 +45,8 @@ public class ShelfPreview extends View {
     private final TextPaint captionPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF dst = new RectF();
     private final Rect src = new Rect();
+    private final Path dockClip = new Path();
+    private final Rect dockBounds = new Rect();
 
     private int mode = GLOW;
     private Bitmap backdrop;
@@ -51,13 +54,14 @@ public class ShelfPreview extends View {
     private String name;
     private String title;
     private String caption;
-    private int glow = AmbientColor.FALLBACK;
+    private Shader glow;
     private final List<Drawable> dock = new ArrayList<>();
     private int focused = -1;
 
     public ShelfPreview(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
+        glow = makeGlow(AmbientColor.FALLBACK);
         float sp = getResources().getDisplayMetrics().scaledDensity;
         // Home's own sizes (Text.LargeTitle and Text.Overline, as ShelfInfoView), at Home's scale.
         namePaint.setTypeface(font(R.font.display_medium));
@@ -99,8 +103,15 @@ public class ShelfPreview extends View {
 
     /** No art: the glow in {@code colour}, with the app's name. */
     void showGlow(String appName, int colour) {
+        glow = makeGlow(colour);
         set(GLOW, null, null, appName, null, null);
-        glow = colour;
+    }
+
+    private Shader makeGlow(int colour) {
+        int c = colour & 0x00FFFFFF;
+        float w = W * density, h = H * density;
+        return new RadialGradient(w * 0.32f, h * 0.42f, w * 0.62f,
+                new int[]{0x5C000000 | c, 0x26000000 | c, c}, null, Shader.TileMode.CLAMP);
     }
 
     /** A suggested title: its backdrop, its logo (or its name) and what it is. */
@@ -134,9 +145,7 @@ public class ShelfPreview extends View {
         if (backdrop != null && !backdrop.isRecycled()) {
             drawFill(canvas, backdrop, w, h);
         } else {
-            int c = glow & 0x00FFFFFF;
-            paint.setShader(new RadialGradient(w * 0.32f, h * 0.42f, w * 0.62f,
-                    new int[]{0x5C000000 | c, 0x26000000 | c, c}, null, Shader.TileMode.CLAMP));
+            paint.setShader(glow);
             canvas.drawRect(0, 0, w, h, paint);
             paint.setShader(null);
         }
@@ -212,15 +221,15 @@ public class ShelfPreview extends View {
             float growV = lifted ? th * (AppAdapter.FOCUS_SCALE - 1f) / 2f : 0f;
             canvas.save();
             dst.set((l - grow) * d, (top - growV) * d, (l + tw + grow) * d, (top + th + growV) * d);
-            android.graphics.Path clip = new android.graphics.Path();
-            clip.addRoundRect(dst, TILE_RADIUS * d, TILE_RADIUS * d, android.graphics.Path.Direction.CW);
-            canvas.clipPath(clip);
-            Rect saved = new Rect(b.getBounds());
+            dockClip.reset();
+            dockClip.addRoundRect(dst, TILE_RADIUS * d, TILE_RADIUS * d, Path.Direction.CW);
+            canvas.clipPath(dockClip);
+            dockBounds.set(b.getBounds());
             b.setBounds(Math.round(dst.left), Math.round(dst.top), Math.round(dst.right), Math.round(dst.bottom));
             b.setAlpha(lifted || focused < 0 ? 255 : 140);
             b.draw(canvas);
             b.setAlpha(255);
-            b.setBounds(saved);
+            b.setBounds(dockBounds);
             canvas.restore();
         }
     }
