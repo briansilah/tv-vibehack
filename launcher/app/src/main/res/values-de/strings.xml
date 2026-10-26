@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="good_morning">Guten Morgen</string>
+    <string name="good_afternoon">Guten Tag</string>
+    <string name="good_evening">Guten Abend</string>
+    <string name="good_night">Gute Nacht</string>
+    <string name="date_format">EEEE, d. MMMM</string>
+    <string name="dream_name">Uhr</string>
     <string name="app_name">Home</string>
     <string name="inputs">Quellen</string>
     <string name="wifi">WLAN</string>

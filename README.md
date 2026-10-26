@@ -10,7 +10,12 @@ and a one-line restore if you change your mind.
 
 It started as an afternoon fixing my parents' Mi TV, which showed them an advert before they
 could reach Netflix. The whole thing was done with Claude Code talking to the real TV, and the
-prompt that did it is in this repo so you can do the same with yours.
+prompt that did it is in this repo so you can do the same with yours. The replies to the tweet
+below are where most of the TV lists in this repo came from.
+
+<p align="center">
+  <a href="https://x.com/gathint/status/2111379569030939102"><img src="docs/tweet.png" alt="The tweet: Vibe coded my parents' TV this afternoon. Before and after screenshots." width="380"></a>
+</p>
 
 ---
 
@@ -208,7 +213,7 @@ rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 400 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no video, no
 network except the top shelf's pictures (below), and no background services except, on Google TV,
 the small Home-button service described below. The only blur is the dock's and the top right's
@@ -221,6 +226,16 @@ the dock order, apps to hide, your TV's Live TV package, the number of columns, 
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
+
+**Language** follows the TV: English, German, Spanish, Catalan and Simplified Chinese. On Android 13
+and later, set a language for the launcher alone with, for example,
+`tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales ca'`.
+The newer translations use English for the fork's additional Home Settings and Top Shelf strings.
+
+**Optional date and VPN shortcut**: `shamsi_date` shows the Solar Hijri date above the Gregorian date at
+the top left (off by default). `vpn_app` sets the package opened by the network button; leave it empty
+for Wi-Fi settings, which holding the button always opens. A connected VPN adds a badge to the network
+button's label or caption, without changing the corner's icon-only styles.
 
 Each app tile exposes its app name to screen readers, including banner-only tiles in the Dock.
 Home Settings and Arrange Apps are named too; the latter's accessible name changes to Done while arranging.
