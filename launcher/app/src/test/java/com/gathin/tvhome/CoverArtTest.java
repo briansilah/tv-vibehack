@@ -113,8 +113,11 @@ public class CoverArtTest {
         assertEquals(0xFFE50914, c[0]);
         for (int i = 1; i < 4; i++) assertTrue(c[i] != c[0]);
         assertEquals(4, CoverArt.blobColours(new int[0], 4).length);
-        assertEquals(0xFF000000, CoverArt.base(new int[]{0xFFE50914}) & 0xFF000000);
-        assertTrue(luma(CoverArt.base(new int[]{0xFFE50914})) < 0.15f);
+    }
+
+    @Test
+    public void groundIsTrueBlack() {
+        assertEquals(0xFF000000, CoverArt.GROUND);
     }
 
     @Test
@@ -134,9 +137,5 @@ public class CoverArtTest {
 
     private static int blue(int c) {
         return c & 0xFF;
-    }
-
-    private static float luma(int c) {
-        return (0.2126f * ((c >> 16) & 0xFF) + 0.7152f * ((c >> 8) & 0xFF) + 0.0722f * (c & 0xFF)) / 255f;
     }
 }
