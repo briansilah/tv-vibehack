@@ -359,16 +359,11 @@ final class CoverArt {
         return out;
     }
 
-    /** The cover's base: a very dark shade of its main colour, so the logo and blobs stand out. */
-    static int base(int[] palette) {
-        if (palette == null || palette.length == 0) return 0xFF0E0E12;
-        int c = palette[0];
-        float[] hsv = new float[3];
-        AmbientColor.rgbToHsv((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, hsv);
-        hsv[1] = Math.min(hsv[1], 0.7f);
-        hsv[2] = 0.08f;
-        return AmbientColor.hsvToRgb(hsv);
-    }
+    /**
+     * The cover's ground, which the logo and blobs stand out on: true black, so a TV that dims its backlight by zone
+     * (mini-LED) or lights each pixel (OLED) is dark there (TrueBlack).
+     */
+    static final int GROUND = 0xFF000000;
 
     /**
      * Where the {@code n} blobs go, as {x, y, radius} fractions of the cover's width and height (radius of its

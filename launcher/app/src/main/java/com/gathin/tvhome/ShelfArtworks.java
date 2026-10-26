@@ -19,10 +19,10 @@ import java.util.Set;
 /**
  * The artworks, one per app, each its own composition from the app's brand: its hue with a few harmonised
  * neighbours and one accent, and abstract motifs from its identity (stripes, arcs, ribbons, petals). All in one
- * manner: six to nine big shapes overlapping in clusters that run off the screen's edges, around the calm dark middle
- * where the logo goes ({@link ShelfArt#CALM_X}); mostly flat paint, a few long dry-brush strokes in a close tone,
- * a bold scribble or two. All original: no app's own pictures or logos, traced or otherwise; the logo comes at
- * runtime, as for cover art.
+ * manner: six to nine big shapes overlapping in clusters that run off the screen's edges, around the calm middle
+ * where the logo goes ({@link ShelfArt#CALM_X}), all on true black; mostly flat paint, a few long dry-brush strokes
+ * in a close tone, a bold scribble or two. All original: no app's own pictures or logos, traced or otherwise; the logo
+ * comes at runtime, as for cover art.
  */
 final class ShelfArtworks {
 
@@ -98,10 +98,11 @@ final class ShelfArtworks {
 
     // ---- helpers -------------------------------------------------------------------------------------------
 
-    /** The ground the reference picture has: a neutral charcoal, a breath of the app's hue in it. */
-    private static int ground(float hue) {
-        return hsl(hue, 0.06f, 0.125f);
-    }
+    /**
+     * The ground: true black, not the reference's charcoal, so a TV that dims its backlight by zone (mini-LED) or
+     * lights each pixel (OLED) is dark there, as around the logo.
+     */
+    private static final int BLACK = 0xFF000000;
 
     /** Flat paint with a few long strokes of a close tone along {@code deg}: darker on light colours, else lighter. */
     private static ShelfArt.Ink paint(int c, float deg) {
@@ -144,7 +145,7 @@ final class ShelfArtworks {
     private static void youtube(ShelfArt.Easel e) {
         int red = hsl(0, 0.90f, 0.50f), deep = hsl(352, 0.72f, 0.33f), coral = hsl(8, 0.90f, 0.64f),
                 pink = hsl(342, 0.85f, 0.80f), cream = hsl(30, 0.45f, 0.92f);
-        e.ground(ground(0));
+        e.ground(BLACK);
         // Top left: pills stacked out of the edge, pink and coral, a cream pebble.
         e.fill(pill(-200f, 40f, 480f, -30f, 230f), paint(pink, -6f));
         e.fill(pill(-200f, 270f, 360f, 230f, 190f), paint(coral, -4f));
@@ -167,7 +168,7 @@ final class ShelfArtworks {
     private static void youtubeMusic(ShelfArt.Easel e) {
         int red = hsl(352, 0.90f, 0.52f), plum = hsl(330, 0.52f, 0.28f), rose = hsl(345, 0.85f, 0.79f),
                 coral = hsl(5, 0.88f, 0.63f), orange = hsl(26, 0.95f, 0.58f);
-        e.ground(ground(345));
+        e.ground(BLACK);
         // Top left: rings out of the corner, an orange scribble at their heart.
         e.fill(circle(40f, 150f, 480f), paint(plum, 40f));
         e.fill(ShelfArt.ring(40f, 150f, 340f, 100f), paint(red, 40f));
@@ -192,7 +193,7 @@ final class ShelfArtworks {
     private static void appleTv(ShelfArt.Easel e) {
         int graphite = hsl(222, 0.10f, 0.31f), steel = hsl(222, 0.10f, 0.46f), silver = hsl(220, 0.12f, 0.74f),
                 white = hsl(220, 0.18f, 0.93f), indigo = hsl(238, 0.62f, 0.66f);
-        e.ground(hsl(225, 0.06f, 0.10f));
+        e.ground(BLACK);
         // Top left: squircles stacked and tilted, an indigo scribble on the biggest.
         ShelfArt.Shape big = rect(150f, 170f, 760f, 560f, -14f, 170f);
         e.fill(big, paint(graphite, -14f));
@@ -215,7 +216,7 @@ final class ShelfArtworks {
     private static void plex(ShelfArt.Easel e) {
         int gold = hsl(40, 0.90f, 0.49f), amber = hsl(30, 0.80f, 0.44f), light = hsl(45, 0.95f, 0.68f),
                 charcoal = hsl(210, 0.08f, 0.26f), rust = hsl(14, 0.68f, 0.46f);
-        e.ground(ground(40));
+        e.ground(BLACK);
         // Top left: two chevrons out of the corner, a charcoal disc below.
         e.fill(circle(-40f, 640f, 250f), paint(charcoal, 20f));
         e.fill(chevron(110f, 360f, 380f, 210f), paint(amber, 45f));
@@ -237,7 +238,7 @@ final class ShelfArtworks {
     private static void stremio(ShelfArt.Easel e) {
         int violet = hsl(255, 0.86f, 0.65f), deep = hsl(258, 0.52f, 0.32f), lilac = hsl(255, 0.90f, 0.85f),
                 magenta = hsl(292, 0.62f, 0.56f), mint = hsl(162, 0.62f, 0.62f);
-        e.ground(ground(258));
+        e.ground(BLACK);
         // Top left: a big diamond out of the corner, a deep one behind, a mint scribble on it.
         e.fill(rect(-60f, 560f, 520f, 520f, 45f, 90f), paint(deep, 45f));
         ShelfArt.Shape gem = rect(140f, 170f, 660f, 660f, 45f, 120f);
@@ -259,7 +260,7 @@ final class ShelfArtworks {
     private static void playGames(ShelfArt.Easel e) {
         int green = hsl(158, 0.78f, 0.36f), teal = hsl(178, 0.68f, 0.40f), lime = hsl(132, 0.55f, 0.52f),
                 deep = hsl(165, 0.70f, 0.20f), yellow = hsl(44, 0.96f, 0.56f);
-        e.ground(ground(160));
+        e.ground(BLACK);
         // Top left: a big green capsule tilted, a deep one behind, a yellow scribble on it.
         e.fill(pill(-160f, 520f, 380f, 300f, 300f), paint(deep, -22f));
         ShelfArt.Shape cap = pill(-140f, 120f, 460f, 60f, 380f);
@@ -282,7 +283,7 @@ final class ShelfArtworks {
     private static void settings(ShelfArt.Easel e) {
         int slate = hsl(214, 0.20f, 0.44f), steel = hsl(210, 0.26f, 0.64f), light = hsl(212, 0.36f, 0.84f),
                 deep = hsl(218, 0.26f, 0.26f), teal = hsl(176, 0.56f, 0.48f);
-        e.ground(ground(215));
+        e.ground(BLACK);
         // Top left: bars out of the edge, stepping in, a deep disc below.
         e.fill(circle(-40f, 600f, 260f), paint(deep, 20f));
         ShelfArt.Shape top = pill(-200f, 50f, 600f, 50f, 250f);
@@ -308,7 +309,7 @@ final class ShelfArtworks {
     private static void tclBrowser(ShelfArt.Easel e) {
         int red = hsl(349, 0.88f, 0.47f), sky = hsl(208, 0.78f, 0.58f), navy = hsl(218, 0.55f, 0.28f),
                 coral = hsl(6, 0.85f, 0.66f), ice = hsl(205, 0.70f, 0.86f);
-        e.ground(ground(215));
+        e.ground(BLACK);
         // Top left: a sky sphere with orbits crossing it, a navy disc behind.
         e.fill(circle(-60f, 560f, 260f), paint(navy, 20f));
         ShelfArt.Shape sphere = circle(100f, 170f, 380f);
@@ -331,7 +332,7 @@ final class ShelfArtworks {
     private static void tclMedia(ShelfArt.Easel e) {
         int orange = hsl(24, 0.92f, 0.57f), teal = hsl(180, 0.74f, 0.38f), deep = hsl(186, 0.68f, 0.23f),
                 peach = hsl(28, 0.92f, 0.79f), red = hsl(349, 0.84f, 0.52f);
-        e.ground(ground(30));
+        e.ground(BLACK);
         // Top left: frames stacked and tilted.
         e.fill(rect(-10f, 520f, 520f, 380f, 12f, 40f), paint(peach, 12f));
         e.fill(rect(260f, 40f, 600f, 420f, 8f, 40f), paint(orange, 8f));
@@ -354,7 +355,7 @@ final class ShelfArtworks {
     private static void tcl(ShelfArt.Easel e) {
         int red = hsl(349, 0.88f, 0.47f), deep = hsl(350, 0.72f, 0.30f), slate = hsl(220, 0.12f, 0.33f),
                 light = hsl(220, 0.16f, 0.80f), blue = hsl(212, 0.76f, 0.57f);
-        e.ground(ground(220));
+        e.ground(BLACK);
         // Top left: a red disc, wide bands crossing under it, a light scribble.
         ShelfArt.Shape disc = circle(60f, 140f, 400f);
         e.fill(disc, paint(red, 30f));
@@ -378,7 +379,7 @@ final class ShelfArtworks {
     private static void primeVideo(ShelfArt.Easel e) {
         int blue = hsl(197, 0.95f, 0.47f), deep = hsl(212, 0.78f, 0.33f), ice = hsl(195, 0.85f, 0.82f),
                 navy = hsl(214, 0.55f, 0.21f), amber = hsl(36, 0.98f, 0.56f);
-        e.ground(ground(205));
+        e.ground(BLACK);
         // Top left: a navy disc, a deep blue squircle over it, an ice pebble.
         e.fill(circle(-40f, 520f, 300f), paint(navy, 20f));
         ShelfArt.Shape sq = rect(120f, 150f, 640f, 560f, 10f, 160f);
@@ -396,11 +397,11 @@ final class ShelfArtworks {
         e.fill(circle(240f, 1060f, 170f), paint(ice, 0f));
     }
 
-    /** Disney+: its arc of light over midnight, sparkles; royal blue, navy, teal and violet, a gold accent. */
+    /** Disney+: its arc of light in the night, sparkles; royal blue, navy, teal and violet, a gold accent. */
     private static void disneyPlus(ShelfArt.Easel e) {
         int royal = hsl(226, 0.78f, 0.52f), navy = hsl(232, 0.68f, 0.24f), teal = hsl(190, 0.82f, 0.50f),
                 violet = hsl(255, 0.58f, 0.52f), white = hsl(220, 0.60f, 0.96f), gold = hsl(44, 0.90f, 0.66f);
-        e.ground(hsl(232, 0.32f, 0.10f));
+        e.ground(BLACK);
         // The arc, over the top, in a glow.
         e.glow(960f, 60f, 700f, hsl(226, 0.6f, 0.30f), 0.35f);
         // Top left: navy and violet, a royal disc, sparkles.
@@ -428,7 +429,7 @@ final class ShelfArtworks {
     private static void hboMax(ShelfArt.Easel e) {
         int blue = hsl(232, 0.88f, 0.55f), violet = hsl(252, 0.84f, 0.70f), indigo = hsl(240, 0.62f, 0.26f),
                 lilac = hsl(252, 0.95f, 0.86f), cyan = hsl(192, 0.90f, 0.62f);
-        e.ground(hsl(240, 0.30f, 0.09f));
+        e.ground(BLACK);
         // Top left: a great ring out of the corner, its dot, a cyan scribble on the ring.
         ShelfArt.Shape o = circle(80f, 200f, 440f).minus(circle(80f, 200f, 230f));
         e.fill(circle(80f, 200f, 440f), paint(indigo, 40f));
@@ -450,7 +451,7 @@ final class ShelfArtworks {
     private static void spotify(ShelfArt.Easel e) {
         int green = hsl(141, 0.74f, 0.47f), deep = hsl(146, 0.80f, 0.25f), mint = hsl(140, 0.70f, 0.80f),
                 lime = hsl(88, 0.72f, 0.55f), pink = hsl(334, 0.86f, 0.70f);
-        e.ground(hsl(140, 0.04f, 0.10f));
+        e.ground(BLACK);
         // Top left: arcs spreading out of the corner.
         e.fill(circle(-80f, -60f, 300f), paint(green, 40f));
         int[] waves = {deep, mint, green};
@@ -473,7 +474,7 @@ final class ShelfArtworks {
     private static void twitch(ShelfArt.Easel e) {
         int purple = hsl(265, 0.98f, 0.64f), deep = hsl(265, 0.70f, 0.40f), lilac = hsl(265, 0.98f, 0.82f),
                 indigo = hsl(250, 0.45f, 0.24f), coral = hsl(352, 0.92f, 0.68f);
-        e.ground(hsl(260, 0.08f, 0.09f));
+        e.ground(BLACK);
         // Top left: a big block with a stepped corner, slices shifted off it.
         e.fill(rect(-20f, 560f, 560f, 280f, 0f, 30f), paint(indigo, 0f));
         ShelfArt.Shape block = poly(-200f, -200f, 600f, -200f, 600f, 160f, 500f, 160f, 500f, 300f, 360f, 300f, 360f,
@@ -498,7 +499,7 @@ final class ShelfArtworks {
     private static void crunchyroll(ShelfArt.Easel e) {
         int orange = hsl(24, 0.90f, 0.54f), deep = hsl(16, 0.80f, 0.38f), peach = hsl(26, 0.95f, 0.76f),
                 ember = hsl(6, 0.78f, 0.50f), cream = hsl(34, 0.70f, 0.93f);
-        e.ground(ground(20));
+        e.ground(BLACK);
         // Top left: a crescent out of the corner, deep orange behind, a cream scribble.
         e.fill(circle(60f, 200f, 440f), paint(deep, 30f));
         ShelfArt.Shape moon = circle(60f, 200f, 440f).minus(circle(270f, 90f, 300f));
@@ -527,7 +528,7 @@ final class ShelfArtworks {
     private static void paramountPlus(ShelfArt.Easel e) {
         int blue = hsl(220, 0.98f, 0.52f), sky = hsl(212, 0.92f, 0.66f), navy = hsl(226, 0.80f, 0.22f),
                 ice = hsl(214, 0.95f, 0.86f), white = hsl(220, 0.60f, 0.97f);
-        e.ground(ground(222));
+        e.ground(BLACK);
         // Top left: navy and blue discs, a sky one.
         e.fill(circle(40f, 260f, 440f), paint(navy, 30f));
         ShelfArt.Shape disc = circle(-30f, 60f, 330f);
@@ -553,7 +554,7 @@ final class ShelfArtworks {
     private static void peacock(ShelfArt.Easel e) {
         int[] f = {hsl(44, 0.98f, 0.58f), hsl(16, 0.90f, 0.55f), hsl(350, 0.75f, 0.54f), hsl(262, 0.70f, 0.62f),
                 hsl(199, 0.94f, 0.46f), hsl(158, 0.90f, 0.36f)};
-        e.ground(hsl(0, 0f, 0.07f));
+        e.ground(BLACK);
         // Top right: the fan, its feathers overlapping out of the corner.
         for (int i = 5; i >= 0; i--) {
             float deg = 100f + i * 20f;
@@ -579,7 +580,7 @@ final class ShelfArtworks {
     private static void hulu(ShelfArt.Easel e) {
         int green = hsl(151, 0.80f, 0.51f), deep = hsl(152, 0.76f, 0.24f), mint = hsl(150, 0.80f, 0.82f),
                 charcoal = hsl(150, 0.05f, 0.24f), cream = hsl(40, 0.60f, 0.90f);
-        e.ground(hsl(150, 0.04f, 0.08f));
+        e.ground(BLACK);
         // Top left: an arch rising out of the dock's way, a charcoal disc behind, a mint pill.
         e.fill(circle(-80f, 120f, 330f), paint(charcoal, 30f));
         ShelfArt.Shape arch = pill(170f, 260f, 170f, 1100f, 460f).minus(pill(170f, 330f, 170f, 1100f, 190f));
@@ -595,11 +596,11 @@ final class ShelfArtworks {
         e.fill(pill(1500f, 960f, 2100f, 960f, 220f), paint(mint, 0f));
     }
 
-    /** Tubi: its bright yellow on deep purple, twin ovals like a pair of eyes, soft blobs; a pink accent. */
+    /** Tubi: its bright yellow and deep purple, twin ovals like a pair of eyes, soft blobs; a pink accent. */
     private static void tubi(ShelfArt.Easel e) {
         int yellow = hsl(58, 0.98f, 0.56f), gold = hsl(46, 0.98f, 0.55f), purple = hsl(270, 0.88f, 0.56f),
                 lilac = hsl(270, 0.90f, 0.80f), plum = hsl(272, 0.62f, 0.27f), pink = hsl(330, 0.90f, 0.68f);
-        e.ground(hsl(270, 0.42f, 0.10f));
+        e.ground(BLACK);
         // Top left: twin ovals, a plum disc behind, a purple scribble on the bigger.
         e.fill(circle(-40f, 560f, 280f), paint(plum, 30f));
         ShelfArt.Shape a = ellipse(80f, 170f, 200f, 300f, 14f);
@@ -620,7 +621,7 @@ final class ShelfArtworks {
     private static void plutoTv(ShelfArt.Easel e) {
         int pink = hsl(312, 0.96f, 0.62f), purple = hsl(262, 0.96f, 0.58f), yellow = hsl(54, 0.98f, 0.56f),
                 cyan = hsl(184, 0.80f, 0.56f), deep = hsl(290, 0.55f, 0.27f);
-        e.ground(hsl(255, 0.25f, 0.09f));
+        e.ground(BLACK);
         // Top left: a pink world, its yellow ring passing behind it and in front.
         ShelfArt.Shape band = ellipse(160f, 220f, 480f, 120f, -20f).outline(52f);
         ShelfArt.Shape world = circle(160f, 220f, 310f);
@@ -643,7 +644,7 @@ final class ShelfArtworks {
     private static void dazn(ShelfArt.Easel e) {
         int white = hsl(0, 0f, 0.93f), neon = hsl(62, 0.98f, 0.55f), grey = hsl(0, 0f, 0.22f), mid = hsl(0, 0f, 0.46f),
                 ink = hsl(0, 0f, 0.10f);
-        e.ground(hsl(0, 0f, 0.065f));
+        e.ground(BLACK);
         // Top left: slabs leaning right, a neon slash between them.
         e.fill(poly(-200f, -200f, 520f, -200f, 240f, 760f, -200f, 760f), paint(grey, 74f).wobble(2f));
         ShelfArt.Shape slab = poly(-200f, -200f, 330f, -200f, 60f, 760f, -200f, 760f);
@@ -663,7 +664,7 @@ final class ShelfArtworks {
     private static void jioHotstar(ShelfArt.Easel e) {
         int pink = hsl(322, 0.98f, 0.46f), violet = hsl(272, 0.86f, 0.57f), blue = hsl(228, 0.92f, 0.56f),
                 cyan = hsl(195, 0.94f, 0.62f), white = hsl(260, 0.60f, 0.97f);
-        e.ground(hsl(260, 0.32f, 0.09f));
+        e.ground(BLACK);
         // Top left: a disc from blue to violet, a pink petal, a cyan scribble.
         e.fill(ellipse(380f, -40f, 260f, 130f, -14f), ink(pink).gradient(violet, 200f, 0f, 600f, 0f));
         ShelfArt.Shape disc = circle(60f, 220f, 440f);
@@ -684,7 +685,7 @@ final class ShelfArtworks {
     private static void dstv(ShelfArt.Easel e) {
         int blue = hsl(210, 0.98f, 0.44f), navy = hsl(220, 0.82f, 0.24f), cyan = hsl(196, 0.98f, 0.50f),
                 ice = hsl(200, 0.85f, 0.83f), orange = hsl(28, 0.95f, 0.58f);
-        e.ground(ground(215));
+        e.ground(BLACK);
         // Top left: a swirl of arcs curling out of the edge, round an ice heart.
         e.fill(ShelfArt.arc(-60f, 260f, 450f, 120f, -80f, 120f), paint(navy, 90f));
         e.fill(ShelfArt.arc(-60f, 260f, 320f, 110f, -60f, 150f), paint(blue, 90f));
@@ -711,7 +712,7 @@ final class ShelfArtworks {
     private static void viusasa(ShelfArt.Easel e) {
         int red = hsl(356, 0.80f, 0.50f), deep = hsl(354, 0.70f, 0.30f), green = hsl(146, 0.80f, 0.33f),
                 gold = hsl(44, 0.96f, 0.56f), white = hsl(36, 0.45f, 0.94f), blue = hsl(205, 0.85f, 0.52f);
-        e.ground(ground(10));
+        e.ground(BLACK);
         // Top left: a tall shield, a white band down it, a deep stripe in that.
         e.fill(circle(-60f, 620f, 240f), paint(green, 30f));
         ShelfArt.Shape shield = ellipse(170f, 220f, 270f, 520f, 10f);
@@ -743,7 +744,7 @@ final class ShelfArtworks {
     private static void kodi(ShelfArt.Easel e) {
         int sky = hsl(196, 0.82f, 0.50f), deep = hsl(200, 0.80f, 0.30f), light = hsl(195, 0.85f, 0.78f),
                 navy = hsl(205, 0.55f, 0.18f), coral = hsl(12, 0.86f, 0.64f);
-        e.ground(ground(200));
+        e.ground(BLACK);
         // Top left: tiles stacked from the corner.
         e.fill(rect(-20f, 560f, 400f, 400f, 8f, 80f), paint(deep, 8f));
         e.fill(rect(320f, 20f, 340f, 340f, 8f, 70f), paint(light, 8f));
@@ -765,7 +766,7 @@ final class ShelfArtworks {
     private static void vlc(ShelfArt.Easel e) {
         int orange = hsl(32, 0.98f, 0.52f), deep = hsl(24, 0.90f, 0.42f), light = hsl(36, 0.98f, 0.71f),
                 cream = hsl(34, 0.60f, 0.93f), slate = hsl(215, 0.40f, 0.46f);
-        e.ground(ground(30));
+        e.ground(BLACK);
         // Top left: a wide band from the corner, striped orange and cream.
         ShelfArt.Shape band = pill(-200f, 520f, 460f, -200f, 380f);
         e.fill(band, paint(orange, -47f));
@@ -797,7 +798,7 @@ final class ShelfArtworks {
     private static void netflix(ShelfArt.Easel e) {
         int red = hsl(357, 0.86f, 0.48f), crimson = hsl(351, 0.70f, 0.30f), fold = hsl(352, 0.80f, 0.36f),
                 coral = hsl(7, 0.84f, 0.63f), blush = hsl(352, 0.72f, 0.82f), amber = hsl(36, 0.92f, 0.60f);
-        e.ground(ground(355));
+        e.ground(BLACK);
         // Top left: a crimson disc, a coral scribble on it; a red ribbon sweeping down past it, folding.
         e.fill(circle(130f, 120f, 330f), paint(crimson, 50f));
         float[] left = {420f, -200f, 520f, 160f, 280f, 420f, -160f, 560f};
@@ -830,7 +831,7 @@ final class ShelfArtworks {
     private static void f1(ShelfArt.Easel e) {
         int red = hsl(2, 0.92f, 0.47f), maroon = hsl(352, 0.62f, 0.27f), orange = hsl(16, 0.94f, 0.58f),
                 white = hsl(30, 0.30f, 0.93f), carbon = hsl(228, 0.12f, 0.24f), yellow = hsl(46, 0.98f, 0.58f);
-        e.ground(ground(230));
+        e.ground(BLACK);
         // Top left: a red slab rushing in, three speed lines streaming off it, a yellow scribble.
         ShelfArt.Shape slab = poly(-200f, -200f, 700f, -200f, 420f, 420f, -200f, 560f).grow(30f);
         e.fill(circle(-40f, 520f, 260f), paint(maroon, 30f));
@@ -880,7 +881,7 @@ final class ShelfArtworks {
     private static void playStore(ShelfArt.Easel e) {
         int blue = hsl(214, 0.82f, 0.56f), deep = hsl(222, 0.66f, 0.36f), teal = hsl(178, 0.72f, 0.40f),
                 green = hsl(146, 0.58f, 0.42f), yellow = hsl(44, 0.96f, 0.56f);
-        e.ground(ground(215));
+        e.ground(BLACK);
         // Top left: a deep blue triangle out of the corner, a green loop on it, a teal disc behind.
         e.fill(circle(470f, -40f, 210f), paint(teal, 20f));
         ShelfArt.Shape tri = poly(-260f, -260f, 600f, 170f, -260f, 640f).grow(50f);

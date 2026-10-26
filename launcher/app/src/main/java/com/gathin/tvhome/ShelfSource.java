@@ -1377,7 +1377,8 @@ final class ShelfSource {
     /**
      * A static image as tvOS shows it: from the top of the screen, scaled to fill the width and to reach the dock
      * (a wider one, an app's 2320 x 720 Top Shelf Image Wide, loses its sides), with nothing drawn over it. Below
-     * that, behind the dock, its bottom edge carries on mirrored and blurred, as on tvOS.
+     * that, behind the dock, its bottom edge carries on mirrored and blurred, as on tvOS. A near-black ground goes
+     * true black; a picture without one stays as it is.
      */
     static Bitmap placeImage(Bitmap src) {
         int sw = BACKDROP_W, sh = BACKDROP_H, w = src.getWidth(), h = src.getHeight();
@@ -1411,7 +1412,38 @@ final class ShelfSource {
             small.recycle();
         }
         src.recycle();
+        // A dark ground (tvOS's #242424 behind YouTube's) turns true black, for a mini-LED or OLED TV.
+        int knee = groundTop(out, top);
+        if (knee >= 0) toe(out, knee, TrueBlack.toeEnd(knee));
         return out;
+    }
+
+    /** Rows of a picture read at a time: a strip, not the whole picture, in memory at once. */
+    private static final int STRIP_PIXELS = 1 << 16;
+
+    /** The top of the near-black ground of a picture's first {@code rows} rows (TrueBlack.groundTop), or -1. */
+    static int groundTop(Bitmap b, int rows) {
+        int w = b.getWidth(), strip = Math.max(1, STRIP_PIXELS / Math.max(1, w));
+        int[] px = new int[w * strip], hist = new int[256];
+        rows = Math.min(rows, b.getHeight());
+        for (int y = 0; y < rows; y += strip) {
+            int n = Math.min(strip, rows - y);
+            b.getPixels(px, 0, w, 0, y, w, n);
+            TrueBlack.count(px, w * n, hist);
+        }
+        return TrueBlack.groundTop(hist);
+    }
+
+    /** A mutable picture with everything at or under {@code knee} black, eased into up to {@code end} (TrueBlack.toe). */
+    static void toe(Bitmap b, int knee, int end) {
+        int w = b.getWidth(), h = b.getHeight(), strip = Math.max(1, STRIP_PIXELS / Math.max(1, w));
+        int[] px = new int[w * strip];
+        for (int y = 0; y < h; y += strip) {
+            int n = Math.min(strip, h - y);
+            b.getPixels(px, 0, w, 0, y, w, n);
+            TrueBlack.toe(px, w * n, knee, end);
+            b.setPixels(px, 0, w, 0, y, w, n);
+        }
     }
 
     /** Fetches an app's vector logo once, then redraws its cover with it. */
@@ -1540,7 +1572,7 @@ final class ShelfSource {
 
         Bitmap back = Bitmap.createBitmap(COVER_W, COVER_H, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(back);
-        c.drawColor(CoverArt.base(palette));
+        c.drawColor(CoverArt.GROUND);
         int n = 5;
         int[] colours = CoverArt.blobColours(palette, n);
         float[][] blobs = CoverArt.blobs(app.pkg.hashCode(), n);
@@ -1553,6 +1585,8 @@ final class ShelfSource {
             c.drawCircle(cx, cy, r, p);
         }
         scrim(c, COVER_W, COVER_H, 0.55f, false);
+        // The blobs' last breath over the black goes, so the black stays black.
+        toe(back, TrueBlack.FAINT_KNEE, TrueBlack.FAINT_END);
         return new Cover(hardware(back), logo == null ? null : hardware(logo));
     }
 

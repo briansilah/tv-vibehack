@@ -87,11 +87,27 @@ public class ShelfArtTest {
     }
 
     @Test
+    public void groundIsTrueBlack() {
+        for (String key : ShelfArtworks.keys()) {
+            int black = 0, lifted = 0;
+            for (int p : render(key)) {
+                int v = TrueBlack.brightness(p);
+                if (v == 0) black++;
+                else if (v <= TrueBlack.FAINT_KNEE) lifted++;
+            }
+            // Where nothing is painted it's 0, 0, 0, which a mini-LED or OLED TV leaves dark. Just above black, only
+            // edges and a glow's rim fading into it (Disney+'s: 3 %), not a ground.
+            assertTrue(key + " black: " + black / (float) (W * H), black > W * H / 4);
+            assertTrue(key + " just above black: " + lifted / (float) (W * H), lifted < W * H / 20);
+        }
+    }
+
+    @Test
     public void fillsTheEdgesAndStaysMidToDark() {
         int band = (int) (W * 0.18f);
         for (String key : ShelfArtworks.keys()) {
             int[] px = render(key);
-            int ground = px[(int) (ShelfArt.CALM_Y / ShelfArt.DH * H) * W + W / 2];
+            int ground = 0xFF000000;
             int painted = 0, left = 0, right = 0;
             float sum = 0f;
             for (int i = 0; i < px.length; i++) {

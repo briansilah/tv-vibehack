@@ -3,8 +3,8 @@ package com.gathin.tvhome;
 /**
  * The top shelf's artwork: an original picture for each app (see {@link ShelfArtworks}), painted on the TV from its
  * brand's colours and motifs, in the manner of tvOS's static Top Shelf images: bold flat shapes cut off by the edges of
- * the screen, dry-brush streaks and scribbles in them, around a calm dark middle where {@link ShelfInfoView} draws the
- * app's logo. No pictures ship with the launcher: each is painted when first needed.
+ * the screen, dry-brush streaks and scribbles in them, around a calm middle where {@link ShelfInfoView} draws the
+ * app's logo, all on true black. No pictures ship with the launcher: each is painted when first needed.
  *
  * <p>Plain Java, so it runs in JVM unit tests, and deterministic: an app always gets the same picture. Recipes draw in
  * a 1920 x 1080 design space (the screen at 1080p), scaled to the size asked for. Shapes are signed distance fields:
@@ -698,17 +698,22 @@ final class ShelfArt {
             }
         }
 
-        /** Last: a fine grain, which keeps gradients from banding and gives the paint a little tooth. */
+        /**
+         * Last: a fine grain, which keeps gradients from banding and gives the paint a little tooth; never on the
+         * black, which stays true black, and the faint haze over it goes (TrueBlack).
+         */
         void finish() {
             long hseed = seed * 0x2545F4914F6CDD1DL;
             for (int i = 0; i < px.length; i++) {
+                int p = px[i];
+                if ((p & 0xFFFFFF) == 0) continue;
                 long z = (i + hseed) * 0x9E3779B97F4A7C15L;
                 z = (z ^ (z >>> 31)) * 0xBF58476D1CE4E5B9L;
                 int n = (int) ((z >>> 59) & 0x7) - 4;   // -4..3
-                int p = px[i];
                 int r = clamp(((p >> 16) & 0xFF) + n), g = clamp(((p >> 8) & 0xFF) + n), b = clamp((p & 0xFF) + n);
                 px[i] = 0xFF000000 | r << 16 | g << 8 | b;
             }
+            TrueBlack.toe(px, px.length, TrueBlack.FAINT_KNEE, TrueBlack.FAINT_END);
         }
     }
 

@@ -306,9 +306,9 @@ it has:
      come from Stremio's image service (metahub).
 2. **Its artwork**, for the apps that have one: a picture made for the app, in the manner of
    YouTube's on Apple TV (big flat shapes running off the edges, dry-brush strokes and a scribble,
-   around a calm middle), from its brand's colours and the shapes of its identity, with its logo over
-   it. Below.
-3. **Cover art**: the app's logo on soft shapes in its colours, like an app's static Top Shelf image
+   around a calm middle, on true black), from its brand's colours and the shapes of its identity,
+   with its logo over it. Below.
+3. **Cover art**: the app's logo on soft shapes in its colours, on black, like an app's static Top Shelf image
    on tvOS. The logo is a vector one from [Simple Icons](https://simpleicons.org) (CC0; `top_shelf_logos`
    in `config.xml`), fetched once and drawn sharp at any size, beside the app's name; for other apps,
    or offline, the logo cut out of the app's banner, never shown larger than it is.
@@ -352,6 +352,12 @@ the dock, mirrored and blurred. An app's own 2320 x 720 Top Shelf Image (Wide) g
 `--whole`, losing its sides as on tvOS; a line
 `package | https://...` in `top_shelf_images` fetches one from a URL instead, once. Until an app has
 its image, it shows its artwork. Up from it goes straight to the top right corner: a picture has no button.
+
+**True black.** Where a picture is dark, it's black: 0, 0, 0, which a mini-LED TV's backlight or an
+OLED's pixels leave off there, rather than a grey glow across half the screen. The artworks and
+cover art are painted on true black. A static image's near-black ground goes true black when it's
+shown (YouTube's on Apple TV is #242424, about half of it), its darkest tones easing into it, its
+colours as they were; a picture without such a ground shows as it is.
 
 **Up** from a dock app showing a title moves to a button under it, which says what OK will do with
 that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue
