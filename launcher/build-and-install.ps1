@@ -66,6 +66,7 @@ try {
     $googleTv = "$(& $py -I ..\tools\tv.py "pm path $googleTvLauncher")" -match 'package:'
     if ($googleTv) {
         @(
+            'pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION 2>/dev/null; echo coarse-location-granted',
             'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
             # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
             'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
@@ -85,6 +86,7 @@ try {
         Write-Host $out
         if ("$out" -match 'Error') { throw 'could not set the new launcher as home; the stock launcher was left untouched' }
         @(
+            'pm grant com.gathin.tvhome android.permission.ACCESS_COARSE_LOCATION 2>/dev/null; echo coarse-location-granted',
             'pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted',
             # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
             'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',

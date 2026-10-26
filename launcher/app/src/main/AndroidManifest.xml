@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Needed on Android 10 to read the Wi-Fi network name; granted over adb at install time. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Opens Google TV's quick settings panel from the top bar (StatusBarManager.expandNotificationsPanel). -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <!-- Top shelf art (config.xml, top_shelf_art): suggested titles' pictures and public catalogue feeds. -->
