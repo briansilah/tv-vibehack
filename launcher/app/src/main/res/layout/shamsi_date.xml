@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/shamsiDate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        style="@style/Text.Callout"
+        android:textColor="#FFFFFFFF"
+        android:shadowColor="#99000000"
+        android:shadowRadius="6"
+        android:shadowDy="1"
+        android:includeFontPadding="false" />
+
+    <TextClock
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:format12Hour="@string/date_format"
+        android:format24Hour="@string/date_format"
+        style="@style/Text.Caption1"
+        android:textColor="#FFFFFFFF"
+        android:shadowColor="#99000000"
+        android:shadowRadius="6"
+        android:shadowDy="1"
+        android:includeFontPadding="false" />
+</LinearLayout>

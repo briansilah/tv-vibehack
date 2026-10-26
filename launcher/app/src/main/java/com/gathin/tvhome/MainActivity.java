@@ -153,6 +153,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private float heroBaseY;
     /** Google TV look: the focused top bar button's name, under the bar. */
     private TextView topCaption;
+    private TextView shamsiDate;
     // Static so they survive the activity being destroyed while another app is open (low-memory TVs,
     // or Developer options → "Don't keep activities"); they only reset when the process dies.
     private static int lastFocused = 0;
@@ -246,6 +247,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         @Override
         public void run() {
             updateNetworkIndicator();
+            updateDate();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -317,6 +319,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         corner.setBar(topBar);
         corner.setProfileName(getString(R.string.profile_name));
         topArea = findViewById(R.id.topArea);
+        if (getResources().getBoolean(R.bool.shamsi_date)) {
+            ViewStub dateStub = findViewById(R.id.shamsiDateStub);
+            shamsiDate = dateStub.inflate().findViewById(R.id.shamsiDate);
+        }
         cornerShade = findViewById(R.id.cornerShade);
         topCaption = findViewById(R.id.topCaption);
         btnWifi = topBar.findViewById(R.id.btnWifi);
@@ -442,6 +448,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             tilesEntered = true;
             grid.scheduleLayoutAnimation();
         }
+        updateDate();
         handler.postDelayed(minuteTick, MINUTE_MS);
 
         // Return to the app we left from, or the same slot if that app is gone. Always refocus: after
@@ -1062,6 +1069,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     }
 
     // ---- top bar ---------------------------------------------------------------------------------
+
+    private void updateDate() {
+        if (shamsiDate != null) shamsiDate.setText(Shamsi.today());
+    }
 
     /** Shows the active network type and its matching icon; a network name when connected over Wi-Fi. */
     private void updateNetworkIndicator() {
