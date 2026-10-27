@@ -119,6 +119,13 @@
         android:clipChildren="false"
         android:clipToPadding="false">
 
+        <ViewStub
+            android:id="@+id/shamsiDateStub"
+            android:layout="@layout/shamsi_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start" />
+
         <com.gathin.tvhome.ProfileCorner
             android:id="@+id/corner"
             android:layout_width="wrap_content"

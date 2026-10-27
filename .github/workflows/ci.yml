@@ -42,8 +42,11 @@ jobs:
       - name: Install Android SDK platform 34 and build-tools 34.0.0
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-34" "build-tools;34.0.0" > /dev/null'
 
-      - name: Build debug and release, run unit tests
-        run: ./gradlew --stacktrace assembleDebug assembleRelease testDebugUnitTest
+      - name: Build debug and release, run unit tests and lint
+        run: ./gradlew --stacktrace assembleDebug assembleRelease testDebugUnitTest testReleaseUnitTest lintRelease
+
+      - name: The launcher stays small
+        run: python3 -c 'from pathlib import Path; size = Path("app/build/outputs/apk/release/app-release.apk").stat().st_size; print(f"release APK {size} bytes"); assert size < 589824, "APK is over 576 KB"'
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
@@ -90,4 +93,7 @@ jobs:
             python -m unittest discover -s tools/tests -v
           else
             echo "No tools/tests directory; skipping."
+          fi
+          if [ -d tests ]; then
+            python -m unittest discover -s tests -v
           fi

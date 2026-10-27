@@ -25,6 +25,13 @@
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
     <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
 
+    <!-- Show the Solar Hijri (Shamsi) date used in Iran and Afghanistan above the Gregorian date at the
+         top left. Off keeps the fork's uncluttered Top Shelf and expanding top right unchanged. -->
+    <bool name="shamsi_date">false</bool>
+    <!-- Optional VPN app the network button opens (hold for Wi-Fi settings). Empty: opens Wi-Fi settings.
+         For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
+    <string name="vpn_app" translatable="false"></string>
+
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>
 
@@ -118,4 +125,7 @@
         <item>com.netflix.ninja | nflx://www.netflix.com/search?q={title}</item>
         <item>com.apple.atve.androidtv.appletv | https://tv.apple.com/search?term={title}</item>
     </string-array>
+    <!-- "Default home" tile that opens Android's home-screen picker, for TVs whose settings have one
+         (most Android TVs don't; the tile only appears when the page exists). Off by default. -->
+    <bool name="show_home_settings_shortcut">false</bool>
 </resources>

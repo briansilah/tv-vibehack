@@ -10,7 +10,12 @@ and a one-line restore if you change your mind.
 
 It started as an afternoon fixing my parents' Mi TV, which showed them an advert before they
 could reach Netflix. The whole thing was done with Claude Code talking to the real TV, and the
-prompt that did it is in this repo so you can do the same with yours.
+prompt that did it is in this repo so you can do the same with yours. The replies to the tweet
+below are where most of the TV lists in this repo came from.
+
+<p align="center">
+  <a href="https://x.com/gathint/status/2111379569030939102"><img src="docs/tweet.png" alt="The tweet: Vibe coded my parents' TV this afternoon. Before and after screenshots." width="380"></a>
+</p>
 
 ---
 
@@ -134,9 +139,13 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 |---|---|
 | Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
 | Xiaomi MiTV-AXSO0 | Android TV 9 |
+| Xiaomi Mi Box S (MIBOX4), streaming box | Android TV 9 |
 | TCL 55" 4K Google TV, 2023 (G10) | Google TV 12 |
 | SANYO ATV R2 | Android TV 9 |
 | OnePlus TV (D00) | Google TV 14 |
+| Sony BRAVIA XBR-65X900E (2017) | Android TV 9 |
+| NVIDIA SHIELD TV Pro 2019 (P2897) | Android TV 11 |
+| Xiaomi MiTV-MOOR2 (venom) | Google TV 11 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -204,7 +213,7 @@ rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 400 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no video, no
 network except the top shelf's pictures (below), and no background services except, on Google TV,
 the small Home-button service described below. The only blur is the dock's and the top right's
@@ -217,6 +226,16 @@ the dock order, apps to hide, your TV's Live TV package, the number of columns, 
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
+
+**Language** follows the TV: English, German, Spanish, Catalan and Simplified Chinese. On Android 13
+and later, set a language for the launcher alone with, for example,
+`tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales ca'`.
+The newer translations use English for the fork's additional Home Settings and Top Shelf strings.
+
+**Optional date and VPN shortcut**: `shamsi_date` shows the Solar Hijri date above the Gregorian date at
+the top left (off by default). `vpn_app` sets the package opened by the network button; leave it empty
+for Wi-Fi settings, which holding the button always opens. A connected VPN adds a badge to the network
+button's label or caption, without changing the corner's icon-only styles.
 
 Each app tile exposes its app name to screen readers, including banner-only tiles in the Dock.
 Home Settings and Arrange Apps are named too; the latter's accessible name changes to Done while arranging.
@@ -474,6 +493,15 @@ tools/venv/bin/python -I tools/tv.py 'settings put secure screensaver_components
 It starts after the TV's "screen off" idle time (`settings get system screen_off_timeout`).
 </details>
 
+### Changing the default home from the TV
+
+Optional: set `show_home_settings_shortcut` to `true` in `config.xml` and a **Default Home** tile
+appears in the app grid, opening Android's own home-screen picker so you can switch
+launchers from the sofa. Most Android TV firmware has no such page, and then the tile stays
+hidden. The stock launcher has to be enabled before it can be picked, see the restore instructions.
+This is separate from **Home Settings**, which controls this launcher's appearance. The optional tile follows
+your saved app order and can be rearranged like an app.
+
 ## Troubleshooting
 
 Things that bit us or contributors, so they don't bite you.
@@ -489,6 +517,9 @@ Things that bit us or contributors, so they don't bite you.
   The device then shows up under an mDNS name such as `adb-XXXX._adb-tls-connect._tcp`.
 - **No "wireless debugging" toggle** on some TVs, Xiaomi among them. USB debugging alone opens
   network ADB on port 5555.
+- **USB devices go dead while USB debugging is on**, seen on the Xiaomi Mi Box S: its firmware
+  switches the USB port to ADB device mode, which cuts the power to a USB speaker or drive. Switch
+  USB debugging off when you're done; the launcher doesn't need it.
 - **Windows PowerShell 5.1 adds a byte-order mark** to text piped into a program, which turned the
   first batch command into gibberish. `tv.py` now strips it, and the `.ps1` scripts pipe clean UTF-8.
 - **Git Bash rewrites paths** like `/data/local/tmp` into Windows paths. The scripts set
@@ -513,6 +544,16 @@ Things that bit us or contributors, so they don't bite you.
   `appops get com.gathin.tvhome AUTO_START` says `allow`; run
   `appops set com.gathin.tvhome AUTO_START allow; appops write-settings`. The second command
   matters: Android saves app ops up to 30 minutes later, and `adb reboot` loses unsaved ones.
+- **Xiaomi MiTV-MOOR2's setup wizard also answers Home**, seen upstream after disabling the stock launcher on Google TV
+  (Xiaomi MiTV-MOOR2). Another system app answers HOME: `com.google.android.tungsten.setupwraith`,
+  with `.MainActivity` at intent-filter priority 4 and `.RecoveryActivity` at priority 1. You
+  cannot outrank it, and the obvious workarounds don't help: Android ignores `android:priority` on
+  HOME filters for apps that aren't on the system image, `cmd package set-home-activity` prints
+  `Success` without changing anything (not even after a reboot), and `pm disable-user` on one of
+  setupwraith's components is refused with a SecurityException. Upstream disabled the whole
+  `com.google.android.tungsten.setupwraith` package to free the slot. This fork instead keeps Google
+  TV's launcher enabled and uses HomeButtonService: do not disable either package to take over Home.
+  If you disabled the setup wizard previously, re-enable it before a factory reset.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`

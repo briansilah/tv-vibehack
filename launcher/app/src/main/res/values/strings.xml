@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="vpn">VPN</string>
     <string name="app_name">Home</string>
     <string name="inputs">Inputs</string>
     <string name="wifi">Wi-Fi</string>
@@ -11,6 +12,11 @@
     <string name="not_connected">No device</string>
     <string name="live_tv">Live TV</string>
     <string name="no_inputs">No inputs found</string>
+    <string name="good_morning">Good morning</string>
+    <string name="good_afternoon">Good afternoon</string>
+    <string name="good_evening">Good evening</string>
+    <string name="good_night">Good night</string>
+    <string name="date_format">EEEE  d MMMM</string>
     <string name="ethernet">Ethernet</string>
     <string name="offline">Offline</string>
     <string name="profile">Profile</string>
@@ -116,4 +122,6 @@
         <item>Purple</item>
         <item>Pink</item>
     </string-array>
+    <string name="default_home">Default Home</string>
+    <string name="home_settings_help">Choose a home screen in system settings, then press Home.</string>
 </resources>

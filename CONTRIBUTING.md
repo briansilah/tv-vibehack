@@ -84,7 +84,10 @@ just wireless debugging. `tools/tests` covers both offline:
   (with screenshots). [.github/skills/pull-requests](.github/skills/pull-requests/SKILL.md) has the details.
 - CI (`.github/workflows/ci.yml`) must pass. With GitHub Actions off, as on Brian's fork, `tools/ci.sh` runs the
   same checks locally. On every PR it builds the launcher (debug and
-  release), runs its unit tests, and checks the Python tools and shell scripts. The debug APK is
+  release), runs debug and release unit tests and release lint, enforces the release APK's 576 KB limit,
+  and checks the Python tools, shell scripts and upstream's `tests/` when present. Partial upstream
+  translations use Android's English fallback for fork-only strings; lint reports missing translations
+  as warnings. The debug APK is
   attached to each run as the `tvhome-debug-apk` artifact.
 - Say which TV you tested on.
 - No new dependencies in the launcher without discussing it in an issue.
