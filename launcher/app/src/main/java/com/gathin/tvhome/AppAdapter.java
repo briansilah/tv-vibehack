@@ -253,7 +253,17 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, apps);
         return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
+    }
+
+    private static void addHomeSettingsShortcut(Context ctx, List<Entry> apps) {
+        if (ctx.getResources().getBoolean(R.bool.show_home_settings_shortcut)
+                && ctx.getPackageManager().resolveActivity(new Intent(Settings.ACTION_HOME_SETTINGS), 0) != null) {
+            apps.add(new Entry(ctx.getString(R.string.default_home),
+                    new ComponentName(ctx, HomeSettingsActivity.class), null,
+                    ctx.getDrawable(R.drawable.ic_home_settings), null, 0));
+        }
     }
 
     /** Whether an app is a tile: not hidden (config.xml), and of this app's own activities only Home Settings. */
@@ -300,6 +310,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, fresh);
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());

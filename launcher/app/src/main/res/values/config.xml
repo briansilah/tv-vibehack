@@ -125,4 +125,7 @@
         <item>com.netflix.ninja | nflx://www.netflix.com/search?q={title}</item>
         <item>com.apple.atve.androidtv.appletv | https://tv.apple.com/search?term={title}</item>
     </string-array>
+    <!-- "Default home" tile that opens Android's home-screen picker, for TVs whose settings have one
+         (most Android TVs don't; the tile only appears when the page exists). Off by default. -->
+    <bool name="show_home_settings_shortcut">false</bool>
 </resources>
