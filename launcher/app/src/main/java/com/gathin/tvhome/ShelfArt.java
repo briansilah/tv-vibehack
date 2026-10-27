@@ -3,8 +3,8 @@ package com.gathin.tvhome;
 /**
  * The top shelf's artwork: an original picture for each app (see {@link ShelfArtworks}), painted on the TV from its
  * brand's colours and motifs, in the manner of tvOS's static Top Shelf images: bold flat shapes cut off by the edges of
- * the screen, dry-brush streaks and scribbles in them, around a calm dark middle where {@link ShelfInfoView} draws the
- * app's logo. No pictures ship with the launcher: each is painted when first needed.
+ * the screen, dry-brush streaks and scribbles in them, around a calm middle where {@link ShelfInfoView} draws the
+ * app's logo, all on true black. No pictures ship with the launcher: each is painted when first needed.
  *
  * <p>Plain Java, so it runs in JVM unit tests, and deterministic: an app always gets the same picture. Recipes draw in
  * a 1920 x 1080 design space (the screen at 1080p), scaled to the size asked for. Shapes are signed distance fields:
@@ -16,11 +16,12 @@ final class ShelfArt {
     /** The design space. */
     static final float DW = 1920f, DH = 1080f;
     /**
-     * The calm middle, which recipes leave to the ground: an ellipse half the screen wide around the logo, which
-     * ShelfInfoView centres above the dock (its middle at 0.46 of the dock's top, about 312 at 1080p), at most 576 x
-     * 203 with the app's name.
+     * The calm middle, which recipes leave to the ground: an ellipse half the screen wide around the logo. Its
+     * centre is where YouTube's Apple TV image has its logo (x 960, y 441 at 1080p), and ShelfInfoView puts every
+     * app's logo there, at most 576 x 203 with the app's name. Above it, along the screen's top edge, shapes run
+     * all the way across, as in YouTube's.
      */
-    static final float CALM_X = 960f, CALM_Y = 312f, CALM_RX = 480f, CALM_RY = 200f;
+    static final float CALM_X = 960f, CALM_Y = 441f, CALM_RX = 480f, CALM_RY = 200f;
 
     /** A picture: paints itself on an easel. */
     interface Recipe {
@@ -698,17 +699,22 @@ final class ShelfArt {
             }
         }
 
-        /** Last: a fine grain, which keeps gradients from banding and gives the paint a little tooth. */
+        /**
+         * Last: a fine grain, which keeps gradients from banding and gives the paint a little tooth; never on the
+         * black, which stays true black, and the faint haze over it goes (TrueBlack).
+         */
         void finish() {
             long hseed = seed * 0x2545F4914F6CDD1DL;
             for (int i = 0; i < px.length; i++) {
+                int p = px[i];
+                if ((p & 0xFFFFFF) == 0) continue;
                 long z = (i + hseed) * 0x9E3779B97F4A7C15L;
                 z = (z ^ (z >>> 31)) * 0xBF58476D1CE4E5B9L;
                 int n = (int) ((z >>> 59) & 0x7) - 4;   // -4..3
-                int p = px[i];
                 int r = clamp(((p >> 16) & 0xFF) + n), g = clamp(((p >> 8) & 0xFF) + n), b = clamp((p & 0xFF) + n);
                 px[i] = 0xFF000000 | r << 16 | g << 8 | b;
             }
+            TrueBlack.toe(px, px.length, TrueBlack.FAINT_KNEE, TrueBlack.FAINT_END);
         }
     }
 
