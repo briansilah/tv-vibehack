@@ -31,3 +31,14 @@ or adopted differently, and why: the only record of it.
 | 2026-10-25 | [Glass scrolling (cleanyourtv#47)](https://github.com/Gathin23/cleanyourtv/pull/47) | Did not restore upstream's moving glass rectangle or its spring properties. | The fork's LiquidGlass dock and tile highlights replaced that rectangle; its GridScroller/followPage already moves the page and backdrop together. |
 | 2026-10-25 | [Row-edge focus (cleanyourtv#55)](https://github.com/Gathin23/cleanyourtv/pull/55) | Kept AppOrder.step and onTileDpadKey instead of restoring onTileVerticalKey. | The fork already handles all four directions and clamps both row edges, including while arranging apps; retaining its path preserves Top Shelf and corner navigation. |
 | 2026-10-25 | [Xiaomi MOOR2 and stock-home detection (cleanyourtv#65)](https://github.com/Gathin23/cleanyourtv/pull/65) | Took the TV list and HOME-priority findings, but commented out its setupwraith disable entry and described it as an upstream-only workaround. Kept the fork's package-presence detection of Google TV, rather than resolving an arbitrary HOME owner to disable. | The fork already recognises launcherx and keeps it enabled with HomeButtonService. Disabling a setup wizard or an unknown HOME candidate is not needed for that design; the known Android TV default and explicit STOCK_LAUNCHER remain supported. |
+
+## Pending, not merged
+
+The October 27 checkpoint reaches upstream `44316cd2`. The next step,
+[Gathin23/cleanyourtv#27](https://github.com/Gathin23/cleanyourtv/pull/27) and its
+[opt-in follow-up](https://github.com/Gathin23/cleanyourtv/commit/2e51d3e5), was trial-merged and aborted:
+its second accessibility key filter needs a coherent integration with `HomeButtonService` and `VolumeHold`,
+including held-volume repeats, Input opt-in and both installers' safe Google TV path. Injected emulator keys
+bypass accessibility filtering, so they cannot verify that interaction. These changes remain pending, not
+rejected or counted as adopted; later upstream commits have not been merged either.
+See [the checkpoint's checks and emulator evidence](https://github.com/briansilah/tv-vibehack/pull/40#issuecomment-6435293777).
