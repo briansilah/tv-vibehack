@@ -4,15 +4,20 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.os.Bundle;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.SeekBar;
 
 /**
  * Apple's Liquid Glass slider (Settings on tvOS and iOS 26), for the remote: Left and Right move it in steps of 5
  * between 0 and 100, OK or Back closes it. On the left an outlined pair of panes (clear), on the right a filled pair
  * (tinted); the track fills blue up to a white thumb, with marks under it at Clear and Tinted
- * ({@link LiquidGlass.Look}).
+ * ({@link LiquidGlass.Look}). Accessibility uses a native SeekBar range and the same five-point steps; activating
+ * the control closes it, just like OK. Its drawing is independent of those semantics.
  */
 public class GlassSlider extends View {
 
@@ -37,6 +42,7 @@ public class GlassSlider extends View {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
         setFocusable(true);
+        setClickable(true);
     }
 
     void setListener(Listener listener) {
@@ -44,8 +50,11 @@ public class GlassSlider extends View {
     }
 
     void setValue(int value) {
-        this.value = clamp(value);
+        int next = clamp(value);
+        if (next == this.value) return;
+        this.value = next;
         invalidate();
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
     }
 
     int getValue() {
@@ -61,16 +70,69 @@ public class GlassSlider extends View {
         return Math.max(0, Math.min(100, v));
     }
 
+    private boolean changeValue(int next) {
+        next = clamp(next);
+        if (next == value) return false;
+        setValue(next);
+        if (listener != null) listener.onGlassChanged(next);
+        return true;
+    }
+
+    @Override
+    public CharSequence getAccessibilityClassName() {
+        return SeekBar.class.getName();
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        info.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_INT, 0, 100, value));
+        info.setScrollable(isEnabled());
+        if (isEnabled()) {
+            if (value > 0) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
+            if (value < 100) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD);
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+        }
+    }
+
+    @Override
+    public void onInitializeAccessibilityEvent(AccessibilityEvent event) {
+        super.onInitializeAccessibilityEvent(event);
+        event.setItemCount(101);
+        event.setCurrentItemIndex(value);
+    }
+
+    @Override
+    public boolean performAccessibilityAction(int action, Bundle arguments) {
+        if (!isEnabled()) return false;
+        if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) return changeValue(step(value, 1));
+        if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) return changeValue(step(value, -1));
+        if (action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()) {
+            if (arguments == null || !arguments.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE)) {
+                return false;
+            }
+            float requested = arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE);
+            if (!Float.isFinite(requested)) return false;
+            return changeValue(Math.round(requested));
+        }
+        return super.performAccessibilityAction(action, arguments);
+    }
+
+    @Override
+    public boolean performClick() {
+        if (!isEnabled()) return false;
+        super.performClick();
+        if (listener != null) listener.onGlassDone();
+        return true;
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_LEFT:
             case KeyEvent.KEYCODE_DPAD_RIGHT:
-                int next = step(value, keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1);
-                if (next != value) {
-                    setValue(next);
-                    if (listener != null) listener.onGlassChanged(next);
-                }
+                changeValue(step(value, keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1));
                 return true;
             case KeyEvent.KEYCODE_DPAD_UP:
             case KeyEvent.KEYCODE_DPAD_DOWN:
@@ -91,6 +153,8 @@ public class GlassSlider extends View {
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER:
             case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                performClick();
+                return true;
             case KeyEvent.KEYCODE_BACK:
                 if (listener != null) listener.onGlassDone();
                 return true;
