@@ -74,6 +74,7 @@ FILE_RULES = [
     (("tools/*",), E(why="local tools")),
     (("launcher/build-and-install.*",), E(check="emulator", why="installing: try it on your emulator")),
     (("launcher/app/src/test/*",), E(why="JVM unit tests")),
+    (("launcher/app/src/androidTest/*",), E(check="emulator", why="device tests, not shipped in the launcher")),
     # The build changes every number.
     (("launcher/build.gradle", "launcher/settings.gradle", "launcher/gradle.properties", "launcher/gradle/*",
       "launcher/gradlew*", "launcher/app/build.gradle", "launcher/app/proguard*", "launcher/app/*.pro",
