@@ -71,6 +71,7 @@ class InputInstallTests(unittest.TestCase):
         config = ET.parse(resources / "values/config.xml")
         self.assertEqual(config.find("bool[@name='input_key_service']").text, "false")
         self.assertEqual(config.find("bool[@name='home_key_service']").text, "false")
+        self.assertIsNone(config.find("integer[@name='rows_below_dock']"))
         manifest = ET.parse(REPO / "launcher/app/src/main/AndroidManifest.xml")
         name = "{http://schemas.android.com/apk/res/android}name"
         services = [s.get(name) for s in manifest.findall(".//service")

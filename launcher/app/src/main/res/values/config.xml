@@ -39,8 +39,6 @@
     <!-- Optional VPN app the network button opens (hold for Wi-Fi settings). Empty: opens Wi-Fi settings.
          For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
     <string name="vpn_app" translatable="false"></string>
-    <!-- Grid rows left visible under the dock on the home screen. 0 = dock sits at the very bottom. -->
-    <integer name="rows_below_dock">0</integer>
 
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>

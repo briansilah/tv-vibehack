@@ -243,7 +243,6 @@ the dock order, apps to hide, your TV's Live TV package, the number of columns, 
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
-`rows_below_dock` optionally leaves grid rows visible below the Dock (default `0`).
 The Inputs button hides itself on sticks and boxes that have no HDMI or tuner.
 On Xiaomi remotes that send ALL_APPS for Home, set `home_key_service` to `true` and reinstall:
 the existing HomeButtonService handles that key too, with no second accessibility filter.
