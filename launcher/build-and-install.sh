@@ -30,6 +30,7 @@ PY=../tools/venv/bin/python
 [ -x "$PY" ] || PY=../tools/venv/Scripts/python.exe
 export MSYS_NO_PATHCONV=1
 [ -x "$PY" ] || { echo "run: python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt" >&2; exit 1; }
+INPUT_KEY_SERVICE=$("$PY" -c 'import xml.etree.ElementTree as E; print(E.parse("app/src/main/res/values/config.xml").find("bool[@name=\"input_key_service\"]").text.strip())')
 # Check the connection before the build; tv.py says what's missing.
 TV=$("$PY" -I ../tools/tv.py 'echo "$(getprop ro.product.manufacturer) $(getprop ro.product.model), Android $(getprop ro.build.version.release)"')
 echo "TV: $TV"
@@ -50,6 +51,12 @@ case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *pack
   if [ "$GOOGLE_TV" = 1 ]; then
     # Re-enable it in case an older version of this script disabled it.
     echo "pm enable $GOOGLE_TV_LAUNCHER"
+  else
+    printf '%s\n' \
+      "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \
+      "pm disable-user --user 0 $STOCK_LAUNCHER"
+  fi
+  if [ "$GOOGLE_TV" = 1 ] || [ "$INPUT_KEY_SERVICE" = true ]; then
     # TCL only lets the system start an app's process for a service with its AUTO_START app op allowed; other
     # TVs have no such op. Allow it before turning the service on, or TCL blocks the first bind. App ops are saved
     # lazily (up to 30 min later) and not on `adb reboot`, so save now or the next boot forgets it.
@@ -61,12 +68,8 @@ case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *pack
     cat <<'SH'
 s=$(settings get secure enabled_accessibility_services); case "$s" in *com.gathin.tvhome/.HomeButtonService*) ;; null|"") settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeButtonService ;; *) settings put secure enabled_accessibility_services "$s:com.gathin.tvhome/.HomeButtonService" ;; esac; settings put secure accessibility_enabled 1; echo home-button-service-on
 SH
-    # Home still resolves to the stock launcher, so open this one now.
+    # On Google TV Home still resolves to the stock launcher; on Android TV this also starts Home after install.
     echo "am start -n com.gathin.tvhome/.MainActivity"
-  else
-    printf '%s\n' \
-      "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \
-      "pm disable-user --user 0 $STOCK_LAUNCHER"
   fi
 } | "$PY" -I ../tools/tv.py --batch
 echo "Installed. Press Home on the remote to see it."

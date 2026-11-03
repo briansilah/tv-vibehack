@@ -109,4 +109,5 @@
         <item>Lila</item>
         <item>Pink</item>
     </string-array>
+    <string name="input_key_service_description">Öffnet die Quellenauswahl, wenn die Input-Taste der Fernbedienung gedrückt wird.</string>
 </resources>

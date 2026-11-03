@@ -120,6 +120,11 @@ A home screen that is yours again:
 - **All text is set in [Inter](https://rsms.me/inter/)**, the open typeface closest to Apple TV's
   SF Pro, on a type scale taken from tvOS's text styles (`values/styles.xml`).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
+- **The remote's Input button can keep working.** On Google TV the stock launcher handled it; an
+  optional `input_key_service` setting in `config.xml` maps it (`KEYCODE_TV`) to the system input
+  switcher in any app. Off by default; set it to `true` and run either installer to turn it on.
+  This uses the existing `HomeButtonService`, not a second key filter, and keeps held-volume repeats.
+  Without a system input switcher the key stays with the TV. Google TV's stock launcher stays enabled.
 
 And a TV that stops working against you: no sponsored rows, no "Discover" nags, no analytics
 phoning home, no apps you never asked for.

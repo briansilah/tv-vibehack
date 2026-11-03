@@ -124,4 +124,5 @@
     </string-array>
     <string name="default_home">Default Home</string>
     <string name="home_settings_help">Choose a home screen in system settings, then press Home.</string>
+    <string name="input_key_service_description">Opens the input switcher when the remote\'s Input button is pressed.</string>
 </resources>

@@ -18,6 +18,7 @@ or adopted differently, and why: the only record of it.
 
 | Date | Upstream | What the fork did | Why |
 |---|---|---|---|
+| 2026-11-03 | [Input key (Gathin23/cleanyourtv#27)](https://github.com/Gathin23/cleanyourtv/pull/27), [opt-in follow-up](https://github.com/Gathin23/cleanyourtv/commit/2e51d3e5) | Ported KEYCODE_TV handling into the existing HomeButtonService, with `input_key_service=false` in config.xml instead of a second service and per-install flags. Both installers enable the same service when opted in, grant DUMP for VolumeHold, and retain the Google TV safe path. Kept both translation keys; no duplicate service declaration or XML. Input is consumed only when a switcher resolves, opens once on an uncanceled release, and is reported to VolumeHold before handling. | Android permits only one accessibility filter to own a key; two filters could hide consumed Input presses from VolumeHold and mistake them for held-volume keys. A packaged, off-by-default option keeps provenance reproducible and leaves stock Input handling unchanged. Physical remote Input/Home/volume interaction still needs /test-on-tv; injected emulator keys cannot verify accessibility filtering. |
 | 2026-10-27 | [Default-home shortcut (Gathin23/cleanyourtv#30)](https://github.com/Gathin23/cleanyourtv/pull/30), [off-by-default follow-up](https://github.com/Gathin23/cleanyourtv/commit/44316cd2) | Took the optional system home picker and internal activity; kept it off by default. Named its label `default_home` so `home_settings` continues to mean the fork's appearance screen. Added HOME_SETTINGS package visibility and integrated the tile with background loading, saved order, Home Settings' app list and launch animations. | The fork already has a distinct Home Settings tile and AppOrder. Replacing either would change its design; the picker must remain discoverable on Android 11+ and use the same tile identity on every surface. |
 | 2026-10-26 | [Simplified Chinese (cleanyourtv#32)](https://github.com/Gathin23/cleanyourtv/pull/32), [Catalan (cleanyourtv#35)](https://github.com/Gathin23/cleanyourtv/pull/35) | Took both translations and per-app locale metadata. Declared CJK's existing Android system-font fallback in the font coverage check, keeping missing Latin characters as errors. | Inter has no CJK glyphs; adding their code points to the Latin subset would only pretend to cover them. System fonts render the translation without large bundled fonts. Fork-only strings fall back to English. |
 | 2026-10-26 | [Android 14 target (cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34) | Took target SDK 34, LEANBACK_LAUNCHER visibility/discovery and optional GPS. Added the coarse-location permission and grants before fine location in both installers, and explicitly made general location hardware optional too. | Release lint exposed Android 12's coarse-plus-fine requirement; APK badging then exposed implied general location hardware. Reading the network name must not require Wi-Fi, GPS or location hardware. |
@@ -34,11 +35,6 @@ or adopted differently, and why: the only record of it.
 
 ## Pending, not merged
 
-The October 27 checkpoint reaches upstream `44316cd2`. The next step,
-[Gathin23/cleanyourtv#27](https://github.com/Gathin23/cleanyourtv/pull/27) and its
-[opt-in follow-up](https://github.com/Gathin23/cleanyourtv/commit/2e51d3e5), was trial-merged and aborted:
-its second accessibility key filter needs a coherent integration with `HomeButtonService` and `VolumeHold`,
-including held-volume repeats, Input opt-in and both installers' safe Google TV path. Injected emulator keys
-bypass accessibility filtering, so they cannot verify that interaction. These changes remain pending, not
-rejected or counted as adopted; later upstream commits have not been merged either.
-See [the checkpoint's checks and emulator evidence](https://github.com/briansilah/tv-vibehack/pull/40#issuecomment-6435293777).
+The November 3 checkpoint reaches upstream `2e51d3e5`, resolving the prior Input-key integration boundary.
+Later upstream commits remain pending, not rejected or counted as adopted.
+The physical-remote interaction remains a TV check, not something injected emulator keys can prove.

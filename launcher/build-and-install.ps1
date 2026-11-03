@@ -33,6 +33,8 @@ try {
     Set-Location $PSScriptRoot
     $py = '..\tools\venv\Scripts\python.exe'
     if (-not (Test-Path $py)) { throw 'run: python -m venv tools\venv; tools\venv\Scripts\python.exe -m pip install -r tools\requirements.txt' }
+    [xml]$config = Get-Content -Raw 'app\src\main\res\values\config.xml'
+    $inputKeyService = $config.SelectSingleNode('/resources/bool[@name="input_key_service"]').InnerText.Trim() -eq 'true'
 
     if (-not $env:JAVA_HOME -or -not (Test-Path "$env:JAVA_HOME\bin\java.exe")) {
         $jbr = Get-ChildItem 'C:\Program Files\Android' -Directory -ErrorAction SilentlyContinue |
@@ -71,15 +73,7 @@ try {
             # The top shelf reads what apps publish for the home screen (Watch Next, preview channels).
             'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
             # Re-enable it in case an older version of this script disabled it.
-            "pm enable $googleTvLauncher",
-            # TCL only lets the system start an app's process for a service with its AUTO_START app op allowed; other
-            # TVs have no such op. Allow it before turning the service on, or TCL blocks the first bind. App ops are saved
-            # lazily (up to 30 min later) and not on `adb reboot`, so save now or the next boot forgets it.
-            'appops set com.gathin.tvhome AUTO_START allow 2>/dev/null; appops write-settings; echo auto-start',
-            # Add the service to enabled_accessibility_services, keeping any others.
-            's=$(settings get secure enabled_accessibility_services); case "$s" in *com.gathin.tvhome/.HomeButtonService*) ;; null|"") settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeButtonService ;; *) settings put secure enabled_accessibility_services "$s:com.gathin.tvhome/.HomeButtonService" ;; esac; settings put secure accessibility_enabled 1; echo home-button-service-on',
-            # Home still resolves to the stock launcher, so open this one now.
-            'am start -n com.gathin.tvhome/.MainActivity'
+            "pm enable $googleTvLauncher"
         ) | & $py -I ..\tools\tv.py --batch
     } else {
         $out = & $py -I ..\tools\tv.py 'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'
@@ -92,6 +86,16 @@ try {
             'pm grant com.gathin.tvhome android.permission.READ_TV_LISTINGS 2>/dev/null; echo tv-listings-granted',
             'cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity',
             "pm disable-user --user 0 $StockLauncher"
+        ) | & $py -I ..\tools\tv.py --batch
+    }
+    if ($googleTv -or $inputKeyService) {
+        @(
+            # Allow the service process on TCL and persist it before the first bind.
+            'appops set com.gathin.tvhome AUTO_START allow 2>/dev/null; appops write-settings; echo auto-start',
+            'pm grant com.gathin.tvhome android.permission.DUMP 2>/dev/null; echo dump-granted',
+            # One filter handles Home and optional Input; VolumeHold sees every key it consumes too.
+            's=$(settings get secure enabled_accessibility_services); case "$s" in *com.gathin.tvhome/.HomeButtonService*) ;; null|"") settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeButtonService ;; *) settings put secure enabled_accessibility_services "$s:com.gathin.tvhome/.HomeButtonService" ;; esac; settings put secure accessibility_enabled 1; echo home-button-service-on',
+            'am start -n com.gathin.tvhome/.MainActivity'
         ) | & $py -I ..\tools\tv.py --batch
     }
     Write-Host 'Installed. Press Home on the remote to see it.'

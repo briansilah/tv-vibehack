@@ -34,6 +34,9 @@
         <intent>
             <action android:name="android.settings.HOME_SETTINGS" />
         </intent>
+        <intent>
+            <action android:name="com.android.tv.action.VIEW_INPUTS" />
+        </intent>
     </queries>
 
     <application
