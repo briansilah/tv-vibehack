@@ -35,6 +35,7 @@ try {
     if (-not (Test-Path $py)) { throw 'run: python -m venv tools\venv; tools\venv\Scripts\python.exe -m pip install -r tools\requirements.txt' }
     [xml]$config = Get-Content -Raw 'app\src\main\res\values\config.xml'
     $inputKeyService = $config.SelectSingleNode('/resources/bool[@name="input_key_service"]').InnerText.Trim() -eq 'true'
+    $homeKeyService = $config.SelectSingleNode('/resources/bool[@name="home_key_service"]').InnerText.Trim() -eq 'true'
 
     if (-not $env:JAVA_HOME -or -not (Test-Path "$env:JAVA_HOME\bin\java.exe")) {
         $jbr = Get-ChildItem 'C:\Program Files\Android' -Directory -ErrorAction SilentlyContinue |
@@ -88,7 +89,7 @@ try {
             "pm disable-user --user 0 $StockLauncher"
         ) | & $py -I ..\tools\tv.py --batch
     }
-    if ($googleTv -or $inputKeyService) {
+    if ($googleTv -or $inputKeyService -or $homeKeyService) {
         @(
             # Allow the service process on TCL and persist it before the first bind.
             'appops set com.gathin.tvhome AUTO_START allow 2>/dev/null; appops write-settings; echo auto-start',

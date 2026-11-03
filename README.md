@@ -3,15 +3,17 @@
 **Your TV, minus the ads.**
 
 Strip the bloatware from any Android TV or Google TV over Wi-Fi, and replace the ad-filled home
-screen with a clean launcher that looks like an Apple TV. No root, no cable, nothing uninstalled,
-and a one-line restore if you change your mind.
+screen with a clean launcher that looks like an Apple TV.
+
+**No root, no cable, nothing uninstalled, and a one-line restore if you change your mind.**
 
 ![Before: stock Google TV home with a sponsored ad. After: the tv-vibehack launcher](docs/stock-vs-new-side.jpg)
 
 It started as an afternoon fixing my parents' Mi TV, which showed them an advert before they
 could reach Netflix. The whole thing was done with Claude Code talking to the real TV, and the
-prompt that did it is in this repo so you can do the same with yours. The replies to the tweet
-below are where most of the TV lists in this repo came from.
+prompt that did it is in this repo so you can do the same with yours. The replies to the
+[tweet below](https://x.com/gathint/status/2111379569030939102) are where most of the TV lists in
+this repo came from.
 
 <p align="center">
   <a href="https://x.com/gathint/status/2111379569030939102"><img src="docs/tweet.png" alt="The tweet: Vibe coded my parents' TV this afternoon. Before and after screenshots." width="380"></a>
@@ -143,14 +145,24 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 | TV | OS |
 |---|---|
 | Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
-| Xiaomi MiTV-AXSO0 | Android TV 9 |
-| Xiaomi Mi Box S (MIBOX4), streaming box | Android TV 9 |
-| TCL 55" 4K Google TV, 2023 (G10) | Google TV 12 |
-| SANYO ATV R2 | Android TV 9 |
-| OnePlus TV (D00) | Google TV 14 |
-| Sony BRAVIA XBR-65X900E (2017) | Android TV 9 |
-| NVIDIA SHIELD TV Pro 2019 (P2897) | Android TV 11 |
-| Xiaomi MiTV-MOOR2 (venom) | Google TV 11 |
+| TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
+| Xiaomi MiTV-AXSO0 (dangal) | Android TV 9 |
+| Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
+| SANYO ATV R2 (SCBC, Realtek RTD285O) | Android TV 9 |
+| OnePlus TV (D00, Dubai) | Google TV 14 |
+| BenQ E55-735 (Changhong AI PONT, DVB96BQ) | Google TV 14 |
+| Hisense SmartTV 4K FFM (huangshan, MediaTek) | Android TV 10 |
+| TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
+| Sony BRAVIA 4K UR2 (BRAVIA_UR2_4K, MediaTek) | Android TV 10 |
+| Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 |
+| Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
+| TCL BeyondTV (India) | Android TV 9 |
+| NVIDIA SHIELD TV Pro 2019 (P2897, mdarcy) | Android TV 11 |
+| Xiaomi MiTV-MOOR2 (venom, MediaTek) | Google TV 11 |
+| Xiaomi MiTV-AESP0 stick (aquaman, 1 GB) | Android TV 9 |
+| TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
+| RCA AI PONT SA (Changhong, redwood, ISDB92RC) | Android 14 |
+| CHiQ AI PONT (DVB93CQ) | Android TV 11 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -231,6 +243,10 @@ the dock order, apps to hide, your TV's Live TV package, the number of columns, 
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
+`rows_below_dock` optionally leaves grid rows visible below the Dock (default `0`).
+The Inputs button hides itself on sticks and boxes that have no HDMI or tuner.
+On Xiaomi remotes that send ALL_APPS for Home, set `home_key_service` to `true` and reinstall:
+the existing HomeButtonService handles that key too, with no second accessibility filter.
 
 **Language** follows the TV: English, German, Spanish, Catalan and Simplified Chinese. On Android 13
 and later, set a language for the launcher alone with, for example,
@@ -564,6 +580,14 @@ Things that bit us or contributors, so they don't bite you.
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`
 - **Third-party launchers** often charge for basics like a custom wallpaper. That's why this repo
   has its own.
+- **Wrong time zone, clock off by 30 or 60 minutes**, seen on Xiaomi in Iran: the TV picked a
+  neighbouring zone, and older firmware ships time zone data from before Iran dropped daylight
+  saving in 2022 (on Android 10 and newer, check with
+  `tools/tv.py 'cat /apex/com.android.tzdata/etc/tz/tz_version'`). Set the zone yourself:
+  `tools/tv.py 'settings put global auto_time_zone 0; cmd alarm set-timezone Asia/Tehran'`.
+  If the clock then jumps an hour ahead in spring, a fixed offset keeps it right:
+  `tools/tv.py 'cmd alarm set-timezone GMT+03:30'`. The same applies to any country whose rules
+  changed after the firmware was built.
 
 ## Questions people ask
 

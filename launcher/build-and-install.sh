@@ -31,6 +31,7 @@ PY=../tools/venv/bin/python
 export MSYS_NO_PATHCONV=1
 [ -x "$PY" ] || { echo "run: python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt" >&2; exit 1; }
 INPUT_KEY_SERVICE=$("$PY" -c 'import xml.etree.ElementTree as E; print(E.parse("app/src/main/res/values/config.xml").find("bool[@name=\"input_key_service\"]").text.strip())')
+HOME_KEY_SERVICE=$("$PY" -c 'import xml.etree.ElementTree as E; print(E.parse("app/src/main/res/values/config.xml").find("bool[@name=\"home_key_service\"]").text.strip())')
 # Check the connection before the build; tv.py says what's missing.
 TV=$("$PY" -I ../tools/tv.py 'echo "$(getprop ro.product.manufacturer) $(getprop ro.product.model), Android $(getprop ro.build.version.release)"')
 echo "TV: $TV"
@@ -56,7 +57,7 @@ case "$("$PY" -I ../tools/tv.py "pm path $GOOGLE_TV_LAUNCHER" || true)" in *pack
       "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \
       "pm disable-user --user 0 $STOCK_LAUNCHER"
   fi
-  if [ "$GOOGLE_TV" = 1 ] || [ "$INPUT_KEY_SERVICE" = true ]; then
+  if [ "$GOOGLE_TV" = 1 ] || [ "$INPUT_KEY_SERVICE" = true ] || [ "$HOME_KEY_SERVICE" = true ]; then
     # TCL only lets the system start an app's process for a service with its AUTO_START app op allowed; other
     # TVs have no such op. Allow it before turning the service on, or TCL blocks the first bind. App ops are saved
     # lazily (up to 30 min later) and not on `adb reboot`, so save now or the next boot forgets it.

@@ -62,6 +62,7 @@ public class HomeButtonService extends AccessibilityService {
     private boolean dreaming;
     private VolumeHold volumeHold;
     private final InputPress inputPress = new InputPress();
+    private final InputPress allAppsPress = new InputPress();
     private Intent inputIntent;
 
     private final BroadcastReceiver dreamReceiver = new BroadcastReceiver() {
@@ -113,6 +114,15 @@ public class HomeButtonService extends AccessibilityService {
     protected boolean onKeyEvent(KeyEvent event) {
         if (volumeHold != null) volumeHold.keyEvent(event);
         if (event.getKeyCode() == KeyEvent.KEYCODE_TV) return onInputKey(event);
+        if (event.getKeyCode() == KeyEvent.KEYCODE_ALL_APPS) {
+            int result = allAppsPress.key(event.getAction(), event.getRepeatCount(), event.isCanceled(),
+                    getResources().getBoolean(R.bool.home_key_service));
+            if (result == InputPress.OPEN) {
+                showLauncher(false);
+                closeScreensaver();
+            }
+            return result != InputPress.PASS;
+        }
         if (event.getKeyCode() != KeyEvent.KEYCODE_HOME) return false;
         switch (event.getAction()) {
             case KeyEvent.ACTION_DOWN:

@@ -29,6 +29,9 @@
          Off leaves the TV's own handling alone. Both installers enable HomeButtonService when true;
          the same filter handles Home and Input, preserving held-volume repeats. -->
     <bool name="input_key_service">false</bool>
+    <!-- Xiaomi sticks whose Home button sends ALL_APPS instead of HOME. Uses the same service as
+         input_key_service, enabled by either installer when true. Other remotes keep their own handling. -->
+    <bool name="home_key_service">false</bool>
 
     <!-- Show the Solar Hijri (Shamsi) date used in Iran and Afghanistan above the Gregorian date at the
          top left. Off keeps the fork's uncluttered Top Shelf and expanding top right unchanged. -->
@@ -36,6 +39,8 @@
     <!-- Optional VPN app the network button opens (hold for Wi-Fi settings). Empty: opens Wi-Fi settings.
          For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
     <string name="vpn_app" translatable="false"></string>
+    <!-- Grid rows left visible under the dock on the home screen. 0 = dock sits at the very bottom. -->
+    <integer name="rows_below_dock">0</integer>
 
     <!-- Tiles per row in the grid; the dock always has this many slots. -->
     <integer name="columns">4</integer>
