@@ -16,7 +16,7 @@ commands = sys.stdin.read().splitlines() if '--batch' in sys.argv else [sys.argv
 with open(os.environ['INSTALL_LOG'], 'a') as log:
     for command in commands:
         log.write(json.dumps(command) + '\\n')
-        if command.startswith('pm path ') and os.environ['GOOGLE_TV'] == '1':
+        if command.startswith('pm path ') and os.environ['FAKE_GOOGLE_TV'] == '1':
             print('package:/system/launcherx.apk')
 """
 
@@ -41,7 +41,7 @@ class InputInstallTests(unittest.TestCase):
             (tools / "b64push.py").write_text("")
             (tools / "tv.py").write_text(FAKE_TV)
             log = root / "commands.jsonl"
-            env = dict(os.environ, INSTALL_LOG=str(log), GOOGLE_TV=str(int(google_tv)))
+            env = dict(os.environ, INSTALL_LOG=str(log), FAKE_GOOGLE_TV=str(int(google_tv)))
             result = subprocess.run(["bash", str(launcher / "build-and-install.sh")], env=env,
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
