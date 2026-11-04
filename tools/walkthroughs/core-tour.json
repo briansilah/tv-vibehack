@@ -70,6 +70,15 @@
       "expect_top": "SettingsActivity"
     },
     {
+      "expect_text": "Home Settings"
+    },
+    {
+      "expect_text": "Liquid Glass"
+    },
+    {
+      "expect_text": "Same for All Apps"
+    },
+    {
       "screenshot": "home-settings",
       "expect": "Home Settings: its rows (the Top Shelf for all apps and for each app, Liquid Glass), nothing cut off"
     },
