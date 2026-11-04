@@ -29,10 +29,13 @@ final class HopKeys {
         replay = 0;
     }
 
-    /** Home is in front: keys go to it again. Returns the move to make again there (a D-pad key code), or 0. */
-    int shown() {
+    /**
+     * Home is in front: keys go to it again. Returns the move to make again there (a D-pad key code), or 0: also when
+     * Home took longer than {@link #HOLD_MS}, as presses since have gone where they went.
+     */
+    int shown(long now) {
+        int r = now < until ? replay : 0;
         until = Long.MIN_VALUE;
-        int r = replay;
         replay = 0;
         return r;
     }
@@ -41,7 +44,11 @@ final class HopKeys {
     boolean take(int action, int keyCode, int repeat, long downTime, long now) {
         if (!LateKeys.navigation(keyCode) && keyCode != KeyEvent.KEYCODE_BACK) return false;
         if (wasTaken(downTime)) return true;
-        if (now >= until || action != KeyEvent.ACTION_DOWN) return false;
+        if (now >= until) {
+            replay = 0;
+            return false;
+        }
+        if (action != KeyEvent.ACTION_DOWN) return false;
         remember(downTime);
         if (replay == 0 && repeat == 0 && !LateKeys.select(keyCode) && keyCode != KeyEvent.KEYCODE_BACK) {
             replay = keyCode;

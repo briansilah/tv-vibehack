@@ -156,7 +156,7 @@ public class HomeButtonService extends AccessibilityService {
         if (pkg == null || cls == null) return;
         ComponentName window = new ComponentName(pkg.toString(), cls.toString());
         if (window.equals(new ComponentName(this, MainActivity.class))) {
-            replay(hopKeys.shown());
+            replay(hopKeys.shown(SystemClock.uptimeMillis()));
             return;
         }
         // Dialogs, toasts and the volume bar also send this event; only activities say what is in front.

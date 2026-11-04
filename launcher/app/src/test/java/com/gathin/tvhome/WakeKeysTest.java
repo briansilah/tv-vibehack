@@ -18,11 +18,11 @@ public class WakeKeysTest {
     public void freshPressesAllGoThrough() {
         LateKeys k = new LateKeys();
         for (long t = 1000; t < 5000; t += 300) {
-            assertFalse(k.drop(DOWN, LEFT, t, t, t + 5));
-            assertFalse(k.drop(UP, LEFT, t + 80, t, t + 85));
+            assertFalse(k.drop(DOWN, LEFT, 0, t, t, t + 5));
+            assertFalse(k.drop(UP, LEFT, 0, t + 80, t, t + 85));
         }
         // Held up a little (a slow frame): still the user's.
-        assertFalse(k.drop(DOWN, RIGHT, 6000, 6000, 6000 + LateKeys.LATE_MS));
+        assertFalse(k.drop(DOWN, RIGHT, 0, 6000, 6000, 6000 + LateKeys.LATE_MS));
     }
 
     @Test
@@ -30,18 +30,18 @@ public class WakeKeysTest {
         LateKeys k = new LateKeys();
         // Pressed Left at 1.0 s, again at 1.8 s and 2.5 s while Home wasn't there; all arrive at 3.0 s.
         long at = 3000;
-        assertFalse(k.drop(DOWN, LEFT, 1000, 1000, at));
-        assertFalse(k.drop(UP, LEFT, 1100, 1000, at));
-        assertTrue(k.drop(DOWN, LEFT, 1800, 1800, at + 1));
-        assertTrue(k.drop(UP, LEFT, 1900, 1800, at + 1));
-        assertTrue(k.drop(DOWN, LEFT, 2500, 2500, at + 2));
-        assertTrue(k.drop(UP, LEFT, 2600, 2500, at + 2));
+        assertFalse(k.drop(DOWN, LEFT, 0, 1000, 1000, at));
+        assertFalse(k.drop(UP, LEFT, 0, 1100, 1000, at));
+        assertTrue(k.drop(DOWN, LEFT, 0, 1800, 1800, at + 1));
+        assertTrue(k.drop(UP, LEFT, 0, 1900, 1800, at + 1));
+        assertTrue(k.drop(DOWN, LEFT, 0, 2500, 2500, at + 2));
+        assertTrue(k.drop(UP, LEFT, 0, 2600, 2500, at + 2));
         // The next press, once Home is there, is the user's.
-        assertFalse(k.drop(DOWN, RIGHT, 3400, 3400, 3405));
+        assertFalse(k.drop(DOWN, RIGHT, 0, 3400, 3400, 3405));
         // A press made at the same moment Home took the first late one isn't part of the burst.
         LateKeys k2 = new LateKeys();
-        assertFalse(k2.drop(DOWN, LEFT, 1000, 1000, 3000));
-        assertFalse(k2.drop(DOWN, LEFT, 3000, 3000, 3600));
+        assertFalse(k2.drop(DOWN, LEFT, 0, 1000, 1000, 3000));
+        assertFalse(k2.drop(DOWN, LEFT, 0, 3000, 3000, 3600));
     }
 
     @Test
@@ -49,40 +49,55 @@ public class WakeKeysTest {
         // Seen on an emulator waking like Google TV: Left at 0.70 s and 0.89 s, both delivered at 1.08 s as Home's
         // window got focus, 379 and 187 ms late. Focus jumped two apps at once.
         LateKeys k = new LateKeys();
-        assertFalse(k.drop(DOWN, LEFT, 699, 699, 1078));
-        assertTrue(k.drop(DOWN, LEFT, 892, 892, 1079));
-        assertTrue(k.drop(UP, LEFT, 972, 892, 1079));
-        assertFalse(k.drop(DOWN, LEFT, 1385, 1385, 1474));
+        assertFalse(k.drop(DOWN, LEFT, 0, 699, 699, 1078));
+        assertTrue(k.drop(DOWN, LEFT, 0, 892, 892, 1079));
+        assertTrue(k.drop(UP, LEFT, 0, 972, 892, 1079));
+        assertFalse(k.drop(DOWN, LEFT, 0, 1385, 1385, 1474));
     }
 
     @Test
     public void aLateSelectNeverOpensAnything() {
         LateKeys k = new LateKeys();
-        assertTrue(k.drop(DOWN, OK, 1000, 1000, 3000));
+        assertTrue(k.drop(DOWN, OK, 0, 1000, 1000, 3000));
         // Its release goes too, so no click; and a held Select's repeats.
-        assertTrue(k.drop(UP, OK, 1200, 1000, 3001));
-        assertTrue(k.drop(DOWN, OK, 1500, 1000, 3001));
+        assertTrue(k.drop(UP, OK, 0, 1200, 1000, 3001));
+        assertTrue(k.drop(DOWN, OK, 1, 1500, 1000, 3001));
         // A fresh one opens as usual.
-        assertFalse(k.drop(DOWN, OK, 4000, 4000, 4003));
-        assertFalse(k.drop(UP, OK, 4090, 4000, 4093));
+        assertFalse(k.drop(DOWN, OK, 0, 4000, 4000, 4003));
+        assertFalse(k.drop(UP, OK, 0, 4090, 4000, 4093));
     }
 
     @Test
     public void aLaterStallIsANewBurst() {
         LateKeys k = new LateKeys();
-        assertFalse(k.drop(DOWN, LEFT, 1000, 1000, 3000));
-        assertTrue(k.drop(DOWN, LEFT, 2000, 2000, 3001));
+        assertFalse(k.drop(DOWN, LEFT, 0, 1000, 1000, 3000));
+        assertTrue(k.drop(DOWN, LEFT, 0, 2000, 2000, 3001));
         // Pressed after Home took the first one, held up again: its first move goes through.
-        assertFalse(k.drop(DOWN, RIGHT, 5000, 5000, 6000));
-        assertTrue(k.drop(DOWN, RIGHT, 5500, 5500, 6001));
+        assertFalse(k.drop(DOWN, RIGHT, 0, 5000, 5000, 6000));
+        assertTrue(k.drop(DOWN, RIGHT, 0, 5500, 5500, 6001));
+    }
+
+    @Test
+    public void aHeldKeyKeepsRepeatingThroughASlowMoment() {
+        LateKeys k = new LateKeys();
+        // Right held from 1.0 s; one repeat waits 310 ms behind a busy main thread, the next was made meanwhile.
+        assertFalse(k.drop(DOWN, RIGHT, 0, 1000, 1000, 1003));
+        assertFalse(k.drop(DOWN, RIGHT, 1, 1450, 1000, 1760));
+        assertFalse(k.drop(DOWN, RIGHT, 2, 1500, 1000, 1762));
+        assertFalse(k.drop(DOWN, RIGHT, 3, 1550, 1000, 1800));
+        assertFalse(k.drop(UP, RIGHT, 0, 1600, 1000, 1810));
+        // A press that was dropped takes its repeats with it.
+        assertFalse(k.drop(DOWN, LEFT, 0, 2000, 2000, 2400));
+        assertTrue(k.drop(DOWN, LEFT, 0, 2100, 2100, 2401));
+        assertTrue(k.drop(DOWN, LEFT, 1, 2600, 2100, 2650));
     }
 
     @Test
     public void otherKeysAreLeftAlone() {
         LateKeys k = new LateKeys();
-        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_BACK, 1000, 1000, 9000));
-        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_VOLUME_UP, 1000, 1000, 9000));
-        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 1000, 1000, 9000));
+        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_BACK, 0, 1000, 1000, 9000));
+        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_VOLUME_UP, 0, 1000, 1000, 9000));
+        assertFalse(k.drop(DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0, 1000, 1000, 9000));
     }
 
     @Test
@@ -100,11 +115,11 @@ public class WakeKeysTest {
         // Volume and Home aren't the D-pad's.
         assertFalse(h.take(DOWN, KeyEvent.KEYCODE_VOLUME_UP, 0, 1460, 1460));
         assertFalse(h.take(DOWN, KeyEvent.KEYCODE_HOME, 0, 1470, 1470));
-        assertEquals(LEFT, h.shown());
+        assertEquals(LEFT, h.shown(1490));
         // Home shows: keys reach it again; a release of a key taken before is still taken.
         assertTrue(h.take(UP, RIGHT, 0, 1300, 1500));
         assertFalse(h.take(DOWN, LEFT, 0, 1600, 1600));
-        assertEquals(0, h.shown());
+        assertEquals(0, h.shown(1610));
     }
 
     @Test
@@ -113,11 +128,18 @@ public class WakeKeysTest {
         h.covering(1000);
         assertTrue(h.take(DOWN, LEFT, 0, 1200, 1200));
         assertFalse(h.take(DOWN, LEFT, 0, 1000 + HopKeys.HOLD_MS, 1000 + HopKeys.HOLD_MS));
+        // Home showing much later (an ordinary Home press, minutes on) makes no old move.
+        assertEquals(0, h.shown(200_000));
+        // Nor if it took longer than the hold, though no key came after it.
+        HopKeys late = new HopKeys();
+        late.covering(1000);
+        assertTrue(late.take(DOWN, RIGHT, 0, 1100, 1100));
+        assertEquals(0, late.shown(1000 + HopKeys.HOLD_MS + 1));
         // Only a press is made again, never Select or Back.
         HopKeys h2 = new HopKeys();
         h2.covering(1000);
         assertTrue(h2.take(DOWN, OK, 0, 1100, 1100));
         assertTrue(h2.take(DOWN, KeyEvent.KEYCODE_BACK, 0, 1200, 1200));
-        assertEquals(0, h2.shown());
+        assertEquals(0, h2.shown(1300));
     }
 }

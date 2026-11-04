@@ -28,12 +28,12 @@ final class LateKeys {
 
     /**
      * Whether to drop this key event. {@code now} and the event's times are {@code SystemClock.uptimeMillis()}'s, as
-     * KeyEvent's.
+     * KeyEvent's. Only presses count: a held key's repeats and its release go with the press.
      */
-    boolean drop(int action, int keyCode, long eventTime, long downTime, long now) {
+    boolean drop(int action, int keyCode, int repeat, long eventTime, long downTime, long now) {
         if (!navigation(keyCode)) return false;
         if (wasDropped(downTime)) return true;
-        if (action != KeyEvent.ACTION_DOWN) return false;
+        if (action != KeyEvent.ACTION_DOWN || repeat > 0) return false;
         boolean late = now - eventTime > LATE_MS;
         if (eventTime >= burstAt && !(late && select(keyCode))) {
             if (late) burstAt = now;

@@ -645,8 +645,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         long now = android.os.SystemClock.uptimeMillis();
-        boolean late = lateKeys.drop(event.getAction(), event.getKeyCode(), event.getEventTime(), event.getDownTime(),
-                now);
+        boolean late = lateKeys.drop(event.getAction(), event.getKeyCode(), event.getRepeatCount(), event.getEventTime(),
+                event.getDownTime(), now);
         if (event.getAction() == KeyEvent.ACTION_DOWN && Perf.enabled()) {
             long age = now - event.getEventTime();
             Perf.log("key", Perf.now() - age * 1_000_000L, String.format(Locale.US,
