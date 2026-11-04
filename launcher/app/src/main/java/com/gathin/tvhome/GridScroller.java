@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Rect;
 import android.view.View;
@@ -19,6 +20,8 @@ import androidx.recyclerview.widget.RecyclerView;
  *
  * Fitted to tvOS 26 recordings (the page moving between the top shelf and the grid, both ways): a spring with
  * stiffness about 225 and damping ratio 1.35, 90 % of the way in about 390 ms and settled in about 750 ms.
+ * With Android's Remove animations enabled, the same destination is applied immediately, including any
+ * distance left by an interrupted spring. DynamicAnimation 1.0.0 does not honor that preference itself.
  */
 final class GridScroller {
 
@@ -50,6 +53,13 @@ final class GridScroller {
      * where things will be once the current run ends: see {@link #pending()}.
      */
     void scrollBy(int dy) {
+        if (!ValueAnimator.areAnimatorsEnabled()) {
+            int step = pending() + dy;
+            stop();
+            grid.stopScroll();
+            grid.scrollBy(0, step);
+            return;
+        }
         if (dy == 0) return;
         grid.stopScroll();   // RecyclerView's own smooth scroll (MainActivity.focusTile's fallback) would fight it
         if (!spring.isRunning()) {
@@ -63,7 +73,7 @@ final class GridScroller {
 
     /** How far the current run has still to go: the tiles are drawn this much lower than where it leaves them. */
     int pending() {
-        return spring.isRunning() ? Math.round(target) - applied : 0;
+        return spring.isRunning() ? scrollDelta(target, applied) : 0;
     }
 
     void stop() {
@@ -71,10 +81,14 @@ final class GridScroller {
     }
 
     private void apply(float value) {
-        int step = Math.round(value) - applied;
+        int step = scrollDelta(value, applied);
         if (step == 0) return;
         applied += step;
         grid.scrollBy(0, step);
+    }
+
+    static int scrollDelta(float value, int applied) {
+        return Math.round(value) - applied;
     }
 
     /**
