@@ -81,10 +81,10 @@ A home screen that is yours again:
   put it on the TV, or else its artwork: an original picture in its brand's colours and shapes, in the
   manner of YouTube's, with its logo (about 30 apps have one). Otherwise, its name over an ambient glow
   in its colour. Or, app by app in **Home Settings**, what it suggests: what you were watching first
-  (with **Resume** a press of Up away), then your watchlist, then the app's own recommendations mixed
-  with what's trending on it (Netflix's Top 10 in your TV's country, Apple TV+, Prime Video, Stremio's
-  popular titles), each full screen with its title's logo, the next one pushing in every 10 seconds.
-  See [The top shelf](#the-top-shelf).
+  (Up shows it full screen, the dock out of the way, with **Resume** under it), then your watchlist,
+  then the app's own recommendations mixed with what's trending on it (Netflix's Top 10 in your TV's
+  country, Apple TV+, Prime Video, Stremio's popular titles), each full screen with its title's logo,
+  the next one pushing in every 10 seconds. See [The top shelf](#the-top-shelf).
 - **Home Settings**, the launcher's own settings on the TV, as an app in the grid like Apple TV's Settings:
   Liquid Glass, and what each app's top shelf shows (its **Picture**, its **App Colour**, its
   **Suggestions**, or its artwork, cover art or a colour of your choice), with a preview of Home as you
@@ -362,18 +362,21 @@ cover art are painted on true black. A static image's near-black ground goes tru
 shown (YouTube's on Apple TV is #242424, about half of it), its darkest tones easing into it, its
 colours as they were; a picture without such a ground shows as it is.
 
-**Up** from a dock app showing a title moves to a button under it, which says what OK will do with
-that title: **Resume** or **Play** only when the app's own link for it plays (Stremio's continue
-watching resumes only what you've started); **Open in …** opens the title's page in its app (a
-Stremio title, or one the app published without playing it); **Search in …** searches the app for a
-catalogue title by its name, where the app can't be opened at the title (Netflix, Apple TV); and
-**Open …** opens just the app when there's no link it accepts (`top_shelf_links` in `config.xml`).
-Left and Right page through the titles one at a time, in the same order both ways (one still
-downloading slides in when it arrives); Down or Back returns to the dock, and Up again opens the top
-right corner. Focus coming back to an app starts again at its first title. Apps don't let other apps
-add to their watchlists, so there's no such button. Up from a dock app showing anything else (a static
-image, artwork or cover art, also while its first title is loading, or the glow) goes straight to the
-top right corner, with no button.
+**Up** from a dock app showing a title shows it full screen, as Apple TV does: the dock, and the apps
+under it, go down off the screen, and the title moves down to the bottom left with a button under it,
+which says what OK will do with that title: **Resume** or **Play** only when the app's own link for it
+plays (Stremio's continue watching resumes only what you've started); **Open in …** opens the title's
+page in its app (a Stremio title, or one the app published without playing it); **Search in …**
+searches the app for a catalogue title by its name, where the app can't be opened at the title
+(Netflix, Apple TV); and **Open …** opens just the app when there's no link it accepts
+(`top_shelf_links` in `config.xml`). Left and Right page through the titles one at a time, in the
+same order both ways (one still downloading slides in when it arrives); Down or Back brings the dock
+back, with focus on the app. The time and profile picture stay in the top right all along: Up opens
+that corner over the full-screen title, and Down from there comes back to the button, then the dock.
+Focus coming back to an app starts again at its first title. Apps don't let other apps add to their
+watchlists, so there's no such button. Up from a dock app showing anything else (a static image,
+artwork or cover art, also while its first title is loading, or the glow) goes straight to the top
+right corner, with no button, and the dock stays.
 
 **The network**: catalogues are fetched at most every 6 hours, only when Home shows and only for
 the dock's apps, and only their first few titles are read. Pictures are downloaded once and kept
