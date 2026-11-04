@@ -37,6 +37,18 @@ public class ProfileCornerTest {
     }
 
     @Test
+    public void reducedMotionEndpointsShowEitherCapsuleOrControls() {
+        float slot = ProfileCorner.SLOT_DP;
+        for (int button = 1; button <= 3; button++) {
+            float distance = button * slot;
+            assertEquals(0f, ProfileCorner.tabAlpha(distance * 0f, slot), 0f);
+            assertEquals(1f, ProfileCorner.tabAlpha(distance * 1f, slot), 0f);
+        }
+        assertEquals(1f, ProfileCorner.capsuleAlpha(0f), 0f);
+        assertEquals(0f, ProfileCorner.capsuleAlpha(1f), 0f);
+    }
+
+    @Test
     public void springMovesAtOnceAndSettlesInAboutThreeHundredMs() {
         assertEquals(0f, ProfileCorner.position(0f), 1e-6f);
         assertTrue(ProfileCorner.position(1 / 60f) > 0.05f);   // the first frame already moves

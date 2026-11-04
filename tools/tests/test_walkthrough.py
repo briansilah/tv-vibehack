@@ -47,6 +47,13 @@ PREFS = """<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
 </map>
 """
 
+HIERARCHY = b"""<hierarchy>
+<node package="com.gathin.tvhome" text="Home Settings" />
+<node package="com.gathin.tvhome" text="Liquid Glass" />
+<node package="com.gathin.tvhome" text="Same for All Apps" />
+<node package="com.android.tv.settings" text="Other app only" />
+</hierarchy>"""
+
 
 class FakeDevice:
     """Answers walkthrough.py's shell commands, keeps the files it would write, and records every command."""
@@ -61,6 +68,7 @@ class FakeDevice:
         self.on_keys = None          # a hook: what pressing keys does to the saved settings
         self.key_commands = []
         self.restores = 0
+        self.hierarchy = HIERARCHY
 
     def describe(self):
         return "fake"
@@ -91,6 +99,9 @@ class FakeDevice:
         if cmd.startswith("screencap -p "):
             self.files[cmd.split()[-1]] = b"\x89PNG..."
             return ""
+        if "&& uiautomator dump " in cmd:
+            self.files[cmd.split()[-1]] = self.hierarchy
+            return "UI hierarchy dumped\n"
         if cmd.startswith("screenrecord"):
             self.files[cmd.split()[3]] = b"mp4"
             return ""
@@ -172,6 +183,13 @@ class CheckTest(unittest.TestCase):
         plan["perf"] = {"scenarios": "cold,fast"}
         self.assertProblem(plan, '"perf.scenarios"')
 
+    def test_text_assertions_need_an_exact_nonempty_label(self):
+        self.assertEqual(wt.problems(self.with_step({"expect_text": "Home Settings"})), [])
+        for value in ("", "   ", None, True, ["Home Settings"]):
+            with self.subTest(value=value):
+                self.assertProblem(self.with_step({"expect_text": value}), "exact text label")
+        self.assertProblem(self.with_step({"expect_text": "Home", "shell": "anything"}), "doesn't take shell")
+
 
 def proven(plan):
     """The manifest of a passing run on an emulator."""
@@ -229,6 +247,68 @@ class CommentTest(unittest.TestCase):
 
 
 class RunTest(unittest.TestCase):
+    def text_plan(self, text):
+        return dict(PLAN, steps=[{"launcher": True}, {"expect_text": text},
+                                 {"keys": "BACK"}])
+
+    def test_exact_text_assertions_keep_the_hierarchy(self):
+        dev = FakeDevice()
+        manifest, out = run(self.text_plan("Home Settings"), dev)
+        self.assertTrue(manifest["ok"], manifest)
+        entry = manifest["steps"][1]
+        self.assertEqual(entry["kind"], "expect_text")
+        with open(os.path.join(out, entry["file"]), "rb") as f:
+            self.assertEqual(f.read(), HIERARCHY)
+        self.assertCleanedUp(dev)
+
+    def test_missing_partial_wrong_case_or_other_app_text_fails_before_keys(self):
+        for label in ("Missing", "Home", "home settings", "Other app only"):
+            with self.subTest(label=label):
+                dev = FakeDevice()
+                manifest, out = run(self.text_plan(label), dev)
+                self.assertFalse(manifest["ok"])
+                self.assertEqual(len(manifest["steps"]), 2)
+                self.assertIn("no exact text", manifest["steps"][-1]["error"])
+                self.assertIn("Home Settings", manifest["steps"][-1]["error"])
+                self.assertTrue(os.path.isfile(os.path.join(out, "01-text.xml")))
+                self.assertFalse(dev.key_commands)
+                self.assertCleanedUp(dev)
+
+    def test_empty_malformed_and_wrong_root_dumps_fail(self):
+        for xml in (b"", b"ERROR: could not get idle state", b"<hierarchy>", b"<not-a-hierarchy />"):
+            with self.subTest(xml=xml):
+                dev = FakeDevice()
+                dev.hierarchy = xml
+                manifest, _ = run(self.text_plan("Home Settings"), dev)
+                self.assertFalse(manifest["ok"])
+                self.assertFalse(dev.key_commands)
+                self.assertCleanedUp(dev)
+
+    def test_text_assertion_transport_failure_is_not_a_pass(self):
+        dev = FakeDevice()
+        real = dev.shell
+
+        def fail_dump(cmd, timeout=120):
+            if "uiautomator dump " in cmd:
+                raise tv.TvError("hierarchy capture failed")
+            return real(cmd, timeout)
+        dev.shell = fail_dump
+        manifest, _ = run(self.text_plan("Home Settings"), dev)
+        self.assertFalse(manifest["ok"])
+        self.assertIn("hierarchy capture failed", manifest["steps"][-1]["error"])
+        self.assertCleanedUp(dev)
+
+    def test_each_missing_settings_label_is_detected(self):
+        labels = ("Home Settings", "Liquid Glass", "Same for All Apps")
+        plan = dict(PLAN, steps=[{"expect_text": label} for label in labels])
+        for label in labels:
+            with self.subTest(label=label):
+                dev = FakeDevice()
+                dev.hierarchy = HIERARCHY.replace(label.encode(), b"Changed label")
+                manifest, _ = run(plan, dev)
+                self.assertFalse(manifest["ok"])
+                self.assertIn(repr(label), manifest["steps"][-1]["error"])
+
     def assertCleanedUp(self, dev):
         """Home on screen, then nothing of ours left on the device."""
         rm = dev.commands.index("rm -rf " + wt.DEVICE_DIR)

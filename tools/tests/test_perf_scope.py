@@ -261,6 +261,9 @@ class PlanTests(unittest.TestCase):
         # What shows next and what stays decoded: the dock's moves and memory, not everything.
         p = plan_for(ps.Change(ps.JAVA + "ShelfOrder.java", None, "final class ShelfOrder {\n}\n", None, None))
         self.assertPlan(p, ["dock", "mem"])
+        # How black the art's blacks are: painted with it, so the same.
+        p = plan_for(ps.Change(ps.JAVA + "TrueBlack.java", None, "final class TrueBlack {\n}\n", None, None))
+        self.assertPlan(p, ["dock", "mem"])
 
     def test_home_settings(self):
         # What each app's top shelf shows: the dock's moves and memory.
