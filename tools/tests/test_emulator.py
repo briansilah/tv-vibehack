@@ -77,8 +77,8 @@ class FakeHost:
         self.clock += s
 
 
-def slots(host, maximum=3):
-    return em.Slots(tempfile.mkdtemp(), host, log=lambda m: None, maximum=maximum)
+def slots(host, maximum=3, directory=None, root="/worktrees/a"):
+    return em.Slots(directory or tempfile.mkdtemp(), host, log=lambda m: None, maximum=maximum, root=root)
 
 
 class SlotTest(unittest.TestCase):
@@ -162,6 +162,23 @@ class SlotTest(unittest.TestCase):
         with self.assertRaisesRegex(em.EmulatorError, "taken by another process"):
             s.start("daily-ux", emulator="emulator")
         self.assertEqual([c for _, c in host.procs.values()], [])
+
+    def test_an_old_owner_cant_stop_the_serials_next_owner(self):
+        host = FakeHost()
+        d = tempfile.mkdtemp()
+        a, b = slots(host, directory=d, root="/worktrees/a"), slots(host, directory=d, root="/worktrees/b")
+        first = a.start("black-art", emulator="emulator")
+        host.procs = {}                                 # a's emulator is gone (stopped, crashed or reaped)
+        second = b.start("daily-reliability", emulator="emulator")
+        self.assertEqual(second["serial"], first["serial"])      # the same port, so the same serial
+        host.killed.clear()
+        with self.assertRaisesRegex(em.EmulatorError, "daily-reliability's now"):
+            a.stop(first["serial"])
+        with self.assertRaisesRegex(em.EmulatorError, "daily-reliability's now"):
+            a.renew(first["serial"], 4)
+        self.assertEqual(host.killed, [])
+        b.stop(second["serial"])
+        self.assertEqual(host.killed, [(second["pgid"], signal.SIGTERM)])
 
     def test_renew(self):
         host = FakeHost()

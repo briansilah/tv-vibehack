@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -209,6 +210,13 @@ public class ProfileCorner extends ViewGroup {
     private void setOpen(boolean open) {
         if (this.open == open) return;
         this.open = open;
+        // DynamicAnimation 1.0 does not honor the system's Remove animations setting.
+        if (!ValueAnimator.areAnimatorsEnabled()) {
+            openSpring.cancel();
+            openness = open ? 1f : 0f;
+            apply();
+            return;
+        }
         // From rest, start with some speed; mid-way, the spring turns around with the speed it has.
         if (!openSpring.isRunning()) openSpring.setStartVelocity(open ? START_VELOCITY : -START_VELOCITY);
         openSpring.animateToFinalPosition(open ? 1f : 0f);
