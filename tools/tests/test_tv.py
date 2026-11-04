@@ -29,6 +29,17 @@ MDNS = "adb-8C00F07E0160CF00F-pLsp3G (2)._adb-tls-connect._tcp"
 DEVICES = "List of devices attached\n%s\tdevice\n\n" % MDNS
 
 
+_bound_device = tv.bound_device
+
+
+def setUpModule():
+    # A worktree bound to an emulator (tools/emulator.py start) mustn't change what these fakes connect to: only
+    # BoundWorktreeTests, which name their own root, read a binding.
+    patcher = mock.patch.object(tv, "bound_device", lambda root=None: _bound_device(root) if root else None)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
 class TransportChoiceTests(unittest.TestCase):
     def test_tv_host_keeps_adb_shell(self):
         self.assertEqual(tv.choose_transport({"TV_HOST": "192.168.1.50"}), "adb_shell")
@@ -534,7 +545,7 @@ class ScriptTests(unittest.TestCase):
         return [a[3] for a in self.adb_calls() if a[:1] == ["-s"] and a[2] == "shell"]
 
     def test_probe_without_tv_host(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--probe"])
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--probe"])
         self.assertEqual(code, 0, err)
         self.assertIn("ro.product.model = Smart TV Pro", out)
         self.assertIn("device " + MDNS, err)
@@ -542,7 +553,7 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(all(a[:2] == ["-s", MDNS] for a in self.adb_calls()[1:]))   # the space survives
 
     def test_batch_keeps_reading_stdin(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--batch"],
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--batch"],
                                        b"getprop ro.product.model\npm path com.example.none\npm list packages -d\n")
         self.assertEqual(code, 0, err)
         self.assertEqual(out, "$ getprop ro.product.model\nSmart TV Pro\n$ pm path com.example.none\n"
@@ -550,12 +561,12 @@ class ScriptTests(unittest.TestCase):
 
     def test_no_device(self):
         self.env["FAKE_ADB_DEVICES"] = "List of devices attached\n\n"
-        code, _, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "tv.py"), "--probe"])
+        code, _, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "tv.py"), "--probe"])
         self.assertEqual(code, 1)
         self.assertIn("tv.py: adb lists no device", err)
 
     def test_b64push_uses_adb_push(self):
-        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(TOOLS, "b64push.py"), __file__,
+        code, out, err = self.run_tool([sys.executable, "-I", os.path.join(self.repo, "tools", "b64push.py"), __file__,
                                         "/data/local/tmp/x.py"])
         self.assertEqual(code, 1, err)   # the fake TV has no md5sum, so no MATCH; the push itself happened
         self.assertIn(["-s", MDNS, "push", __file__, "/data/local/tmp/x.py"], self.adb_calls())
