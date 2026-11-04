@@ -78,6 +78,12 @@ reads the system's animations once, in the background, to decide.
 - `MainActivity.onLaunchApp`, `comeBackFromApp`, `gridScroll` and `followPage`.
 - `AppAdapter.Holder.press`: the pressed tile.
 
+The profile corner keeps its normal tvOS spring when animations are enabled. With Android's
+**Remove animations** setting (animator duration scale 0), it opens and closes directly at the final
+position, cancelling any spring still running. The time, divider, capsule and buttons update together;
+D-pad focus and the open and closed layouts stay the same. Other focus and scrolling springs are
+unchanged.
+
 ### Performance
 
 All the motion is translation, scale and alpha: no layout runs while it plays. During the push and the
