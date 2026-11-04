@@ -601,19 +601,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     }
 
     /**
-     * Home is hidden ({@code TRIM_MEMORY_UI_HIDDEN}), or the system needs memory: the top shelf keeps only the pictures
-     * on screen. Except when Home was covered by something it didn't open (the TV going to sleep, Google TV's own home
-     * on waking, which HomeButtonService covers): Home is what shows next, so the dock's pictures stay, while the screen
-     * is off and for {@link #KEEP_HIDDEN_MS} otherwise, and moving along the dock after waking shows them at once.
+     * Home is hidden ({@code TRIM_MEMORY_UI_HIDDEN}), or its process is in the background ({@code
+     * TRIM_MEMORY_BACKGROUND}, the only other level Android 14 sends): the top shelf keeps only the pictures on screen.
+     * Except when Home was covered by something it didn't open (the TV going to sleep, Google TV's own home on waking,
+     * which HomeButtonService covers; Google TV's DispatchActivity in front puts Home in the background): Home is what
+     * shows next, so the dock's pictures stay, while the screen is off and for {@link #KEEP_HIDDEN_MS} otherwise, and
+     * moving along the dock after waking shows them at once.
      */
     @Override
     public void onTrimMemory(int level) {
         super.onTrimMemory(level);
         handler.removeCallbacks(trimHidden);
+        boolean hidden = level == TRIM_MEMORY_UI_HIDDEN || level == TRIM_MEMORY_BACKGROUND;
         // Delivered after Home showed again (Google TV's home covers Home on waking, then HomeButtonService covers it):
         // nothing is hidden now.
-        if (level == TRIM_MEMORY_UI_HIDDEN && resumed) return;
-        if (level == TRIM_MEMORY_UI_HIDDEN && !opened) {
+        if (hidden && resumed) return;
+        if (hidden && !opened) {
             android.os.PowerManager pm = getSystemService(android.os.PowerManager.class);
             boolean screenOff = pm != null && !pm.isInteractive();
             Perf.log("trim", Perf.now(), "level=" + level + " kept=1 screen_off=" + (screenOff ? 1 : 0));

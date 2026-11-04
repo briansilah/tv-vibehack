@@ -17,6 +17,7 @@ import android.graphics.drawable.Drawable;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
@@ -1273,7 +1274,7 @@ final class ShelfSource {
      * from its URL. Worker thread.
      */
     private File staticImageFile(String pkg, String url) {
-        File put = ctx.getExternalFilesDir(IMAGE_DIR);
+        File put = imageDir();
         if (put != null) {
             for (String type : IMAGE_TYPES) {
                 File f = new File(put, pkg + type);
@@ -1284,6 +1285,25 @@ final class ShelfSource {
         File f = artFile(url);
         return f.exists() ? f : null;
     }
+
+    /**
+     * Where static images are put on the TV: {@link #IMAGE_DIR} in the launcher's external files, as
+     * tools/top_shelf_image.py pushes them. Found without getExternalFilesDir, which creates the folder through
+     * StorageManager whenever it's missing (it usually is): right after a TCL TV woke, that binder call took 12.8 s,
+     * holding up every picture queued behind it on the worker.
+     */
+    private File imageDir() {
+        File d = imageDir;
+        if (d == null) {
+            File storage = Environment.getExternalStorageDirectory();
+            d = storage == null ? null
+                    : new File(storage, "Android/data/" + ctx.getPackageName() + "/files/" + IMAGE_DIR);
+            imageDir = d;
+        }
+        return d;
+    }
+
+    private volatile File imageDir;
 
     /** A static image fetched from its URL: kept, not pruned with the titles' pictures. */
     private File artFile(String url) {
