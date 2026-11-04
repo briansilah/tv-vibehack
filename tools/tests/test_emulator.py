@@ -1,4 +1,5 @@
-"""Offline tests for tools/emulator.py: slots, ports, reaping and the measuring lock, against a fake Mac.
+"""Offline tests for tools/emulator.py: slots, ports, queue timeouts, bindings, reaping and the measuring lock,
+against a fake Mac.
 
     python3 -m unittest discover -s tools/tests -v
 """
@@ -82,6 +83,36 @@ def slots(host, maximum=3, directory=None, root="/worktrees/a"):
 
 
 class SlotTest(unittest.TestCase):
+    def test_adb_reserved_port_is_skipped_without_a_visible_qemu_or_listener(self):
+        host = FakeHost()
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(host, "adb_serials", return_value=["emulator-5554", "192.0.2.1:5555"]):
+            slot = slots(host, directory=d).start("daily-testing", emulator="emulator")
+        self.assertEqual(slot["port"], 5556)
+        self.assertEqual(len(host.launched), 1)
+
+    def test_starting_emulator_reserves_capacity_before_qemu_appears(self):
+        host = FakeHost()
+        with tempfile.TemporaryDirectory() as d:
+            s = slots(host, maximum=1, directory=d)
+            first = s.claim("daily-testing", em.DEFAULT_AVD, 6, "emulator")
+            host.procs[first["pid"]] = (first["pgid"], "/sdk/emulator/emulator -port %d" % first["port"])
+            self.assertIsNone(s.claim("daily-ui", em.DEFAULT_AVD, 6, "emulator"))
+            self.assertEqual(len(host.launched), 1)
+
+    def test_requested_queue_timeout_expires_without_starting_or_stopping_an_emulator(self):
+        host = FakeHost(others=[5554])
+        began = host.now()
+        with tempfile.TemporaryDirectory() as d:
+            s = slots(host, maximum=1, directory=d)
+            with self.assertRaisesRegex(em.EmulatorError, "no slot came free"):
+                s.start("daily-testing", timeout=60, emulator="emulator")
+        self.assertGreaterEqual(host.now() - began, 60)
+        self.assertLessEqual(host.now() - began, 90)
+        self.assertEqual(host.launched, [])
+        self.assertEqual(host.killed, [])
+        self.assertEqual([cmd for _, cmd in host.procs.values()], [QEMU % 5554])
+
     def test_start_takes_a_free_port_and_waits_for_the_boot(self):
         host = FakeHost(others=[5554])
         host.busy_ports.add(5556)       # something else listens there
@@ -222,6 +253,15 @@ class ExclusiveTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
+    def test_unbind_preserves_a_different_serial_then_removes_the_matching_one(self):
+        with tempfile.TemporaryDirectory() as root:
+            em.bind("emulator-5556", root)
+            em.unbind("emulator-5554", root)
+            self.assertEqual(em.tv.bound_device(root), "emulator-5556")
+            em.unbind("emulator-5556", root)
+            self.assertFalse(os.path.exists(em.bind_file(root)))
+            em.unbind("emulator-5556", root)
+
     def test_start_status_stop(self):
         host = FakeHost()
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as root, \
