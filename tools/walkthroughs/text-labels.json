@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "title": "App actions: exact labels checked from the UI hierarchy",
+  "steps": [
+    {"launcher": true},
+    {"to_first_dock_app": true},
+    {"longpress": "CENTER"},
+    {"wait": 2},
+    {"expect_top": "MainActivity"},
+    {"expect_text": "Move"},
+    {"expect_text": "App Info"},
+    {"expect_text": "Change Top Shelf\u2026"},
+    {"screenshot": "action-labels", "expect": "The app actions show Move first, Change Top Shelf\u2026 and App Info in the next group; no label is clipped"},
+    {"keys": "BACK"},
+    {"expect_top": "MainActivity"}
+  ],
+  "perf": {"scenarios": "auto"}
+}
