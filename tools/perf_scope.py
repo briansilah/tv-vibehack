@@ -126,6 +126,11 @@ FILE_RULES = [
      E("jank", keys="default arrange", trace="keys:arrange",
        why="where a key moves focus or a moving app: plain logic with JVM tests")),
     ((JAVA + "TopShelf.java",), E("dock mem", trace="dock", why="the top shelf")),   # MEMBER_RULES go finer
+    ((JAVA + "ShelfFullScreen.java",),
+     E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+       why="the top shelf full screen: the dock going down off the screen and back, Up from a dock app showing a "
+           "suggested title. No scenario reaches it (the shipped choices show no titles): check it on your emulator "
+           "with an app on Suggestions")),
     ((JAVA + "TopShelfView.java", JAVA + "ShelfSource.java", JAVA + "ShelfFeeds.java", JAVA + "ShelfInfoView.java",
       JAVA + "CoverArt.java", JAVA + "AmbientColor.java", JAVA + "ShelfArt.java", JAVA + "ShelfArtworks.java",
       JAVA + "ShelfArtKeep.java", JAVA + "TrueBlack.java"),
@@ -228,6 +233,9 @@ MEMBER_RULES = {
           "ambientFade", "glowAt", "onShelfGlow"),
          E("dock", trace="dock", why="the top shelf's name and glow on a dock move")),
         (("hideHero",), E("jank dock", keys="grid", trace="dock", why="the top shelf going, down into the grid")),
+        (("fullScreen", "onFullScreen", "dockPanelTop"),
+         E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+           why="the top shelf full screen: the dock going down off the screen and back")),
         (("onShelfExit", "onTileDpadKey"),
          E("jank", keys="default corner", trace="keys:corner", why="moving focus between tiles, the shelf and the "
                                                                    "top right")),
@@ -289,6 +297,9 @@ MEMBER_RULES = {
          E("dock mem", trace="dock", why="each app's top shelf choice (Home Settings), and the glow's colour")),
         (("enterActions", "leaveActions", "liftTo", "lift", "liftAnim", "acting", "onActionKey", "labelAction"),
          E("jank dock", keys="corner", trace="keys:corner", why="the top shelf's button, Up from the dock")),
+        (("setFull", "full", "placeInfo", "actionY"),
+         E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+           why="the top shelf's title and button, full screen and with the page")),
         (("act", "intentFor"), E(check="emulator", why="what the top shelf's button opens")),
         (("followPage", "pageTravel"), E("jank", keys="grid", trace="keys:grid",
                                          why="the top shelf following the page")),

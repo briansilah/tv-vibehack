@@ -220,6 +220,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private int showMode = Transitions.SHOW_BACK;
     private HomeMotion homeMotion;
     private GridScroller scroller;
+    /** The top shelf full screen: the dock, and the grid under it, away below the screen (see {@link #onFullScreen}). */
+    private ShelfFullScreen fullScreen;
     /** An app opened but Home is still on screen this long after: it didn't cover Home, so bring Home back. */
     private static final long COME_BACK_MS = 3000L;
     private final Runnable comeBackIfShown = this::comeBack;
@@ -352,6 +354,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         grid.setLayoutAnimation(new LayoutAnimationController(
                 AnimationUtils.loadAnimation(this, R.anim.tile_enter), 0.06f));
         grid.setAdapter(adapter);
+        fullScreen = new ShelfFullScreen(this::onFullScreen);
         // Apps moved into or out of the dock: the top shelf fetches and prepares art for the new dock.
         adapter.setOnOrderSaved(() -> topShelf.setDock(adapter.dockApps()));
         rearranger = new Rearranger(this, root, grid, adapter, this, COLUMNS);
@@ -398,8 +401,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if ((keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_BACK)
                     && adapter.getItemCount() > 0) {
-                // Down passes the top shelf's button on the way, when it has one: it sits between here and the dock.
+                // Down passes the top shelf's button on the way, full screen, when it has one: it sits between here
+                // and the dock.
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !rearranger.isActive() && topShelf.enterActions()) {
+                    fullScreen.set(true);
                     return true;
                 }
                 focusTile(lastFocused % COLUMNS);
@@ -583,6 +588,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
         // Center, instead of showing it close. onResume moves focus back to the dock.
         if (corner.hasFocus()) corner.snapClosed();
+        // Likewise with the dock in place, which focus comes back to.
+        fullScreen.snap(false);
         if (lastFocusedKey != null && !lastFocusedKey.equals(state.getString(PREF_FOCUSED, null))) {
             state.edit().putString(PREF_FOCUSED, lastFocusedKey).apply();
         }
@@ -677,6 +684,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         Perf.begin("tvhome:onTileFocused");
         if (Perf.enabled()) Perf.log("focus", Perf.now(), "tile=" + position);
         topShelf.leaveActions();
+        fullScreen.set(false);
         rearranger.onTileFocused(position);
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
@@ -858,6 +866,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     public void onShelfExit(boolean up) {
         if (up) btnSettings.requestFocus();
         else focusTile(lastFocused % COLUMNS);
+    }
+
+    /**
+     * The top shelf full screen, as on tvOS ({@link ShelfFullScreen}): the dock, and the grid under it, go {@code
+     * fraction} of the way down off the screen, and the shelf's title and button follow into the space. Translation
+     * only, as the page's scroll; the dock's glass follows it over the backdrop. All the way away, the grid hides, so
+     * neither it nor the glass is drawn: it shows again before it moves back or takes focus. The top right stays.
+     */
+    private void onFullScreen(float fraction, boolean full) {
+        View dock = (View) grid.getParent();
+        dock.setTranslationY(fraction == 0f ? 0f : fraction * ShelfFullScreen.away(root.getHeight(), dockPanelTop()));
+        dock.setVisibility(full && fraction >= 1f ? View.INVISIBLE : View.VISIBLE);
+        topShelf.setFull(fraction);
+    }
+
+    /** The top of the dock's panel with the page at rest, in the screen's coordinates (see DockDecoration). */
+    private float dockPanelTop() {
+        View wrapper = (View) grid.getParent();
+        // The dock row's top is the grid's top padding at rest (onTileFocused); its tiles are 6dp below that.
+        return wrapper.getTop() + grid.getTop() + grid.getPaddingTop() + (6 - DockDecoration.PAD_V_DP) * density;
     }
 
     /** The app's top shelf choice changed while it shows (Home Settings): its glow takes the colour now. */
@@ -1053,10 +1081,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     public boolean onTileDpadKey(int position, int keyCode) {
         int target = AppOrder.step(position, adapter.getItemCount(), COLUMNS, keyCode);
         if (target < 0) {
-            // Up from the dock: into the top shelf, as on tvOS, when it shows a suggested title (Play, Resume, Open);
-            // otherwise (a static picture, artwork, cover art or the glow), and Up again from there, the top right
-            // corner opens on Settings, next to the profile picture, as tvOS opens Control Center on its settings tab.
-            if (!rearranger.isActive() && topShelf.enterActions()) return true;
+            // Up from the dock: into the top shelf, as on tvOS, when it shows a suggested title (Play, Resume, Open):
+            // the dock goes down off the screen, the title full screen with its button. Otherwise (a static picture,
+            // artwork, cover art or the glow), and Up again from the button, the top right corner opens on Settings,
+            // next to the profile picture, as tvOS opens Control Center on its settings tab.
+            if (!rearranger.isActive() && topShelf.enterActions()) {
+                fullScreen.set(true);
+                return true;
+            }
             btnSettings.requestFocus();
             return true;
         }
@@ -1093,6 +1125,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
 
     private void focusTile(int position) {
         if (adapter.getItemCount() == 0) return;
+        // The dock back first: a tile in the grid hidden away below the screen can't take focus.
+        fullScreen.set(false);
         final int pos = Math.max(0, Math.min(position, adapter.getItemCount() - 1));
         focusTarget = pos;
         afterDeferredFocus = null;
