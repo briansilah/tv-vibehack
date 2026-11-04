@@ -13,10 +13,13 @@ import android.view.KeyEvent;
 final class LateKeys {
 
     /**
-     * A press this old when it reaches Home was held up. A remote's key takes about 3 ms on a TV, a frame 7 ms; one
-     * held while Home's window comes up, hundreds of milliseconds to seconds.
+     * A press this old when it reaches Home was held up, and presses made meanwhile queued behind it. A remote's key
+     * takes about 5 ms on a TV; one held while Home's window comes up, about 100 ms to seconds (a press HopKeys makes
+     * again in Home waits about 100 ms for its window's focus).
      */
-    static final long LATE_MS = 250L;
+    static final long STALL_MS = 50L;
+    /** A Select this old is never taken: what it would open may not be what was on screen when it was pressed. */
+    static final long LATE_SELECT_MS = 250L;
     private static final int REMEMBERED = 16;
 
     /** When Home last took a late move: presses made before then were held behind it, and go. */
@@ -34,9 +37,9 @@ final class LateKeys {
         if (!navigation(keyCode)) return false;
         if (wasDropped(downTime)) return true;
         if (action != KeyEvent.ACTION_DOWN || repeat > 0) return false;
-        boolean late = now - eventTime > LATE_MS;
-        if (eventTime >= burstAt && !(late && select(keyCode))) {
-            if (late) burstAt = now;
+        long age = now - eventTime;
+        if (eventTime >= burstAt && !(select(keyCode) && age > LATE_SELECT_MS)) {
+            if (age > STALL_MS) burstAt = now;
             return false;
         }
         remember(downTime);

@@ -21,8 +21,9 @@ public class WakeKeysTest {
             assertFalse(k.drop(DOWN, LEFT, 0, t, t, t + 5));
             assertFalse(k.drop(UP, LEFT, 0, t + 80, t, t + 85));
         }
-        // Held up a little (a slow frame): still the user's.
-        assertFalse(k.drop(DOWN, RIGHT, 0, 6000, 6000, 6000 + LateKeys.LATE_MS));
+        // Held up a little (a slow frame): still the user's, and so is the next.
+        assertFalse(k.drop(DOWN, RIGHT, 0, 6000, 6000, 6000 + LateKeys.STALL_MS));
+        assertFalse(k.drop(DOWN, RIGHT, 0, 6040, 6040, 6052));
     }
 
     @Test
@@ -53,6 +54,16 @@ public class WakeKeysTest {
         assertTrue(k.drop(DOWN, LEFT, 0, 892, 892, 1079));
         assertTrue(k.drop(UP, LEFT, 0, 972, 892, 1079));
         assertFalse(k.drop(DOWN, LEFT, 0, 1385, 1385, 1474));
+    }
+
+    @Test
+    public void aMoveMadeAgainInHomeAndAPressHeldBehindItAreOneMove() {
+        // On the TV: Left during the hand-over, made again in Home (102 ms late, waiting for its window's focus), and
+        // a second Left made before that one was taken, 93 ms late. Focus moved two apps in 52 ms.
+        LateKeys k = new LateKeys();
+        assertFalse(k.drop(DOWN, LEFT, 0, 776, 776, 878));
+        assertTrue(k.drop(DOWN, LEFT, 0, 838, 838, 931));
+        assertFalse(k.drop(DOWN, LEFT, 0, 1369, 1369, 1397));
     }
 
     @Test
