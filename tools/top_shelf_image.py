@@ -21,8 +21,8 @@ then in Preview File > New from Clipboard).
 
 From a screenshot it keeps the part above the dock, paints over the time and profile picture in the top right from
 what's around them, and scales it to the width of the TV's screen (1920 pixels). The launcher draws it from the top
-of the screen, as tvOS does, carrying its bottom edge on behind the dock, mirrored and blurred. Then this shows Home
-again, which picks the image up.
+of the screen, as tvOS does, carrying its bottom edge on behind the dock, mirrored and blurred, and turns a near-black
+ground true black. Then this shows Home again, which picks the image up.
 
 Connects to the TV as tools/tv.py does. Needs Pillow: pip install -r tools/requirements.txt.
 """
