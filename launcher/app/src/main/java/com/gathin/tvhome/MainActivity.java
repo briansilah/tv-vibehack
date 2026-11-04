@@ -93,6 +93,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      * (-1 goes back to config.xml's).
      */
     static final String PREF_GLASS = "liquid_glass";
+    /** The app focus was last on, so Home comes back to it after its process ended (in standby, say). */
+    private static final String PREF_FOCUSED = "last_focused";
     static final String EXTRA_GLASS = "liquid_glass";
     /** Home Settings' Liquid Glass row: Home shows again with focus on the dock, then the slider over it. */
     static final String EXTRA_GLASS_SLIDER = "com.gathin.tvhome.GLASS_SLIDER";
@@ -160,6 +162,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     private float density;
     /** reportFullyDrawn() once per activity instance, after its first focus restore. */
     private boolean reportedFullyDrawn;
+    /** Presses that reach Home too late to be the user's latest intent (after waking, say): see {@link LateKeys}. */
+    private final LateKeys lateKeys = new LateKeys();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
@@ -185,6 +189,27 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      */
     private boolean appsChanged = true;
     private boolean resumed;
+    /** Home started something (an app, Settings, an input) since it last showed: see {@link #onTrimMemory}. */
+    private boolean opened;
+    /**
+     * Covered by something it didn't open, Home keeps the dock's pictures this long (Google TV's home shows for about
+     * half a second on waking before HomeButtonService covers it), or while the screen is off.
+     */
+    private static final long KEEP_HIDDEN_MS = 5000L;
+    private final Runnable trimHidden = () -> {
+        if (resumed) return;
+        Perf.log("trim", Perf.now(), "level=" + TRIM_MEMORY_UI_HIDDEN + " delayed=1");
+        topShelf.trim(TRIM_MEMORY_UI_HIDDEN);
+    };
+    /** The screen came on with Home hidden and its pictures kept: they go unless Home shows soon. */
+    private final BroadcastReceiver screenOn = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (resumed) return;
+            handler.removeCallbacks(trimHidden);
+            handler.postDelayed(trimHidden, KEEP_HIDDEN_MS);
+        }
+    };
     /** Home was hidden (stopped) since it last showed: it falls back into place when it shows again. */
     private boolean wasStopped;
     /** How Home is coming back (Transitions.SHOW_*): set by an intent, else Back from an app. */
@@ -262,6 +287,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         IntentFilter storage = new IntentFilter(Intent.ACTION_EXTERNAL_APPLICATIONS_AVAILABLE);
         storage.addAction(Intent.ACTION_EXTERNAL_APPLICATIONS_UNAVAILABLE);
         registerReceiver(packageReceiver, storage);
+        registerReceiver(screenOn, new IntentFilter(Intent.ACTION_SCREEN_ON));
         // Start loading the apps (other apps' banners, icons and labels) now, in the background, so it overlaps
         // inflating the screen; onResume shows them.
         adapter.preload();
@@ -280,6 +306,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         prefs = getSharedPreferences("home", MODE_PRIVATE);
+        if (lastFocusedKey == null) lastFocusedKey = prefs.getString(PREF_FOCUSED, null);
         Intent start = getIntent();
         if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
             defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
@@ -411,6 +438,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         Perf.begin("tvhome:onResume");
         super.onResume();
         resumed = true;
+        opened = false;
+        handler.removeCallbacks(trimHidden);
         topShelf.resume();
         comeBackFromApp();
         // The top shelf stays as it was when an app was opened, so Home comes back showing it at once
@@ -549,6 +578,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
         // Center, instead of showing it close. onResume moves focus back to the dock.
         if (corner.hasFocus()) corner.snapClosed();
+        if (lastFocusedKey != null && !lastFocusedKey.equals(prefs.getString(PREF_FOCUSED, null))) {
+            prefs.edit().putString(PREF_FOCUSED, lastFocusedKey).apply();
+        }
     }
 
     @Override
@@ -563,10 +595,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         topShelf.pause();
     }
 
+    /**
+     * Home is hidden ({@code TRIM_MEMORY_UI_HIDDEN}), or the system needs memory: the top shelf keeps only the pictures
+     * on screen. Except when Home was covered by something it didn't open (the TV going to sleep, Google TV's own home
+     * on waking, which HomeButtonService covers): Home is what shows next, so the dock's pictures stay, while the screen
+     * is off and for {@link #KEEP_HIDDEN_MS} otherwise, and moving along the dock after waking shows them at once.
+     */
     @Override
     public void onTrimMemory(int level) {
         super.onTrimMemory(level);
+        handler.removeCallbacks(trimHidden);
+        // Delivered after Home showed again (Google TV's home covers Home on waking, then HomeButtonService covers it):
+        // nothing is hidden now.
+        if (level == TRIM_MEMORY_UI_HIDDEN && resumed) return;
+        if (level == TRIM_MEMORY_UI_HIDDEN && !opened) {
+            android.os.PowerManager pm = getSystemService(android.os.PowerManager.class);
+            boolean screenOff = pm != null && !pm.isInteractive();
+            Perf.log("trim", Perf.now(), "level=" + level + " kept=1 screen_off=" + (screenOff ? 1 : 0));
+            if (!screenOff) handler.postDelayed(trimHidden, KEEP_HIDDEN_MS);
+            return;
+        }
+        Perf.log("trim", Perf.now(), "level=" + level + " opened=" + (opened ? 1 : 0));
         topShelf.trim(level);
+    }
+
+    /** Every activity Home starts comes through here (startActivity too): see {@link #onTrimMemory}. */
+    @Override
+    public void startActivityForResult(Intent intent, int requestCode, Bundle options) {
+        opened = true;
+        super.startActivityForResult(intent, requestCode, options);
     }
 
     @Override
@@ -575,21 +632,28 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         if (cm != null) cm.unregisterNetworkCallback(networkCallback);
         unregisterReceiver(packageReceiver);
+        unregisterReceiver(screenOn);
+        handler.removeCallbacks(trimHidden);
         backdrop.release();
     }
 
     /**
-     * With logging on, each key as it reaches Home ({@code key}): how long since the remote sent it ({@code ms}), and
-     * the tile focus was on. Keys held up by the system or a busy main thread show as old ones.
+     * Presses that reach Home late, held up while it couldn't take them, are mostly dropped ({@link LateKeys}). With
+     * logging on, each key as it reaches Home ({@code key}): how long since the remote sent it ({@code ms}), the tile
+     * focus was on, and whether it was dropped.
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        long now = android.os.SystemClock.uptimeMillis();
+        boolean late = lateKeys.drop(event.getAction(), event.getKeyCode(), event.getEventTime(), event.getDownTime(),
+                now);
         if (event.getAction() == KeyEvent.ACTION_DOWN && Perf.enabled()) {
-            long age = android.os.SystemClock.uptimeMillis() - event.getEventTime();
-            Perf.log("key", Perf.now() - age * 1_000_000L, String.format(Locale.US, "code=%d repeat=%d tile=%d",
-                    event.getKeyCode(), event.getRepeatCount(), grid.hasFocus() ? lastFocused : -1));
+            long age = now - event.getEventTime();
+            Perf.log("key", Perf.now() - age * 1_000_000L, String.format(Locale.US,
+                    "code=%d repeat=%d tile=%d dropped=%d", event.getKeyCode(), event.getRepeatCount(),
+                    grid.hasFocus() ? lastFocused : -1, late ? 1 : 0));
         }
-        return super.dispatchKeyEvent(event);
+        return late || super.dispatchKeyEvent(event);
     }
 
     @Override

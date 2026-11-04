@@ -151,8 +151,14 @@ final class ShelfSource {
     static final int MIN_BACKDROP_W = 1200, MIN_BACKDROP_H = 500;
     private static final int COVER_W = 480, COVER_H = 270;
 
-    private static final ExecutorService NET = worker("tvhome-shelf-net");
-    private static final ExecutorService WORK = worker("tvhome-shelf");
+    private static final ExecutorService NET = worker("tvhome-shelf-net", Process.THREAD_PRIORITY_BACKGROUND);
+    /**
+     * Decodes and paints what the shelf shows next, just below the priority of normal work rather than at background
+     * priority: right after the TV wakes or boots everything else is busy too, and a background thread got so little
+     * of the CPU that pictures took seconds. The UI's threads run well above it.
+     */
+    private static final ExecutorService WORK = worker("tvhome-shelf",
+            Process.THREAD_PRIORITY_DEFAULT + Process.THREAD_PRIORITY_LESS_FAVORABLE);
 
     private final Context ctx;
     private final Listener listener;
@@ -1802,10 +1808,10 @@ final class ShelfSource {
         if (!tmp.renameTo(f)) tmp.delete();
     }
 
-    private static ExecutorService worker(final String name) {
+    private static ExecutorService worker(final String name, final int priority) {
         return Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(() -> {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+                Process.setThreadPriority(priority);
                 r.run();
             }, name);
             t.setDaemon(true);

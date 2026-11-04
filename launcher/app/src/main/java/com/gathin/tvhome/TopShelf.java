@@ -733,7 +733,7 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return;
         if (shown && current != null) want(current);
         else keep();
-        // Artworks are full-screen pictures: keep() decodes only those that may show next. Static images as before.
+        // Artworks are decoded by keep(), with the dock's titles, while Home shows. Static images as before.
         for (ShelfSource.App a : dock) {
             if (source.preloads(a)) source.makeCover(a, null);
         }
@@ -769,16 +769,21 @@ final class TopShelf implements ShelfSource.Listener {
     }
 
     /**
-     * Artworks are decoded only for the dock app showing one, and those either side of it, which may show next
-     * (focus in the grid: those around the dock app it left); never for apps with titles to show.
+     * Artworks are decoded for every dock app that shows one, as each dock app's first title is, nearest the focused one
+     * first, so moving along the dock never waits for one; never for apps with titles to show.
      */
     private void keepArtwork() {
-        List<String> keys = new ArrayList<>(3);
-        for (int i = Math.max(0, dockAt - 1); i <= Math.min(dock.size() - 1, dockAt + 1); i++) {
-            ShelfSource.App a = dock.get(i);
-            if (!source.artworkWanted(a.pkg)) continue;
-            keys.add(a.key);
-            source.makeCover(a, null);
+        int n = dock.size();
+        List<String> keys = new ArrayList<>(n);
+        int from = Math.max(0, Math.min(dockAt, n - 1));
+        for (int d = 0; d < n; d++) {
+            for (int i : d == 0 ? new int[]{from} : new int[]{from + d, from - d}) {
+                if (i < 0 || i >= n) continue;
+                ShelfSource.App a = dock.get(i);
+                if (!source.artworkWanted(a.pkg)) continue;
+                keys.add(a.key);
+                source.makeCover(a, null);
+            }
         }
         source.keepArtwork(keys);
     }

@@ -31,7 +31,8 @@ import java.util.Map;
  * - opens the quick settings panel on a long press of Home, as Google TV does;
  * - covers the stock home when it comes up some other way: Google TV sends the TV to its home on waking after more
  *   than 30 s in standby (launcherx's DispatchActivity, with home-app rights to start it), at boot, or when an app
- *   goes home itself. That one shows briefly first.
+ *   goes home itself. That one shows briefly first, and the remote's presses meanwhile are kept from it: the first
+ *   move is made again in this launcher once it shows ({@link HopKeys}).
  * It only acts while Home resolves to another app; with the stock launcher disabled it passes everything through.
  * Filtering keys costs a held volume key its repeats on a TV; {@link VolumeHold} puts them back.
  * Keys sent with `adb shell input` skip accessibility services, so test Home with the real remote.
@@ -60,6 +61,7 @@ public class HomeButtonService extends AccessibilityService {
     private boolean longPressDone;
     private boolean dreaming;
     private VolumeHold volumeHold;
+    private final HopKeys hopKeys = new HopKeys();
 
     private final BroadcastReceiver dreamReceiver = new BroadcastReceiver() {
         @Override
@@ -109,6 +111,10 @@ public class HomeButtonService extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         if (volumeHold != null) volumeHold.keyEvent(event);
+        if (hopKeys.take(event.getAction(), event.getKeyCode(), event.getRepeatCount(), event.getDownTime(),
+                SystemClock.uptimeMillis())) {
+            return true;
+        }
         if (event.getKeyCode() != KeyEvent.KEYCODE_HOME) return false;
         switch (event.getAction()) {
             case KeyEvent.ACTION_DOWN:
@@ -149,8 +155,36 @@ public class HomeButtonService extends AccessibilityService {
         CharSequence cls = event.getClassName();
         if (pkg == null || cls == null) return;
         ComponentName window = new ComponentName(pkg.toString(), cls.toString());
+        if (window.equals(new ComponentName(this, MainActivity.class))) {
+            replay(hopKeys.shown());
+            return;
+        }
         // Dialogs, toasts and the volume bar also send this event; only activities say what is in front.
         if (isActivity(window) && window.equals(QuickSettings.stockHome(this))) coverStockHome();
+    }
+
+    /** Makes a move taken from Google TV's home again in this launcher (Android 13+, which can send D-pad keys). */
+    private void replay(int keyCode) {
+        if (keyCode == 0 || Build.VERSION.SDK_INT < 33) return;
+        int action;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+                action = GLOBAL_ACTION_DPAD_UP;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                action = GLOBAL_ACTION_DPAD_DOWN;
+                break;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                action = GLOBAL_ACTION_DPAD_LEFT;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                action = GLOBAL_ACTION_DPAD_RIGHT;
+                break;
+            default:
+                return;
+        }
+        Log.i(TAG, "made a press from the stock home again in this launcher");
+        performGlobalAction(action);
     }
 
     /**
@@ -170,6 +204,7 @@ public class HomeButtonService extends AccessibilityService {
         redirectTimes[redirectNext] = now;
         redirectNext = (redirectNext + 1) % MAX_REDIRECTS;
         Log.i(TAG, "stock home came up; showing this launcher");
+        hopKeys.covering(now);
         showLauncher(true);
     }
 
