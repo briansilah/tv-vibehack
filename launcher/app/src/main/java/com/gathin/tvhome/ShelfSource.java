@@ -375,7 +375,9 @@ final class ShelfSource {
 
     /** Once what start() reads has arrived (one worker, in order; then the main thread, in order). */
     private void afterReads() {
+        final long asked = Perf.now();
         WORK.execute(() -> main.post(() -> {
+            if (Perf.enabled()) Perf.log("shelf_titles_read", asked, "deferred=" + deferred.size());
             titlesRead = true;
             List<Deferred> waiting = new ArrayList<>(deferred);
             deferred.clear();
@@ -445,8 +447,11 @@ final class ShelfSource {
         lastOwnRead = System.currentTimeMillis();
         if (ctx.checkSelfPermission(READ_TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) return;
         final ContentResolver cr = ctx.getContentResolver();
+        final long asked = Perf.now();
         WORK.execute(() -> {
+            final long began = Perf.now();
             final Map<String, List<ShelfFeeds.Item>> got = new HashMap<>();
+            Perf.begin("tvhome:shelf.readOwn");
             try {
                 Map<Long, String> channels = new HashMap<>();
                 Set<Long> continuing = new HashSet<>(), saving = new HashSet<>();
@@ -504,8 +509,15 @@ final class ShelfSource {
                 }
             } catch (RuntimeException e) {
                 return;   // TvProvider missing or refusing: no own suggestions
+            } finally {
+                Perf.end();
             }
+            final long read = Perf.now();
             main.post(() -> {
+                if (Perf.enabled()) {
+                    Perf.log("shelf_read_own", asked, String.format(Locale.US, "apps=%d wait_ms=%.1f read_ms=%.1f",
+                            got.size(), Perf.ms(asked, began), Perf.ms(began, read)));
+                }
                 Set<String> changed = new HashSet<>(ownItems.keySet());
                 changed.addAll(got.keySet());
                 ownItems.clear();
@@ -732,7 +744,10 @@ final class ShelfSource {
             return;
         }
         final File f = imageFile(url);
+        final long asked = Perf.now();
         Runnable decode = () -> {
+            final long began = Perf.now();
+            Perf.begin("tvhome:shelf.decode");
             Bitmap got = null;
             try {
                 if (f.exists()) {
@@ -741,9 +756,19 @@ final class ShelfSource {
                 }
             } catch (IOException | RuntimeException e) {
                 f.delete();   // a broken download: fetch it again next time
+            } finally {
+                Perf.end();
             }
             final Bitmap result = got;
-            main.post(() -> finished(url, result));
+            final long decoded = Perf.now();
+            main.post(() -> {
+                if (Perf.enabled()) {
+                    Perf.log("shelf_decode", asked, String.format(Locale.US,
+                            "backdrop=%d ok=%d wait_ms=%.1f decode_ms=%.1f", backdrop ? 1 : 0, result != null ? 1 : 0,
+                            Perf.ms(asked, began), Perf.ms(began, decoded)));
+                }
+                finished(url, result);
+            });
         };
         if (f.exists()) {
             WORK.execute(decode);
@@ -1042,9 +1067,19 @@ final class ShelfSource {
         final File svgFile = spec == null ? null : new File(dir, "logo-" + spec.slug + ".svg");
         final String imageUrl = imageUrl(app.pkg, choice);
         final int gen = coverGen;
+        final long asked = Perf.now();
         WORK.execute(() -> {
-            final Cover result = buildCover(app, choice, art, imageUrl, spec, svgFile);
+            final long began = Perf.now();
+            Perf.begin("tvhome:shelf.cover " + app.pkg);
+            final Cover result;
+            try {
+                result = buildCover(app, choice, art, imageUrl, spec, svgFile);
+            } finally {
+                Perf.end();
+            }
+            final long made = Perf.now();
             main.post(() -> {
+                if (Perf.enabled()) logCover(app.pkg, result, asked, began, made);
                 if (coversLoading.get(app.key) == waiters) coversLoading.remove(app.key);
                 if (!choice.equals(choices.get(app.pkg))) {
                     // The choice changed meanwhile: make the new one for whoever's waiting.
@@ -1067,6 +1102,17 @@ final class ShelfSource {
                 if (result != null && svgFile != null && !svgFile.exists()) fetchLogo(app, spec, svgFile);
             });
         });
+    }
+
+    /**
+     * With logging on: an app's cover is ready on the main thread ({@code ms}, since it was asked for), how long it
+     * waited for the worker ({@code wait_ms}: what was queued before it) and took there ({@code make_ms}), and what it
+     * is.
+     */
+    private static void logCover(String pkg, Cover c, long asked, long began, long made) {
+        String kind = c == null ? "none" : c.artwork ? "artwork" : c.image ? "image" : "cover";
+        Perf.log("shelf_cover", asked, String.format(Locale.US, "pkg=%s kind=%s wait_ms=%.1f make_ms=%.1f", pkg, kind,
+                Perf.ms(asked, began), Perf.ms(began, made)));
     }
 
     /**

@@ -146,6 +146,8 @@ final class TopShelf implements ShelfSource.Listener {
     void start() {
         if (source == null || started) return;
         started = true;
+        // With logging on: how long after the process started (ms).
+        Perf.log("shelf_start", android.os.Process.getStartElapsedRealtime() * 1_000_000L, null);
         // Nothing was shown or made yet, so choices that changed before now (default_config at a cold start) have
         // nothing to redo.
         source.choices().takeChanged();

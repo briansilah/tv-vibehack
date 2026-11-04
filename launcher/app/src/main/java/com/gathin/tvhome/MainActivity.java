@@ -578,6 +578,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         backdrop.release();
     }
 
+    /**
+     * With logging on, each key as it reaches Home ({@code key}): how long since the remote sent it ({@code ms}), and
+     * the tile focus was on. Keys held up by the system or a busy main thread show as old ones.
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && Perf.enabled()) {
+            long age = android.os.SystemClock.uptimeMillis() - event.getEventTime();
+            Perf.log("key", Perf.now() - age * 1_000_000L, String.format(Locale.US, "code=%d repeat=%d tile=%d",
+                    event.getKeyCode(), event.getRepeatCount(), grid.hasFocus() ? lastFocused : -1));
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     public void onBackPressed() {
         // Home screen: Back goes nowhere, except while arranging apps.
@@ -589,6 +603,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     @Override
     public void onTileFocused(int position, View card) {
         Perf.begin("tvhome:onTileFocused");
+        if (Perf.enabled()) Perf.log("focus", Perf.now(), "tile=" + position);
         topShelf.leaveActions();
         rearranger.onTileFocused(position);
         lastFocused = position;
