@@ -420,6 +420,13 @@ class PlanTests(unittest.TestCase):
         self.assertIn("--seconds 30", ps.render(p))
         p = plan_for(ps.Change(ps.JAVA + "VolumeHold.java", None, "a\n", None, None))
         self.assertPlan(p, [], check="tv")
+        p = plan_for(ps.Change(ps.JAVA + "HopKeys.java", None, "a\n", None, None))
+        self.assertPlan(p, [], check="tv")
+
+    def test_late_keys_are_every_keys_and_the_remotes(self):
+        p = plan_for(ps.Change(ps.JAVA + "LateKeys.java", None, "a\n", None, None))
+        self.assertPlan(p, ["jank"], ["default"])
+        self.assertTrue(p["tv"])
 
     def test_variants(self):
         p = plan_for(ps.Change(ps.JAVA + "GlassTestArt.java", "a\n", "b\n", [1], [1]))

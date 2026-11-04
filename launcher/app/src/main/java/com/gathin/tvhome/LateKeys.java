@@ -1,0 +1,83 @@
+package com.gathin.tvhome;
+
+import android.view.KeyEvent;
+
+/**
+ * Presses Home couldn't take when they were made, which reach it together later: right after the TV wakes or boots,
+ * Android holds keys until Home's window has focus (up to 5 s), then delivers them all at once, and focus would jump
+ * across several apps the user never saw it pass. Home takes the first held press, as the user saw nothing happen
+ * after it, and drops every press made before it took that one or too soon after to have seen it move: those were
+ * pressed again because nothing happened. A late Select is never taken, so nothing opens that wasn't on screen when
+ * it was pressed. Plain Java, so it runs in JVM unit tests. Main thread.
+ */
+final class LateKeys {
+
+    /**
+     * A press this old when it reaches Home was held up, and presses made meanwhile queued behind it. A remote's key
+     * takes about 5 ms on a TV; one held while Home's window comes up, about 100 ms to seconds (a press HopKeys makes
+     * again in Home waits about 100 ms for its window's focus).
+     */
+    static final long STALL_MS = 50L;
+    /** A Select this old is never taken: what it would open may not be what was on screen when it was pressed. */
+    static final long LATE_SELECT_MS = 250L;
+    /**
+     * Presses made this soon after Home took a held one were made before the move could show (a frame, and the time to
+     * see it), so they belong to the same burst.
+     */
+    static final long SEEN_MS = 150L;
+    private static final int REMEMBERED = 16;
+
+    /** Presses made before this were held behind the late move Home last took, or came too soon after it: they go. */
+    private long burstAt = Long.MIN_VALUE;
+    /** The down times of presses dropped, so their repeats and releases go too. */
+    private final long[] dropped = new long[REMEMBERED];
+    private int next;
+    private int count;
+
+    /**
+     * Whether to drop this key event. {@code now} and the event's times are {@code SystemClock.uptimeMillis()}'s, as
+     * KeyEvent's. Only presses count: a held key's repeats and its release go with the press.
+     */
+    boolean drop(int action, int keyCode, int repeat, long eventTime, long downTime, long now) {
+        if (!navigation(keyCode)) return false;
+        if (wasDropped(downTime)) return true;
+        if (action != KeyEvent.ACTION_DOWN || repeat > 0) return false;
+        long age = now - eventTime;
+        if (eventTime >= burstAt && !(select(keyCode) && age > LATE_SELECT_MS)) {
+            if (age > STALL_MS) burstAt = now + SEEN_MS;
+            return false;
+        }
+        remember(downTime);
+        return true;
+    }
+
+    static boolean navigation(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                return true;
+            default:
+                return select(keyCode);
+        }
+    }
+
+    static boolean select(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
+    }
+
+    private boolean wasDropped(long downTime) {
+        for (int i = 0; i < count; i++) {
+            if (dropped[i] == downTime) return true;
+        }
+        return false;
+    }
+
+    private void remember(long downTime) {
+        dropped[next] = downTime;
+        next = (next + 1) % REMEMBERED;
+        count = Math.min(count + 1, REMEMBERED);
+    }
+}

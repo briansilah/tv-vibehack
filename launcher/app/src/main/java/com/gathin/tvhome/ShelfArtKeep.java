@@ -8,8 +8,8 @@ import java.util.Set;
 
 /**
  * Which full-screen pictures the top shelf keeps decoded, for {@link ShelfSource}: an artwork (8 MB at 1080p) only
- * while it may show (the dock app showing it, and those either side: TopShelf.keepArtwork), and an app's static image
- * as before, with the dock. Plain Java, so it runs in JVM unit tests. Main thread.
+ * while its app is in the dock and shows it (TopShelf.keepArtwork), as each dock app's first title, and an app's static
+ * image as before, with the dock. Plain Java, so it runs in JVM unit tests. Main thread.
  */
 final class ShelfArtKeep {
 

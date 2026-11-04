@@ -87,7 +87,8 @@ FILE_RULES = [
     ((JAVA + "Transitions.java", JAVA + "HomeMotion.java"),
      E("warm", trace="home launch", why="Home's motion as it comes back (warm) and as an app opens (no scenario: "
                                         "trace it)")),
-    ((JAVA + "HomeButtonService.java", JAVA + "VolumeHold.java", RES + "xml/home_button_service.xml"),
+    ((JAVA + "HomeButtonService.java", JAVA + "VolumeHold.java", JAVA + "HopKeys.java",
+      RES + "xml/home_button_service.xml"),
      E(check="tv", trace="home remote",
        why="the Home button service: no scenario goes through it (warm starts the launcher directly, adb keys skip "
            "it, and it's off on an Android TV emulator), so check it on the TV with the remote")),
@@ -97,6 +98,10 @@ FILE_RULES = [
      E("jank", keys="corner", trace="keys:corner", art="jank", why="the shade behind the top right, for bright "
                                                                    "pictures")),
     ((JAVA + "GridScroller.java",), E("jank", keys="grid", trace="keys:grid", why="scrolling the grid")),
+    ((JAVA + "LateKeys.java",),
+     E("jank", keys="default", trace="keys remote", why="which late presses Home takes, on every key (plain logic "
+                                                        "with JVM tests); the late ones come after the TV wakes, so "
+                                                        "try that on the TV with the remote")),
     ((JAVA + "DockDecoration.java",),
      E("jank dock", keys="default dock", trace="dock", why="the dock's panel of glass", art="dock")),
     ((JAVA + "LiquidGlass.java",),
@@ -205,7 +210,11 @@ MEMBER_RULES = {
          E(check="emulator", trace="launch", why="opening an app, which no scenario does: trace it")),
         (("open", "openSettings", "openProfile", "USER_SETTINGS"),
          E(check="emulator", why="what the top right's buttons open")),
-        (("onTrimMemory",), E("mem", why="giving memory back")),
+        (("onTrimMemory", "startActivityForResult", "opened", "trimHidden", "screenOn", "KEEP_HIDDEN_MS"),
+         E("mem", why="giving memory back")),
+        (("dispatchKeyEvent", "lateKeys"),
+         E("jank", keys="default", trace="keys remote", why="every key, and the late ones after the TV wakes")),
+        (("PREF_FOCUSED",), E("cold warm", trace="home", why="the app focus comes back to")),
         (("onDestroy",), E(check="emulator", why="only when the system ends Home")),
         (("onBackPressed", "onActionTile"),
          E("jank", keys="arrange", trace="keys:arrange", why="arranging apps")),
