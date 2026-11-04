@@ -277,6 +277,14 @@ title comes on screen after Left or Right, the carousel, or a fallback: how long
 picture), its place in the app's list (`i`, `n`) and its name. `shelf_artwork` says how long an app's artwork took to
 paint (`from=paint`: once per app after an install) or to read back from the cache (`from=cache`).
 
+For the first seconds after the TV wakes or boots: `key` for each key as Home takes it, how long after the remote
+sent it (`ms`; a key held up while Home's window wasn't there yet shows as an old one), the tile focus was on and
+whether it was dropped as a late press (see `LateKeys`); `focus` for each tile focus; `trim` when Home gives pictures
+back (or keeps them, `kept=1`); `shelf_start` how long after the process started the top shelf began; and
+`shelf_cover`, `shelf_decode` and `shelf_read_own` for each cover made, picture decoded and TvProvider read, with how
+long each waited for the shelf's worker (`wait_ms`) and took there. `shelf_titles_read` is when the titles saved and
+published on the TV are known, which covers with artwork wait for.
+
 ### Trace sections
 
 | Section | Where |
@@ -288,7 +296,7 @@ paint (`from=paint`: once per app after an install) or to read back from the cac
 | `tvhome:onTileFocused` | scrolling and the top shelf on each focus change |
 | `tvhome:launch` | opening an app from a tile: starting it, then Home's push away; the `launch` log line splits it (`start_ms`, `check_ms`) |
 | `tvhome:shelf` (async, Android 10+) | from a dock focus change until the top shelf shows that app; the `shelf` log line has the same time |
-| (threads) `tvhome-shelf`, `tvhome-shelf-net` | the top shelf's art: decoding pictures, cutting cover art, painting artwork (once per app per install, then read back from the cache), reading TvProvider; and fetching catalogues and pictures. Both at background priority |
+| (threads) `tvhome-shelf`, `tvhome-shelf-net` | the top shelf's art: decoding pictures (`tvhome:shelf.decode`), making covers (`tvhome:shelf.cover <package>`: cutting cover art, painting artwork once per app per install, then reading it back from the cache), reading TvProvider (`tvhome:shelf.readOwn`), just below normal priority; and fetching catalogues and pictures, at background priority |
 | `tvhome:updateWifiLabel`, `tvhome:showInputs` | network pill refresh, Inputs menu |
 | `tvhome:DockDecoration.onDraw` | the dock panel |
 | `tvhome:glass.record` | Liquid Glass (`LiquidGlass`): recording its copy of the top shelf behind the dock or the top right capsule, on frames where the shelf or the glass moved or changed; the GPU then blurs it during the RenderThread's `DrawFrame` |
@@ -378,6 +386,7 @@ its own; the before/after tables are in the pull request that made it.
 
 | | Finding | What changed |
 |---|---|---|
+| New | **Waking the TV, simulated**: the stock Android TV launcher as HOME standing in for Google TV's, `HomeButtonService` on, the TV put to sleep and woken with `input keyevent SLEEP`/`WAKEUP`, the stock home started on waking as Google TV does after 30 s in standby, Left ×5 and Right ×3 pressed 0.45 s apart from a virtual remote (`uinput`, whose keys pass the service, unlike `input keyevent`), with three busy loops on the CPU. Presses made while Home's window wasn't there yet were held by Android ("Waiting because no window has focus") and reached Home together, up to 1 s late: held presses were applied at once in 5 of 12 runs. With Home's process ended in standby, it came back on the first dock app, not the one left (6 of 6). Waking from Home decoded every dock app's art again: it was dropped when the TV slept. | Home takes the first held press and drops those queued behind it (`LateKeys`); the service keeps the stock home's presses and makes the first move again in Home (`HopKeys`); the app focused last is saved; the dock's pictures stay through sleep and the hand-over, and every dock app's artwork stays decoded. Held presses applied at once in 0 of 12 runs, focus back on the right app 6 of 6, no pictures decoded on waking from Home. |
 | New | **The top shelf waited on purpose**: 280 ms for focus to settle, then 100 + 220 ms of fades. The new app's name showed 674 ms after the move, and each move drew about 32 frames. This is most of "moving between two apps feels slow". | The shelf follows focus at once with short fades: 270 ms, about 16 frames per move. |
 | 2 | Confirmed: every Home press reloaded the app list (8.8 ms of `onResume`, 7.5 ms of it the reload), then faded the shelf in again (27 frames). | Reload only when a TV app changes, and keep the shelf: 0.8 ms, 2 frames. |
 | 1 | Confirmed: the debug build. A release build compiled with `speed` cuts cold start by 37 %, PSS by 18 % and the APK by 86 %. `adb install` leaves a release build at `verify` (no ahead-of-time code; an embedded Baseline Profile needs ProfileInstaller or Play), so the install scripts compile it. | The install scripts build and compile a release build. |

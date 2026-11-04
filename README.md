@@ -385,9 +385,10 @@ remove a feed's line to keep that app to its own suggestions and cover art.
 
 **Memory**: on a TV with 1.5 GB of RAM or more, backdrops are fetched in 4K where available and
 shown at the screen's 1920 x 1080 (Android TV draws apps at 1080p, even on a 4K panel). On smaller
-TVs they're shown at 1280 x 720. Kept decoded: each dock app's first title, so moving along the dock
-shows it at once, and the titles either side of the one showing; a few others that showed lately.
-Pictures not on screen are dropped when you open an app.
+TVs they're shown at 1280 x 720. Kept decoded: each dock app's first title or artwork, so moving
+along the dock shows it at once, and the titles either side of the one showing; a few others that
+showed lately. Pictures not on screen are dropped when you open an app, but not when the TV goes to
+sleep or Google TV's own home briefly covers Home on waking, so the dock shows its art at once then.
 
 **Build and install** with one command:
 
@@ -440,11 +441,15 @@ The script therefore turns on `HomeButtonService`, an accessibility service in t
   the app the `DUMP` permission; without it a hold changes the volume by one step.
 - **Settings on the remote** works as before: the system opens the panel over any app.
 - When the stock home comes up on its own, the service covers it: at boot, and when the TV wakes
-  after more than 30 seconds in standby (Google TV sends it home then). It shows briefly first.
+  after more than 30 seconds in standby (Google TV sends it home then). It shows briefly first; the
+  remote's arrows and OK meanwhile are kept from it, and the first arrow pressed moves focus in
+  this launcher once it shows (Android 13+). Presses made before this launcher could take them
+  don't all land at once either: it takes the first and drops the rest, and never a late OK.
 
 Trade-offs:
 
-- Every remote key passes through the service, which answers at once for everything but Home.
+- Every remote key passes through the service, which answers at once for everything but Home (and
+  the arrows and OK for the moment the stock home shows on its way to being covered).
 - The `DUMP` permission the install script grants lets the launcher read the state of any system
   service through `dumpsys`. It reads only `dumpsys input`, only after the volume changes and
   while a volume key is held (about 20 times a second), and keeps nothing it reads.
