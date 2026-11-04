@@ -93,8 +93,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      * (-1 goes back to config.xml's).
      */
     static final String PREF_GLASS = "liquid_glass";
-    /** The app focus was last on, so Home comes back to it after its process ended (in standby, say). */
+    /**
+     * The app focus was last on, so Home comes back to it after its process ended (in standby, say). In its own file:
+     * it's where Home was, not a setting.
+     */
     private static final String PREF_FOCUSED = "last_focused";
+    private SharedPreferences state;
     static final String EXTRA_GLASS = "liquid_glass";
     /** Home Settings' Liquid Glass row: Home shows again with focus on the dock, then the slider over it. */
     static final String EXTRA_GLASS_SLIDER = "com.gathin.tvhome.GLASS_SLIDER";
@@ -306,7 +310,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
                 ambientGlow.setGradientRadius((r - l) * 0.62f));
         prefs = getSharedPreferences("home", MODE_PRIVATE);
-        if (lastFocusedKey == null) lastFocusedKey = prefs.getString(PREF_FOCUSED, null);
+        state = getSharedPreferences("state", MODE_PRIVATE);
+        if (lastFocusedKey == null) lastFocusedKey = state.getString(PREF_FOCUSED, null);
         Intent start = getIntent();
         if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
             defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
@@ -578,8 +583,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         // Opened Settings or the like from the top right: Home comes back with it closed, as tvOS closes Control
         // Center, instead of showing it close. onResume moves focus back to the dock.
         if (corner.hasFocus()) corner.snapClosed();
-        if (lastFocusedKey != null && !lastFocusedKey.equals(prefs.getString(PREF_FOCUSED, null))) {
-            prefs.edit().putString(PREF_FOCUSED, lastFocusedKey).apply();
+        if (lastFocusedKey != null && !lastFocusedKey.equals(state.getString(PREF_FOCUSED, null))) {
+            state.edit().putString(PREF_FOCUSED, lastFocusedKey).apply();
         }
     }
 
