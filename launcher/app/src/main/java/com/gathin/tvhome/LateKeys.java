@@ -6,9 +6,9 @@ import android.view.KeyEvent;
  * Presses Home couldn't take when they were made, which reach it together later: right after the TV wakes or boots,
  * Android holds keys until Home's window has focus (up to 5 s), then delivers them all at once, and focus would jump
  * across several apps the user never saw it pass. Home takes the first held press, as the user saw nothing happen
- * after it, and drops every press made before it took that one; a late Select is never taken, so nothing opens that
- * wasn't on screen when it was pressed. Presses made after Home took the first always go through. Plain Java, so it
- * runs in JVM unit tests. Main thread.
+ * after it, and drops every press made before it took that one or too soon after to have seen it move: those were
+ * pressed again because nothing happened. A late Select is never taken, so nothing opens that wasn't on screen when
+ * it was pressed. Plain Java, so it runs in JVM unit tests. Main thread.
  */
 final class LateKeys {
 
@@ -20,9 +20,14 @@ final class LateKeys {
     static final long STALL_MS = 50L;
     /** A Select this old is never taken: what it would open may not be what was on screen when it was pressed. */
     static final long LATE_SELECT_MS = 250L;
+    /**
+     * Presses made this soon after Home took a held one were made before the move could show (a frame, and the time to
+     * see it), so they belong to the same burst.
+     */
+    static final long SEEN_MS = 150L;
     private static final int REMEMBERED = 16;
 
-    /** When Home last took a late move: presses made before then were held behind it, and go. */
+    /** Presses made before this were held behind the late move Home last took, or came too soon after it: they go. */
     private long burstAt = Long.MIN_VALUE;
     /** The down times of presses dropped, so their repeats and releases go too. */
     private final long[] dropped = new long[REMEMBERED];
@@ -39,7 +44,7 @@ final class LateKeys {
         if (action != KeyEvent.ACTION_DOWN || repeat > 0) return false;
         long age = now - eventTime;
         if (eventTime >= burstAt && !(select(keyCode) && age > LATE_SELECT_MS)) {
-            if (age > STALL_MS) burstAt = now;
+            if (age > STALL_MS) burstAt = now + SEEN_MS;
             return false;
         }
         remember(downTime);

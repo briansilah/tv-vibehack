@@ -39,10 +39,11 @@ public class WakeKeysTest {
         assertTrue(k.drop(UP, LEFT, 0, 2600, 2500, at + 2));
         // The next press, once Home is there, is the user's.
         assertFalse(k.drop(DOWN, RIGHT, 0, 3400, 3400, 3405));
-        // A press made at the same moment Home took the first late one isn't part of the burst.
+        // A press made once the first late one could be seen moving isn't part of the burst, even if it waits too.
         LateKeys k2 = new LateKeys();
         assertFalse(k2.drop(DOWN, LEFT, 0, 1000, 1000, 3000));
-        assertFalse(k2.drop(DOWN, LEFT, 0, 3000, 3000, 3600));
+        assertTrue(k2.drop(DOWN, LEFT, 0, 3000 + LateKeys.SEEN_MS - 1, 3149, 3200));
+        assertFalse(k2.drop(DOWN, LEFT, 0, 3000 + LateKeys.SEEN_MS, 3150, 3600));
     }
 
     @Test
@@ -64,6 +65,16 @@ public class WakeKeysTest {
         assertFalse(k.drop(DOWN, LEFT, 0, 776, 776, 878));
         assertTrue(k.drop(DOWN, LEFT, 0, 838, 838, 931));
         assertFalse(k.drop(DOWN, LEFT, 0, 1369, 1369, 1397));
+    }
+
+    @Test
+    public void aPressMadeJustAfterTheHeldMoveIsPartOfIt() {
+        // On the TV: the move made again in Home came 81 ms late; a second Left, pressed again because nothing had
+        // happened, was made 81 ms after Home took it and moved focus another app 113 ms later.
+        LateKeys k = new LateKeys();
+        assertFalse(k.drop(DOWN, LEFT, 0, 683, 683, 764));
+        assertTrue(k.drop(DOWN, LEFT, 0, 845, 845, 877));
+        assertFalse(k.drop(DOWN, LEFT, 0, 1373, 1373, 1390));
     }
 
     @Test
