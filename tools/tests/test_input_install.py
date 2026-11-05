@@ -35,6 +35,9 @@ with open(os.environ['INSTALL_LOG'], 'a') as log:
 
 
 class InputInstallTests(unittest.TestCase):
+    def test_shell_installer_is_executable(self):
+        self.assertTrue(os.access(REPO / "launcher/build-and-install.sh", os.X_OK))
+
     def install(self, google_tv, input_key, home_key, *, overrides=None, succeeds=True):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
