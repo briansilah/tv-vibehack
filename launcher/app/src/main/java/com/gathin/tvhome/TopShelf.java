@@ -42,7 +42,10 @@ final class TopShelf implements ShelfSource.Listener {
         /** The shelf's button was pressed: open this in its app (Home moves away as for a tile). */
         void onShelfAction(Intent intent);
 
-        /** Focus leaves the shelf's button: Up to the top right corner, else back to the dock. */
+        /**
+         * Focus leaves the shelf's button: Up to the top right corner, the shelf staying full screen, else back to the
+         * dock, which comes back.
+         */
         void onShelfExit(boolean up);
 
         /** The app's top shelf choice changed while it shows (Home Settings): its glow's colour may have too. */
@@ -78,6 +81,10 @@ final class TopShelf implements ShelfSource.Listener {
     /** How far the title is lifted to make room for the button, in pixels, and how far the page has moved. */
     private float lift;
     private float pageTravel;
+    /** How far the dock has gone below the screen, the shelf full screen: 0 not at all, 1 all the way. */
+    private float full;
+    /** Where the button's top is with the dock in place. */
+    private float actionY;
     private android.animation.ValueAnimator liftAnim;
     private final Host host;
     /** Null when the top shelf art is turned off (config.xml, top_shelf_art). */
@@ -146,6 +153,8 @@ final class TopShelf implements ShelfSource.Listener {
     void start() {
         if (source == null || started) return;
         started = true;
+        // With logging on: how long after the process started (ms).
+        Perf.log("shelf_start", android.os.Process.getStartElapsedRealtime() * 1_000_000L, null);
         // Nothing was shown or made yet, so choices that changed before now (default_config at a cold start) have
         // nothing to redo.
         source.choices().takeChanged();
@@ -293,7 +302,23 @@ final class TopShelf implements ShelfSource.Listener {
     /** The page moved {@code travel} pixels from the dock: the title moves with it. */
     void followPage(float travel) {
         pageTravel = travel;
-        info.setTranslationY(-pageTravel - lift);
+        placeInfo();
+    }
+
+    /**
+     * The dock is {@code fraction} of the way below the screen (see {@link ShelfFullScreen}): the title and its button
+     * go down as far into the space it leaves, the button's bottom to the screen's safe area.
+     */
+    void setFull(float fraction) {
+        full = fraction;
+        placeInfo();
+    }
+
+    /** The title, with the page, lifted for the button, and down into the dock's place when it's away. */
+    private void placeInfo() {
+        float drop = full == 0f ? 0f : full * ShelfFullScreen.drop(info.getHeight(), contentBottom);
+        info.setTranslationY(-pageTravel - lift + drop);
+        action.setY(actionY + drop);
     }
 
     /** Whether focus is on the shelf's button. */
@@ -303,9 +328,10 @@ final class TopShelf implements ShelfSource.Listener {
 
     /**
      * Up from the dock: focus goes to the button under the title showing (Resume, Play, Open in the app, Search in
-     * the app, or Open the app: see {@link ShelfAction}), and the carousel holds still. Only a suggested title has
-     * one: for anything else on screen (a static image, artwork or cover art, also while an app's first title is
-     * loading, or the glow) this returns false, and Up goes straight to the top right corner.
+     * the app, or Open the app: see {@link ShelfAction}), and the carousel holds still. The host then shows the shelf
+     * full screen ({@link ShelfFullScreen}): the button only ever shows there. Only a suggested title has one: for
+     * anything else on screen (a static image, artwork or cover art, also while an app's first title is loading, or
+     * the glow) this returns false, and Up goes straight to the top right corner.
      */
     boolean enterActions() {
         if (!shown || current == null || tier != CONTENT || showingItem == null) return false;
@@ -319,7 +345,8 @@ final class TopShelf implements ShelfSource.Listener {
         float d = density();
         float rowH = 40 * d;
         action.setX(contentLeft);
-        action.setY(contentBottom - rowH);
+        actionY = contentBottom - rowH;
+        placeInfo();
         action.setVisibility(View.VISIBLE);
         action.setFocusable(true);
         action.animate().cancel();
@@ -353,7 +380,7 @@ final class TopShelf implements ShelfSource.Listener {
         liftAnim.setInterpolator(DECELERATE);
         liftAnim.addUpdateListener(a -> {
             lift = (float) a.getAnimatedValue();
-            info.setTranslationY(-pageTravel - lift);
+            placeInfo();
         });
         liftAnim.start();
     }
@@ -420,10 +447,12 @@ final class TopShelf implements ShelfSource.Listener {
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_DOWN:
             case KeyEvent.KEYCODE_BACK:
+                // The dock comes back, with focus on its app.
                 host.onShelfExit(false);
                 return true;
             case KeyEvent.KEYCODE_DPAD_UP:
-                // Focus moves first, then the button goes.
+                // Focus moves first, then the button goes. The shelf stays full screen: Down from the top right comes
+                // back to the button, and Down again to the dock.
                 host.onShelfExit(true);
                 leaveActions();
                 return true;
@@ -731,7 +760,7 @@ final class TopShelf implements ShelfSource.Listener {
         if (source == null || !started) return;
         if (shown && current != null) want(current);
         else keep();
-        // Artworks are full-screen pictures: keep() decodes only those that may show next. Static images as before.
+        // Artworks are decoded by keep(), with the dock's titles, while Home shows. Static images as before.
         for (ShelfSource.App a : dock) {
             if (source.preloads(a)) source.makeCover(a, null);
         }
@@ -767,16 +796,21 @@ final class TopShelf implements ShelfSource.Listener {
     }
 
     /**
-     * Artworks are decoded only for the dock app showing one, and those either side of it, which may show next
-     * (focus in the grid: those around the dock app it left); never for apps with titles to show.
+     * Artworks are decoded for every dock app that shows one, as each dock app's first title is, nearest the focused one
+     * first, so moving along the dock never waits for one; never for apps with titles to show.
      */
     private void keepArtwork() {
-        List<String> keys = new ArrayList<>(3);
-        for (int i = Math.max(0, dockAt - 1); i <= Math.min(dock.size() - 1, dockAt + 1); i++) {
-            ShelfSource.App a = dock.get(i);
-            if (!source.artworkWanted(a.pkg)) continue;
-            keys.add(a.key);
-            source.makeCover(a, null);
+        int n = dock.size();
+        List<String> keys = new ArrayList<>(n);
+        int from = Math.max(0, Math.min(dockAt, n - 1));
+        for (int d = 0; d < n; d++) {
+            for (int i : d == 0 ? new int[]{from} : new int[]{from + d, from - d}) {
+                if (i < 0 || i >= n) continue;
+                ShelfSource.App a = dock.get(i);
+                if (!source.artworkWanted(a.pkg)) continue;
+                keys.add(a.key);
+                source.makeCover(a, null);
+            }
         }
         source.keepArtwork(keys);
     }

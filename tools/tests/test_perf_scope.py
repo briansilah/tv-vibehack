@@ -253,6 +253,14 @@ class PlanTests(unittest.TestCase):
         p = plan_for(ps.Change("launcher/app/build.gradle", "a\n", "b\n", [1], [1]))
         self.assertPlan(p, ps.SCENARIOS, ["default"], check="tv")
 
+    def test_device_tests_need_an_emulator_but_no_production_perf_scenarios(self):
+        for path in ("launcher/app/src/androidTest/AndroidManifest.xml",
+                     "launcher/app/src/androidTest/java/com/gathin/tvhome/GlassSliderAccessibilityTest.java"):
+            self.assertPlan(plan_for(ps.Change(path, None, "test\n", None, None)), [], check="emulator")
+        # A production manifest must still select every scenario.
+        self.assertPlan(plan_for(ps.Change(ps.SOURCE + "AndroidManifest.xml", None, "manifest\n", None, None)),
+                        ps.SCENARIOS, ["default"], check="tv")
+
     def test_unknown_launcher_file_is_everything(self):
         self.assertPlan(plan_for(ps.Change("launcher/app/lint.xml", None, "x\n", None, None)), ps.SCENARIOS,
                         ["default"])
@@ -412,6 +420,13 @@ class PlanTests(unittest.TestCase):
         self.assertIn("--seconds 30", ps.render(p))
         p = plan_for(ps.Change(ps.JAVA + "VolumeHold.java", None, "a\n", None, None))
         self.assertPlan(p, [], check="tv")
+        p = plan_for(ps.Change(ps.JAVA + "HopKeys.java", None, "a\n", None, None))
+        self.assertPlan(p, [], check="tv")
+
+    def test_late_keys_are_every_keys_and_the_remotes(self):
+        p = plan_for(ps.Change(ps.JAVA + "LateKeys.java", None, "a\n", None, None))
+        self.assertPlan(p, ["jank"], ["default"])
+        self.assertTrue(p["tv"])
 
     def test_variants(self):
         p = plan_for(ps.Change(ps.JAVA + "GlassTestArt.java", "a\n", "b\n", [1], [1]))

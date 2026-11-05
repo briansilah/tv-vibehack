@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- HomeButtonService: filters Home and, when opted in, Input (every other key is passed straight on) and watches
-     which activity comes to the front (package and class). Window content is read once, when the service starts, and
+<!-- HomeButtonService: filters keys to take the remote's Home press, and the D-pad's for the moment Google TV's own home
+     shows before this launcher covers it, plus Input and ALL_APPS when opted in (every other key is passed straight
+     on), and watches which activity comes to
+     the front (package and class). Window content is read once, when the service starts, and
      only for the package of the active window; no text is read. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"

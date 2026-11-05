@@ -15,6 +15,11 @@ motion copies Apple TV's. Everything here was measured frame by frame from scree
   4:44–5:12, a direct capture at 1080p30.
 - **Scrolling between grid rows** (tvOS 17, many apps): Proper Honest Tech, [Apple TV is INCREDIBLE
   when you know how to use it!](https://www.youtube.com/watch?v=lqth5ytlrOo), 3:20–3:32, 1080p30.
+- **The Top Shelf full screen** (tvOS 13): Apple's own capture in WWDC19 session 211, [Mastering the
+  Living Room With tvOS](https://developer.apple.com/videos/play/wwdc2019/211/), 5:31, 1280×720 at
+  29.97 fps. Apple's [Top Shelf guidelines](https://developer.apple.com/design/human-interface-guidelines/top-shelf)
+  and [user guide](https://support.apple.com/guide/tv/atvbe55a4b4e/tvos) describe the rest: "swipe up to
+  see the preview in full screen and view more options; press Back to return to the Home Screen".
 
 **Method.** Each frame was extracted with ffmpeg. To measure the zoom and fade, every frame was
 modelled as a mix of two still frames, one of Home and one of the app. Home was scaled about a centre
@@ -22,7 +27,8 @@ point, and the fit found the scale and the opacity of each picture. The best cen
 the screen.
 
 For scrolling, a band around the dock row was template-matched in every frame. Springs were then
-fitted to the curves.
+fitted to the curves. For the Top Shelf full screen, the rows of the dock's icons were found in every
+frame, and a critically damped spring fitted to how far they had moved.
 
 ### Measured
 
@@ -37,6 +43,7 @@ fitted to the curves.
 | **Down from the dock into the grid** | The whole page moves up: the dock row goes to the top of the screen, and the rows below get the rest. The top shelf moves up with the page, dims and blurs. The clock and profile in the corner fade out |
 | **Down from the dock: the curve** | A spring with no overshoot: stiffness about 225, damping ratio about 1.35. 90 % after about 390 ms, settled after about 750 ms. Going back up is the same (stiffness 203, damping ratio 1.32) |
 | **Between grid rows** | The page moves only when the focused row would leave the screen, and by one row: 90 % after about 360 ms, settled after about 700 ms. Holding the D-pad carries the motion on smoothly |
+| **Up into the Top Shelf (full screen)** | The dock, and the rows under it, go down off the screen: 0, 33, 96, 155 and 196 px (of 720) on successive frames, the panel out of sight after about 170 ms. That fits a critically damped spring at ω = 20 rad/s, set off from rest, to within a pixel, coming to rest about 60 of 1080 px below the screen. The picture fills the screen; the title, Play and More Info, page dots and a chevron sit over it. Back returns to the Home Screen |
 
 ## What Android lets a launcher do (Android 14, Google TV)
 
@@ -65,6 +72,7 @@ reads the system's animations once, in the background, to decide.
 | **Back** | The system's 400 ms fade | The same fall inside the system's fade | Same as Home |
 | **Down from the dock** | The focused row slid into a band at the bottom; the dock climbed one row per press | The page moves on a spring (stiffness 225, damping ratio 1.35) until the dock row reaches the top of the screen's safe area. The grid fills the screen: the time and profile picture in the top right scroll away with the page and fade over 110 dp | Stiffness about 225, damping ratio about 1.35; the dock row goes to the top |
 | **Between rows** | RecyclerView's smooth scroll, restarting at every press | The same spring. A press while it is still moving carries its speed on. The page moves only as far as needed to show the whole focused tile and its name | 90 % after about 360 ms |
+| **Up into the top shelf** (a dock app showing a suggested title) | A button appeared under the title; the dock stayed | Full screen: the dock and the grid go down off the screen on tvOS's spring (stiffness 400, damping ratio 1), coming to rest 60 of 1080 px below it, out of sight after about 180 ms. The title and its button follow, down to the bottom left; the time and profile picture stay. Down or Back brings the dock back on the same spring, and a press while it moves turns it round with its speed. With Remove animations, it goes there at once | ω = 20 rad/s, out of sight after about 170 ms |
 | **A settings panel or other see-through app** | The system's animation | Home stays as it is under it | – |
 
 ### Where it is
@@ -75,8 +83,17 @@ reads the system's animations once, in the background, to decide.
 - `GridScroller`: the scroll spring, the row targets, and the layout manager. The layout manager lays
   out a row's worth beyond each edge, plus however far a running scroll still has to go, so the next
   row is there to take focus even while you hold the D-pad.
+- `ShelfFullScreen`: the top shelf full screen's spring; `MainActivity.onFullScreen` moves the grid,
+  `TopShelf.setFull` the title and its button. Once the dock is all the way down, the grid hides, so
+  neither it nor the dock's glass is drawn.
 - `MainActivity.onLaunchApp`, `comeBackFromApp`, `gridScroll` and `followPage`.
 - `AppAdapter.Holder.press`: the pressed tile.
+
+The profile corner and the top shelf full screen keep their normal tvOS springs when animations are
+enabled. With Android's **Remove animations** setting (animator duration scale 0), they open and close
+directly at the final position, cancelling any spring still running. The time, divider, capsule and
+buttons update together, as do the dock, the title and its button; D-pad focus and the open and closed
+layouts stay the same. Other focus and scrolling springs are unchanged.
 
 ### Performance
 

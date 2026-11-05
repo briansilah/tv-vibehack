@@ -15,6 +15,28 @@ public class GridScrollerTest {
     }
 
     @Test
+    public void immediateScrollIncludesTheUnfinishedSpring() {
+        int pending = GridScroller.scrollDelta(630f, 200);
+        assertEquals(430, pending);
+        assertEquals(630, 200 + pending);
+        assertEquals(0, 200 + pending - 630);
+    }
+
+    @Test
+    public void immediateScrollFinishesAnUpwardSpring() {
+        assertEquals(-430, GridScroller.scrollDelta(-630f, -200));
+        assertEquals(0, GridScroller.scrollDelta(-630f, -200) + 430);
+    }
+
+    @Test
+    public void pendingAndAppliedScrollUseTheSamePixelRounding() {
+        assertEquals(1, GridScroller.scrollDelta(20.6f, 20));
+        assertEquals(0, GridScroller.scrollDelta(20.6f, 21));
+        assertEquals(-1, GridScroller.scrollDelta(-20.6f, -20));
+        assertEquals(0, GridScroller.scrollDelta(-20.6f, -21));
+    }
+
+    @Test
     public void downFromTheDockPutsTheDockRowAtTheTop() {
         // First grid row just below the parked dock; the dock row reaches the top after scrolling 500.
         assertEquals(500, target(740, 1050, 500, -10, Integer.MAX_VALUE));

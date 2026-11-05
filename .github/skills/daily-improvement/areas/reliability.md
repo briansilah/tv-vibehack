@@ -18,7 +18,12 @@ apps installed; and the code stays small and easy to change.
    Monkey can save an app order or a setting: the emulator is read-only, so restart it before measuring
    anything else.
 2. **Edge cases.** Each on the emulator, with a screenshot:
-   - no network (`adb shell svc wifi disable; svc data disable`, then enable both)
+   - no network: disable Wi-Fi (`adb shell svc wifi disable`) and, only when supported, cellular data
+     (`adb shell svc data disable`). Save `adb shell dumpsys connectivity` after the change settles and inspect
+     the active default network and connected Internet-capable networks, including Ethernet. Wi-Fi being
+     disabled, or monkey reporting no Wi-Fi/mobile time, is not proof of being offline. If Ethernet or another
+     Internet-capable network remains and cannot be safely disabled on your owned emulator, record offline
+     coverage as **not covered**, not passed. Re-enable every transport you disabled afterward.
    - the process ending at any point (`walkthrough` `cold_restart` from each screen)
    - few apps and many (the `tvperf` AVD has about 30, 20 of them `com.example.tvstub*`); an app installed or
      removed while Home shows
@@ -54,6 +59,9 @@ apps installed; and the code stays small and easy to change.
   [Improve your code with lint](https://developer.android.com/studio/write/lint),
   [StrictMode](https://developer.android.com/reference/android/os/StrictMode)
 - [TV app quality](https://developer.android.com/docs/quality-guidelines/tv-app-quality)
+- [Read network state](https://developer.android.com/develop/connectivity/network-ops/reading-network-state):
+  Android can maintain several connections at once; check the default network, transports and capabilities,
+  not just the Wi-Fi radio.
 - Google Testing Blog, [Code Health](https://testing.googleblog.com/search/label/Code%20Health): short
   posts on keeping code simple, one problem each
 
@@ -74,3 +82,5 @@ the screens the code draws.
 - A clean-up must not change behaviour: no "while I'm here" changes to how it looks or works.
 - Monkey's `--pct-syskeys 0` keeps it away from Home and Power; never run monkey on the TV.
 - Put the network, locale and settings back before you stop.
+- The API 34 `tvperf` emulator retained a validated Ethernet default network after Wi-Fi was disabled
+  (2026-11-04). That probe checks Wi-Fi-off behavior, not network loss; don't count it as offline coverage.

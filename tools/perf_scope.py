@@ -74,6 +74,7 @@ FILE_RULES = [
     (("tools/*",), E(why="local tools")),
     (("launcher/build-and-install.*",), E(check="emulator", why="installing: try it on your emulator")),
     (("launcher/app/src/test/*",), E(why="JVM unit tests")),
+    (("launcher/app/src/androidTest/*",), E(check="emulator", why="device tests, not shipped in the launcher")),
     # The build changes every number.
     (("launcher/build.gradle", "launcher/settings.gradle", "launcher/gradle.properties", "launcher/gradle/*",
       "launcher/gradlew*", "launcher/app/build.gradle", "launcher/app/proguard*", "launcher/app/*.pro",
@@ -86,7 +87,8 @@ FILE_RULES = [
     ((JAVA + "Transitions.java", JAVA + "HomeMotion.java"),
      E("warm", trace="home launch", why="Home's motion as it comes back (warm) and as an app opens (no scenario: "
                                         "trace it)")),
-    ((JAVA + "HomeButtonService.java", JAVA + "VolumeHold.java", RES + "xml/home_button_service.xml"),
+    ((JAVA + "HomeButtonService.java", JAVA + "VolumeHold.java", JAVA + "HopKeys.java",
+      RES + "xml/home_button_service.xml"),
      E(check="tv", trace="home remote",
        why="the Home button service: no scenario goes through it (warm starts the launcher directly, adb keys skip "
            "it, and it's off on an Android TV emulator), so check it on the TV with the remote")),
@@ -96,6 +98,10 @@ FILE_RULES = [
      E("jank", keys="corner", trace="keys:corner", art="jank", why="the shade behind the top right, for bright "
                                                                    "pictures")),
     ((JAVA + "GridScroller.java",), E("jank", keys="grid", trace="keys:grid", why="scrolling the grid")),
+    ((JAVA + "LateKeys.java",),
+     E("jank", keys="default", trace="keys remote", why="which late presses Home takes, on every key (plain logic "
+                                                        "with JVM tests); the late ones come after the TV wakes, so "
+                                                        "try that on the TV with the remote")),
     ((JAVA + "DockDecoration.java",),
      E("jank dock", keys="default dock", trace="dock", why="the dock's panel of glass", art="dock")),
     ((JAVA + "LiquidGlass.java",),
@@ -120,6 +126,11 @@ FILE_RULES = [
      E("jank", keys="default arrange", trace="keys:arrange",
        why="where a key moves focus or a moving app: plain logic with JVM tests")),
     ((JAVA + "TopShelf.java",), E("dock mem", trace="dock", why="the top shelf")),   # MEMBER_RULES go finer
+    ((JAVA + "ShelfFullScreen.java",),
+     E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+       why="the top shelf full screen: the dock going down off the screen and back, Up from a dock app showing a "
+           "suggested title. No scenario reaches it (the shipped choices show no titles): check it on your emulator "
+           "with an app on Suggestions")),
     ((JAVA + "TopShelfView.java", JAVA + "ShelfSource.java", JAVA + "ShelfFeeds.java", JAVA + "ShelfInfoView.java",
       JAVA + "CoverArt.java", JAVA + "AmbientColor.java", JAVA + "ShelfArt.java", JAVA + "ShelfArtworks.java",
       JAVA + "ShelfArtKeep.java", JAVA + "TrueBlack.java"),
@@ -204,7 +215,11 @@ MEMBER_RULES = {
          E(check="emulator", trace="launch", why="opening an app, which no scenario does: trace it")),
         (("open", "openSettings", "openProfile", "USER_SETTINGS"),
          E(check="emulator", why="what the top right's buttons open")),
-        (("onTrimMemory",), E("mem", why="giving memory back")),
+        (("onTrimMemory", "startActivityForResult", "opened", "trimHidden", "screenOn", "KEEP_HIDDEN_MS"),
+         E("mem", why="giving memory back")),
+        (("dispatchKeyEvent", "lateKeys"),
+         E("jank", keys="default", trace="keys remote", why="every key, and the late ones after the TV wakes")),
+        (("PREF_FOCUSED",), E("cold warm", trace="home", why="the app focus comes back to")),
         (("onDestroy",), E(check="emulator", why="only when the system ends Home")),
         (("onBackPressed", "onActionTile"),
          E("jank", keys="arrange", trace="keys:arrange", why="arranging apps")),
@@ -218,6 +233,9 @@ MEMBER_RULES = {
           "ambientFade", "glowAt", "onShelfGlow"),
          E("dock", trace="dock", why="the top shelf's name and glow on a dock move")),
         (("hideHero",), E("jank dock", keys="grid", trace="dock", why="the top shelf going, down into the grid")),
+        (("fullScreen", "onFullScreen", "dockPanelTop"),
+         E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+           why="the top shelf full screen: the dock going down off the screen and back")),
         (("onShelfExit", "onTileDpadKey"),
          E("jank", keys="default corner", trace="keys:corner", why="moving focus between tiles, the shelf and the "
                                                                    "top right")),
@@ -279,6 +297,9 @@ MEMBER_RULES = {
          E("dock mem", trace="dock", why="each app's top shelf choice (Home Settings), and the glow's colour")),
         (("enterActions", "leaveActions", "liftTo", "lift", "liftAnim", "acting", "onActionKey", "labelAction"),
          E("jank dock", keys="corner", trace="keys:corner", why="the top shelf's button, Up from the dock")),
+        (("setFull", "full", "placeInfo", "actionY"),
+         E("jank dock", keys="corner", check="emulator", trace="keys:corner",
+           why="the top shelf's title and button, full screen and with the page")),
         (("act", "intentFor"), E(check="emulator", why="what the top shelf's button opens")),
         (("followPage", "pageTravel"), E("jank", keys="grid", trace="keys:grid",
                                          why="the top shelf following the page")),

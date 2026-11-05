@@ -29,6 +29,17 @@ MDNS = "adb-8C00F07E0160CF00F-pLsp3G (2)._adb-tls-connect._tcp"
 DEVICES = "List of devices attached\n%s\tdevice\n\n" % MDNS
 
 
+_bound_device = tv.bound_device
+
+
+def setUpModule():
+    # A worktree bound to an emulator (tools/emulator.py start) mustn't change what these fakes connect to: only
+    # BoundWorktreeTests, which name their own root, read a binding.
+    patcher = mock.patch.object(tv, "bound_device", lambda root=None: _bound_device(root) if root else None)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
 class TransportChoiceTests(unittest.TestCase):
     def test_tv_host_keeps_adb_shell(self):
         self.assertEqual(tv.choose_transport({"TV_HOST": "192.168.1.50"}), "adb_shell")
