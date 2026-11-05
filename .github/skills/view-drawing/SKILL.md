@@ -27,6 +27,9 @@ Picture, App Colour, Custom's picture and all eight colours, then Back and a col
 pixels as well as looking at its pictures. Follow launcher-tv-testing for the core tour and scoped performance
 checks. Daily runs use only their own emulator; the TV waits for /test-on-tv.
 
+GlassSlider keeps its fixed Clear and Tinted tick marks in a private static array, not a new array per draw.
+Replay `tools/walkthroughs/glass-slider-marks.json` to check the marks, focus and closing without changing settings.
+
 ## Sources
 
 - [Android: Optimize a custom view](https://developer.android.com/develop/ui/views/layout/custom-views/optimizing-view):
