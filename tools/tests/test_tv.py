@@ -644,7 +644,7 @@ class ScriptTests(unittest.TestCase):
     def test_windows_home_commands_use_components(self):
         with open(os.path.join(REPO, "launcher", "build-and-install.ps1")) as f:
             install = f.read()
-        self.assertEqual(install.count("cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'"), 2)
+        self.assertEqual(install.count("cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'"), 1)
         self.assertNotIn("cmd package set-home-activity --user 0 com.gathin.tvhome'", install)
         self.assertIn("com.gathin.tvhome/.HomeButtonService", install)
         with open(os.path.join(REPO, "tools", "restore.ps1")) as f:

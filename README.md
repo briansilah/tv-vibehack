@@ -137,32 +137,35 @@ Anything running **Android TV** or **Google TV**: Xiaomi and Redmi, TCL, Hisense
 Realme, Nvidia Shield and most others. The launcher does not require Wi-Fi hardware; Ethernet-only
 TVs are supported too.
 
-Not supported: Samsung (Tizen), LG (webOS) and Amazon Fire TV. They run different systems or
-won't let a third-party launcher take over Home.
+Not supported: Samsung (Tizen) and LG (webOS), which run different systems. Amazon Fire TV
+(Fire OS) takes the debloat half only: Fire OS won't let a third-party launcher take over Home,
+so the Fire TV lists below are about removing Amazon's ads and telemetry, not the home screen.
 
 Lists that people have tested and contributed live in [`examples/`](examples/):
 
 | TV | OS |
 |---|---|
-| Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
-| TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
-| Xiaomi MiTV-AXSO0 (dangal) | Android TV 9 |
-| Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
-| SANYO ATV R2 (SCBC, Realtek RTD285O) | Android TV 9 |
-| OnePlus TV (D00, Dubai) | Google TV 14 |
 | BenQ E55-735 (Changhong AI PONT, DVB96BQ) | Google TV 14 |
-| Hisense SmartTV 4K FFM (huangshan, MediaTek) | Android TV 10 |
-| TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
-| Sony BRAVIA 4K UR2 (BRAVIA_UR2_4K, MediaTek) | Android TV 10 |
-| Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 |
-| Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
-| TCL BeyondTV (India) | Android TV 9 |
-| NVIDIA SHIELD TV Pro 2019 (P2897, mdarcy) | Android TV 11 |
-| Xiaomi MiTV-MOOR2 (venom, MediaTek) | Google TV 11 |
-| Xiaomi MiTV-AESP0 stick (aquaman, 1 GB) | Android TV 9 |
-| TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
-| RCA AI PONT SA (Changhong, redwood, ISDB92RC) | Android 14 |
 | CHiQ AI PONT (DVB93CQ) | Android TV 11 |
+| Hisense SmartTV 4K FFM (huangshan, MediaTek) | Android TV 10 |
+| Insignia 55" F30 4K Fire TV (NS-55F301NA25, AFTDCT31, duckie) | Fire OS 7 / Android 9 |
+| NVIDIA SHIELD TV Pro 2019 (P2897, mdarcy) | Android TV 11 |
+| OnePlus TV (D00, Dubai) | Google TV 14 |
+| RCA AI PONT SA (Changhong, redwood, ISDB92RC) | Android 14 |
+| SANYO ATV R2 (SCBC, Realtek RTD285O) | Android TV 9 |
+| Sony BRAVIA 4K UR2 (BRAVIA_UR2_4K, MediaTek) | Android TV 10 |
+| Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
+| TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
+| TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
+| TCL BeyondTV (India) | Android TV 9 |
+| TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
+| Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
+| Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 |
+| Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
+| Xiaomi MiTV-AESP0 stick (aquaman, 1 GB) | Android TV 9 |
+| Xiaomi MiTV-AXSO0 (dangal) | Android TV 9 |
+| Xiaomi MiTV-MOOR2 (venom, MediaTek) | Google TV 11 |
+| Xiaomi TV A Pro 75" 2026 (MiTV-MZTU0, river, MediaTek) | Google TV 14 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -224,9 +227,12 @@ powershell -ExecutionPolicy Bypass -File tools\restore.ps1 examples\xiaomi-mi-tv
 Each script takes `-TvHost <tv ip>` for `adb_shell` and `-Serial <adb serial>` to pick one of
 several adb devices.
 
-The install script stops before touching the stock launcher if the install or the home-screen
-switch fails. Git Bash also works; the `.sh` scripts detect a Windows venv and disable MSYS path
-rewriting themselves.
+Both install scripts keep Google TV's `launcherx` enabled, regardless of `STOCK_LAUNCHER`.
+On other TVs they ask which app owns Home and only disable a recognised stock launcher
+(`tvlauncher` or `leanbacklauncher`); pass `STOCK_LAUNCHER=<package>` (or `-StockLauncher`) to
+override, or `none` to disable nothing. They stop before touching it if install or launch fails,
+then verify Home after switching and restore the stock launcher if the switch fails.
+Git Bash also works; the `.sh` scripts detect a Windows venv and disable MSYS path rewriting themselves.
 
 ## The launcher
 
@@ -445,6 +451,8 @@ It needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0). On macOS:
 ```bash
 brew install openjdk@17 android-commandlinetools
 sdkmanager "platforms;android-34" "build-tools;34.0.0"
+# newer command-line tools (sdkmanager forwards to the "android" CLI) take this form instead:
+# android sdk install platforms/android-34 build-tools/34.0.0
 ```
 
 Without Homebrew, the script also finds a JDK 17 known to `/usr/libexec/java_home` and an SDK in
@@ -582,6 +590,11 @@ Things that bit us or contributors, so they don't bite you.
   `com.google.android.tungsten.setupwraith` package to free the slot. This fork instead keeps Google
   TV's launcher enabled and uses HomeButtonService: do not disable either package to take over Home.
   If you disabled the setup wizard previously, re-enable it before a factory reset.
+- **The TV drops off Wi-Fi every minute right after the install**, seen on Google TV 14 (Xiaomi
+  MiTV-MZTU0): the same setupwraith `.RecoveryActivity` took Home and system_server crash-looped
+  on it after the stock launcher was disabled. This fork keeps the stock Google TV launcher enabled
+  and uses HomeButtonService instead. If you're already in the loop:
+  `tools/tv.py 'pm enable --user 0 com.google.android.apps.tv.launcherx'`.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`

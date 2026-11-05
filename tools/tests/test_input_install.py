@@ -14,16 +14,28 @@ REPO = Path(__file__).resolve().parents[2]
 FAKE_TV = """
 import json, os, sys
 commands = sys.stdin.read().splitlines() if '--batch' in sys.argv else [sys.argv[1]]
+path = os.environ['INSTALL_LOG']
+previous = open(path).read() if os.path.exists(path) else ''
+switched = 'cmd package set-home-activity' in previous
 with open(os.environ['INSTALL_LOG'], 'a') as log:
     for command in commands:
         log.write(json.dumps(command) + '\\n')
         if command.startswith('pm path ') and os.environ['FAKE_GOOGLE_TV'] == '1':
             print('package:/system/launcherx.apk')
+        elif command.startswith('pm install '):
+            print(os.environ.get('FAKE_INSTALL', 'Success'))
+        elif command.startswith('am start -W'):
+            print(os.environ.get('FAKE_START', 'Status: ok'))
+        elif command.startswith('cmd package resolve-activity'):
+            if switched and os.environ.get('FAKE_QUERY_FAILURE') == '1':
+                sys.exit(1)
+            package = os.environ.get('FAKE_HOME_AFTER', 'com.gathin.tvhome') if switched else os.environ.get('FAKE_HOME', 'com.google.android.tvlauncher')
+            print(package + '/.MainActivity')
 """
 
 
 class InputInstallTests(unittest.TestCase):
-    def install(self, google_tv, input_key, home_key):
+    def install(self, google_tv, input_key, home_key, *, overrides=None, succeeds=True):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             launcher = root / "launcher"
@@ -44,9 +56,14 @@ class InputInstallTests(unittest.TestCase):
             (tools / "tv.py").write_text(FAKE_TV)
             log = root / "commands.jsonl"
             env = dict(os.environ, INSTALL_LOG=str(log), FAKE_GOOGLE_TV=str(int(google_tv)))
+            env.pop("STOCK_LAUNCHER", None)
+            env.update(overrides or {})
             result = subprocess.run(["bash", str(launcher / "build-and-install.sh")], env=env,
                                     capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stderr)
+            if succeeds:
+                self.assertEqual(result.returncode, 0, result.stderr)
+            else:
+                self.assertNotEqual(result.returncode, 0, result.stdout)
             return [json.loads(line) for line in log.read_text().splitlines()]
 
     def test_only_one_service_with_volume_support_in_all_install_modes(self):
@@ -65,6 +82,43 @@ class InputInstallTests(unittest.TestCase):
                                  not google_tv)
                 self.assertFalse(any("disable-user" in c and "launcherx" in c for c in commands))
                 self.assertFalse(any("force-stop" in c for c in commands))
+
+    def test_non_google_stock_is_detected_and_none_disables_nothing(self):
+        for package in ("com.google.android.leanbacklauncher", "com.gathin.tvhome"):
+            commands = self.install(False, False, False, overrides={"FAKE_HOME": package})
+            disabled = [c for c in commands if c.startswith("pm disable-user")]
+            self.assertEqual(disabled, [] if package == "com.gathin.tvhome"
+                             else ["pm disable-user --user 0 " + package])
+        commands = self.install(False, False, False, overrides={"STOCK_LAUNCHER": "none"})
+        self.assertFalse(any("disable-user" in c for c in commands))
+
+    def test_unknown_home_fails_without_disabling_anything(self):
+        for package in ("android", "com.google.android.tungsten.setupwraith", "other.launcher"):
+            commands = self.install(False, False, False, overrides={"FAKE_HOME": package}, succeeds=False)
+            self.assertFalse(any("disable-user" in c or c.startswith("pm install") for c in commands))
+
+    def test_install_or_launch_failure_leaves_stock_untouched(self):
+        for override in ({"FAKE_INSTALL": "Failure [INSTALL_FAILED]"}, {"FAKE_START": "Error: activity missing"}):
+            commands = self.install(False, False, False, overrides=override, succeeds=False)
+            self.assertFalse(any("disable-user" in c for c in commands))
+
+    def test_failed_home_verification_restores_stock(self):
+        for override in ({"FAKE_HOME_AFTER": "android"}, {"FAKE_QUERY_FAILURE": "1"}):
+            commands = self.install(False, False, False, overrides=override, succeeds=False)
+            self.assertIn("pm enable --user 0 com.google.android.tvlauncher", commands)
+
+    def test_start_disable_and_home_preference_are_ordered(self):
+        commands = self.install(False, False, False)
+        start = commands.index("am start -W -n com.gathin.tvhome/.MainActivity")
+        disable = commands.index("pm disable-user --user 0 com.google.android.tvlauncher")
+        home = commands.index("cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity")
+        self.assertLess(start, disable)
+        self.assertLess(disable, home)
+
+    def test_google_tv_is_never_disabled_even_with_override(self):
+        commands = self.install(True, False, False,
+                                overrides={"STOCK_LAUNCHER": "com.google.android.apps.tv.launcherx"})
+        self.assertFalse(any("disable-user" in c for c in commands))
 
     def test_default_has_no_input_interception_or_second_filter(self):
         resources = REPO / "launcher/app/src/main/res"
