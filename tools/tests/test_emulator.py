@@ -1,5 +1,5 @@
-"""Offline tests for tools/emulator.py: slots, ports, queue timeouts, bindings, reaping and the measuring lock,
-against a fake Mac.
+"""Offline tests for tools/emulator.py: slots, ports, queue timeouts, bindings, boot recovery, reaping and the
+measuring lock, against a fake Mac. Boot failures and termination deadlines use its clock, not real devices.
 
     python3 -m unittest discover -s tools/tests -v
 """
@@ -228,6 +228,58 @@ class SlotTest(unittest.TestCase):
             s.start("daily-ux", emulator="emulator")
         self.assertEqual(host.procs, {})
         self.assertIn("none", s.describe())
+
+    def test_exit_while_booting_frees_the_slot_for_the_next_start(self):
+        host = FakeHost(others=[5554])
+        others = dict(host.procs)
+
+        def exit_before_boot(serial):
+            host.procs = dict(others)
+            return False
+
+        with tempfile.TemporaryDirectory() as d:
+            s = slots(host, maximum=2, directory=d)
+            with mock.patch.object(host, "booted", side_effect=exit_before_boot):
+                with self.assertRaisesRegex(em.EmulatorError, "emulator-5556 exited while booting; see"):
+                    s.start("daily-testing", emulator="emulator")
+            self.assertEqual(s._read(), [])
+            self.assertEqual(host.procs, others)
+            self.assertEqual(host.killed, [])
+            self.assertEqual(s.start("daily-testing", emulator="emulator")["serial"], "emulator-5556")
+
+    def test_transient_adb_error_does_not_report_an_unbooted_emulator_ready(self):
+        host = FakeHost()
+        began = host.now()
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(host, "booted", side_effect=[em.tv.TvError("adb reconnecting"), False, True]) \
+                as booted:
+            slot = slots(host, directory=d).start("daily-testing", emulator="emulator")
+        self.assertEqual(booted.call_args_list, [mock.call(slot["serial"])] * 3)
+        self.assertEqual(host.now() - began, 6)
+        self.assertEqual(host.killed, [])
+        self.assertTrue(host.listeners(slot["port"]))
+
+    def test_stop_escalates_only_its_own_group_when_sigterm_is_ignored(self):
+        host = FakeHost(others=[5554])
+        others = dict(host.procs)
+        killpg = host.killpg
+
+        def ignore_sigterm(pgid, sig):
+            if sig == signal.SIGTERM:
+                host.killed.append((pgid, sig))
+            else:
+                killpg(pgid, sig)
+
+        with tempfile.TemporaryDirectory() as d:
+            s = slots(host, directory=d)
+            slot = s.start("daily-testing", emulator="emulator")
+            began = host.now()
+            with mock.patch.object(host, "killpg", side_effect=ignore_sigterm):
+                s.stop(slot["serial"])
+            self.assertEqual(s._read(), [])
+        self.assertEqual(host.killed, [(slot["pgid"], signal.SIGTERM), (slot["pgid"], signal.SIGKILL)])
+        self.assertEqual(host.now() - began, 20)
+        self.assertEqual(host.procs, others)
 
 
 @unittest.skipIf(os.name == "nt", "fcntl")
