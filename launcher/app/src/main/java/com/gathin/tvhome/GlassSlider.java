@@ -31,6 +31,7 @@ public class GlassSlider extends View {
     private static final int TRACK = 0xFF3A3A3C;
     private static final int FILL = 0xFF3478F6;
     private static final int ICON = 0xB3FFFFFF;
+    private static final int[] MARKS = {LiquidGlass.Look.CLEAR, LiquidGlass.Look.TINTED};
 
     private final float density;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -184,7 +185,7 @@ public class GlassSlider extends View {
 
         paint.setColor(0x66FFFFFF);
         float dotY = cy + thumbR + 5 * density, dotR = 1.5f * density;
-        for (int mark : new int[]{LiquidGlass.Look.CLEAR, LiquidGlass.Look.TINTED}) {
+        for (int mark : MARKS) {
             c.drawCircle(trackLeft + (trackRight - trackLeft) * mark / 100f, dotY, dotR, paint);
         }
 
