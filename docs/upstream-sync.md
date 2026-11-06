@@ -18,6 +18,7 @@ or adopted differently, and why: the only record of it.
 
 | Date | Upstream | What the fork did | Why |
 |---|---|---|---|
+| 2026-11-06 | [Android 14 target (Gathin23/cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34), [input discovery (Gathin23/cleanyourtv#42)](https://github.com/Gathin23/cleanyourtv/pull/42), [VPN status (Gathin23/cleanyourtv#69)](https://github.com/Gathin23/cleanyourtv/pull/69) | Kept the cumulative device/platform fixes and advanced only the docs/list checkpoint to `4cd5e0b6`; today's merge changes no launcher or device tool. Fresh exclusive emulator pairs were fully drawn 206 to 215 ms, then 198 to 204 ms; warm focus 60.2 to 55.7 ms, then 40.9 to 59.4 ms. Grid jank was 19.8% to 19.6%, Dock jank 52.1% to 51.6%; PSS 42.1 to 43.6 MB. | The earlier large cold-start regression did not reproduce, but the warm-focus direction still reverses, so performance is not signed off. Cold traces show onCreate 31.0 to 25.1 ms, shader compilation 100.7 to 101.1 ms, and main-thread rendering waits up to 56.2/52.0 ms: no defensible code-level cause to remove a wanted device fix. HOME-intent traces are not comparable because baseline installation restores stock Home while the sync installer selects tvhome; do not use them to explain the direct-activity warm measurements. Keep draft rather than broaden the unresolved launcher boundary. |
 | 2026-11-06 | [AXSO0 additions and restore guidance (4cd5e0b6)](https://github.com/Gathin23/cleanyourtv/commit/4cd5e0b616a9870d7ae5031a44e2e08cddad5780) | Took every AXSO0 package addition, model alias and safety warning. Adapted the new restore section to document that the fork disables its own HomeButtonService and resets its auto-start app-op and DUMP grant; quoted the example list paths. Kept the adjacent AESP0 row's `home_key_service=true` option when resolving the table conflict. | Upstream's claim that restore leaves accessibility services enabled does not describe this fork. Preserve the existing single-service configuration and make copyable shell paths safe without dropping the new device findings. |
 | 2026-11-05 | [Android 14 target (Gathin23/cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34), [input discovery (Gathin23/cleanyourtv#42)](https://github.com/Gathin23/cleanyourtv/pull/42), [VPN status (Gathin23/cleanyourtv#69)](https://github.com/Gathin23/cleanyourtv/pull/69) | Retained the cumulative device/platform fixes, but stopped this run at `38b65eb6` rather than expanding the unresolved performance boundary. Fresh emulator pairs were fully drawn 308 to 275 ms, then 255 to 385 ms; warm focus 77.3 to 63.9 ms, then 53.8 to 85.4 ms. Repeat grid jank was 54.2% to 61.0%, Dock jank 67.8% to 76.3%; PSS 44.7 to 44.9 MB. | Direction reversals and emulator rendering stalls prevent causal attribution, not a performance pass. Diagnostic cold/grid traces show main-thread waits on rendering (grid postAndWait up to 200.4 ms); injected key handling itself was 0.08 ms median, with 3.2 ms median and 150.8 ms maximum delivery latency. Keep draft and require performance investigation/TV confirmation before merging, not removal of device fixes based on inconclusive traces. |
 | 2026-11-05 | [Home crash-loop fix (Gathin23/cleanyourtv#91)](https://github.com/Gathin23/cleanyourtv/pull/91), [known stock-launcher detection](https://github.com/Gathin23/cleanyourtv/commit/ed06e6d6) | Both installers detect known Android TV Home owners, support `none`, start before disabling, set Home last and restore stock on failed verification. Google TV still keeps launcherx enabled, with the existing HomeButtonService and packaged Input/ALL_APPS options. | Adopt the safety checks without upstream's Google TV disable/setup-wizard workaround or competing services. Keep release/debug, grants, compilation and both transports. Offline routing/failure tests cover the shell installer; Windows execution remains pending. |
@@ -43,12 +44,25 @@ or adopted differently, and why: the only record of it.
 
 ## Pending, not merged
 
-The November 5 checkpoint reaches upstream `38b65eb6`, adding two TV lists, safer installer detection
-and Home verification, the translated screensaver date and the pinned Gradle 8.9 wrapper.
-Latest fork main is merged, retaining wake-time D-pad replay alongside optional Input/ALL_APPS handling.
-Later upstream commits remain pending, not rejected or counted as adopted.
-The physical-remote interaction remains a TV check, not something injected emulator keys can prove.
-Combined CI passes at the checkpoint and the emulator core tour passes 40/40. Performance is not signed off:
-the fresh repeat regressed, so the run stops at this pushed boundary. The screensaver layout now uses the
-packaged translated date format in both clock modes; its live preview remains pending because this production
-emulator image rejects dream shell commands and has no activity for `android.settings.DREAM_SETTINGS`.
+The November 6 checkpoint reaches upstream `4cd5e0b6`: 86 upstream commits adopted cumulatively,
+one added today. It adds the AXSO0 package/model findings and restore/safety guidance without changing
+the November 5 launcher tree. Against the fetched upstream tip `3c122bc0`, 5,338 commits remain
+(2,452 first-parent commits), pending rather than rejected or counted as adopted.
+
+The next commit, [tile sizing (d7a2efcd)](https://github.com/Gathin23/cleanyourtv/commit/d7a2efcd84bf628ae131072f70620a03ad069383),
+needs a coordinated port into the fork's grid: upstream assumes a 1.10 focus scale and rows_below_dock,
+whereas the fork uses 1.22 focus, 1.27 lifted tiles, fixed scroll-row geometry and its retained Dock position.
+Do not text-merge those geometry assumptions while the cumulative launcher's warm-focus comparison remains
+unresolved. No part of this pending commit is marked merged.
+
+`. tools/devenv.sh && tools/ci.sh` passes at `41f1e97b`: 180 JVM tests per variant, 279 Python tests,
+release lint and a 415,865-byte APK (below 589,824 bytes). Upstream has no CI workflow or root `tests/`
+at this checkpoint; the merged local CI includes the later upstream test/lint/size requirements already.
+The private emulator core tour passes 40/40, its eight screenshots match their expectations, and saved
+settings are unchanged. Latest fork main is included, preserving wake-time D-pad replay with optional
+Input/ALL_APPS handling. The physical TV was untouched; the cumulative PR remains draft for
+`/test-on-tv pr 40`, with performance not signed off for the reasons above.
+
+Windows installer execution, physical-remote filtering and live screensaver preview remain unverified.
+The production emulator image rejects dream shell commands and has no activity for
+`android.settings.DREAM_SETTINGS`; the screensaver's packaged translated date format is checked locally.
