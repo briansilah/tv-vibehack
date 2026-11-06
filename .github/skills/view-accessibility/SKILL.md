@@ -10,6 +10,9 @@ TalkBack through Android's accessibility nodes and events, not additional visibl
 
 - **Name the thing, not its type.** Use localized labels from resources; follow `ux-writing`.
   App names already come from their installed packages. Do not append "button" or "radio button".
+- **Custom buttons have the native button role.** `TopBarButton.getAccessibilityClassName()` returns
+  `Button` so Android initializes nodes and events consistently in every top-bar style. Keep its existing
+  localized description, click action, enabled state and hidden decorative children.
 - **Expose saved choice separately from highlight.** A D-pad highlight previews a choice; it does not save
   it. Top Shelf option rows and colour swatches expose the native `RadioButton` role, `checkable=true`
   and `checked` from the same saved-choice comparison that draws the checkmark.
@@ -28,6 +31,7 @@ TalkBack through Android's accessibility nodes and events, not additional visibl
 | Off has a visible checkmark but reports `checked=false` | Off reports a radio button with `checked=true` |
 | Moving the highlight leaves no way to identify the saved option | Highlight and checked state are independently inspectable |
 | Colour swatches expose only a colour name | Named radio choices expose the same state as their checkmarks |
+| Inputs, Network and Settings report generic ViewGroup roles | All three report Button without changing their labels or appearance |
 
 ## Check
 
@@ -35,6 +39,13 @@ On an owned emulator, repeat UIAutomator dumps before and after. All choice cont
 only the saved option is checked. Move focus without pressing OK and confirm the checked option stays put.
 Choose a different option, reopen its page, and check again after a cold restart. Restore saved settings.
 Inspect the same screenshots at font scales 1.0 and 1.3; labels, checkmarks and navigation must not change.
+
+For top-bar roles, run `(cd launcher && ./gradlew assembleDebugAndroidTest)`, install both debug APKs, then
+`adb shell am instrument -w com.gathin.tvhome.test/com.gathin.tvhome.TopBarButtonAccessibilityTest`.
+The platform-only tests cover nodes, events, descriptions and accessible clicks in all four styles, including
+disabled buttons. Repeat UIAutomator dumps with the corner open: Inputs, Network and Settings must each be
+one named Button, with no separate icon or label stops. Replay `tools/walkthroughs/top-bar-accessibility.json`
+to check D-pad edges, opening Inputs and returning from system Settings.
 
 ## Sources
 
