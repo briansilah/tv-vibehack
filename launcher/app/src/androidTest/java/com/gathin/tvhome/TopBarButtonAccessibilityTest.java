@@ -31,7 +31,7 @@ public class TopBarButtonAccessibilityTest extends Instrumentation {
     public void onStart() {
         getUiAutomation();
         Activity activity = startActivitySync(new Intent(getTargetContext(), MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
         runOnMainSync(() -> {
             FrameLayout host = new FrameLayout(activity);
             activity.addContentView(host, new FrameLayout.LayoutParams(1200, 200));
