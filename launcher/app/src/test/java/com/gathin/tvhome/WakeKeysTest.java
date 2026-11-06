@@ -90,6 +90,46 @@ public class WakeKeysTest {
     }
 
     @Test
+    public void everySelectKeyDropsItsLatePressRepeatsAndRelease() {
+        for (int key : new int[]{OK, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER}) {
+            LateKeys k = new LateKeys();
+            assertFalse(k.drop(DOWN, key, 0, 1000, 1000, 1005));
+            assertFalse(k.drop(UP, key, 0, 1080, 1000, 1085));
+            assertTrue(k.drop(DOWN, key, 0, 2000, 2000, 3000));
+            assertTrue(k.drop(DOWN, key, 1, 3100, 2000, 3105));
+            assertTrue(k.drop(UP, key, 0, 3200, 2000, 3205));
+            assertFalse(k.drop(DOWN, key, 0, 4000, 4000, 4005));
+        }
+    }
+
+    @Test
+    public void selectIsAcceptedAtItsAgeLimitButNotOneMillisecondLater() {
+        for (int key : new int[]{OK, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER}) {
+            LateKeys atLimit = new LateKeys();
+            assertFalse(atLimit.drop(DOWN, key, 0, 1000, 1000, 1000 + LateKeys.LATE_SELECT_MS));
+            assertFalse(atLimit.drop(UP, key, 0, 1100, 1000, 1300));
+
+            LateKeys pastLimit = new LateKeys();
+            assertTrue(pastLimit.drop(DOWN, key, 0, 1000, 1000, 1001 + LateKeys.LATE_SELECT_MS));
+            assertTrue(pastLimit.drop(UP, key, 0, 1100, 1000, 1300));
+        }
+    }
+
+    @Test
+    public void recentDroppedPressesStayDroppedAfterManyOtherPresses() {
+        LateKeys k = new LateKeys();
+        for (long t = 1000; t < 1320; t += 10) {
+            assertTrue(k.drop(DOWN, OK, 0, t, t, t + LateKeys.LATE_SELECT_MS + 1));
+        }
+        for (long downTime : new long[]{1300, 1310}) {
+            assertTrue(k.drop(DOWN, OK, 1, 2000, downTime, 2005));
+            assertTrue(k.drop(UP, OK, 0, 2100, downTime, 2105));
+        }
+        assertFalse(k.drop(DOWN, OK, 0, 3000, 3000, 3005));
+        assertFalse(k.drop(UP, OK, 0, 3080, 3000, 3085));
+    }
+
+    @Test
     public void aLaterStallIsANewBurst() {
         LateKeys k = new LateKeys();
         assertFalse(k.drop(DOWN, LEFT, 0, 1000, 1000, 3000));
