@@ -102,6 +102,7 @@ public class ProfileCorner extends ViewGroup {
     private View avatar;
     private View bar;
     private final SpringAnimation openSpring;
+    private final Rect digits = new Rect();
     /** 0 at rest, 1 open. */
     private float openness;
     private boolean open;
@@ -297,7 +298,6 @@ public class ProfileCorner extends ViewGroup {
         divider.layout(dividerLeft, cy - dh / 2, dividerLeft + dw, cy - dh / 2 + dh);
 
         // The digits, not the text box, centred on the capsule: whatever the font's ascent and descent.
-        Rect digits = new Rect();
         time.getPaint().getTextBounds("0", 0, 1, digits);
         int tw = time.getMeasuredWidth(), th = time.getMeasuredHeight();
         int timeTop = Math.round(cy + digits.height() / 2f - time.getBaseline());
