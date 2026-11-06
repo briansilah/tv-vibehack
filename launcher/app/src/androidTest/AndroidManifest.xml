@@ -3,4 +3,7 @@
     <instrumentation
         android:name="com.gathin.tvhome.GlassSliderAccessibilityTest"
         android:targetPackage="com.gathin.tvhome" />
+    <instrumentation
+        android:name="com.gathin.tvhome.TopBarButtonAccessibilityTest"
+        android:targetPackage="com.gathin.tvhome" />
 </manifest>

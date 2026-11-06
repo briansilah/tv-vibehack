@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.animation.DecelerateInterpolator;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -113,6 +114,11 @@ public class TopBarButton extends ViewGroup {
         scaleX = new SpringAnimation(this, DynamicAnimation.SCALE_X, 1f);
         scaleY = new SpringAnimation(this, DynamicAnimation.SCALE_Y, 1f);
         setExpansion(mode == MODE_PILL ? 1f : 0f);
+    }
+
+    @Override
+    public CharSequence getAccessibilityClassName() {
+        return Button.class.getName();
     }
 
     /** Whether MainActivity should show this button's label under the bar while it is focused. */
