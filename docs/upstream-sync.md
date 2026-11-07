@@ -18,6 +18,7 @@ or adopted differently, and why: the only record of it.
 
 | Date | Upstream | What the fork did | Why |
 |---|---|---|---|
+| 2026-11-07 | [Android 14 support (Gathin23/cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34), [input discovery (Gathin23/cleanyourtv#42)](https://github.com/Gathin23/cleanyourtv/pull/42), [dense-grid fix (d7a2efcd)](https://github.com/Gathin23/cleanyourtv/commit/d7a2efcd84bf628ae131072f70620a03ad069383) | Retained the cumulative platform/device fixes and the newly verified dense-grid fix, but stopped after two checked merge steps rather than expand the unsigned-off performance boundary. Final reverse-order exclusive emulator pair: fully drawn 209 to 252 ms, warm focus 61.7 to 40.9 ms, grid/corner/arrange jank 14.4% to 19.7%, Dock jank 47.0% to 62.4%, shelf change 245.2 to 251.8 ms, PSS 44.8 to 46.4 MB. | Cold and jank regressions remain: not a performance pass. The first pair was fully drawn 189 to 235 ms, grid jank 13.9% to 26.2%, Dock jank 43.9% to 85.8%; the repeat reduced but did not eliminate them. Comparative cold traces show onCreate 18.91 to 20.21 ms, reload 9.86 to 8.03 ms and maximum main-thread postAndWait 57.48 to 57.04 ms. Dock focus work totals 1.18 to 0.86 ms over eight changes, while rendering waits dominate; these traces do not establish a code-level cause or justify deleting a wanted fix. Keep draft and carry the unresolved regression into TV sign-off, not a speculative rollback. |
 | 2026-11-07 | [Crash-loop log diagnosis (0852d371)](https://github.com/Gathin23/cleanyourtv/commit/0852d371) | Adopted the crash-buffer signature and repeated RecoveryActivity evidence, while keeping the fork's enabled stock Google TV launcher and single HomeButtonService recovery guidance. | The diagnostic evidence is useful; upstream's renewed instruction to disable setupwraith conflicts with the fork's safe Home ownership policy. |
 | 2026-11-07 | [Dense-grid tile sizing (d7a2efcd)](https://github.com/Gathin23/cleanyourtv/commit/d7a2efcd84bf628ae131072f70620a03ad069383) | Ported adaptive card/name/corner sizing with room for the fork's 1.27 Arrange apps lift, and resized its move ring/chevrons too. Kept one-to-four-column XML geometry and exact Dock placement; dense rows adjust the Dock height to their cards. Did not restore the old GlassView focus panel or `rows_below_dock`. | Upstream reserves room for 1.10 focus and assumes its own Dock composition. The fork needs its 1.22 focus, 1.27 lift, LiquidGlass and full Top Shelf; the old focus panel would duplicate focus and reference removed components. The existing ledger's raised-Dock exclusion still applies. |
 | 2026-11-06 | [Android 14 target (Gathin23/cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34), [input discovery (Gathin23/cleanyourtv#42)](https://github.com/Gathin23/cleanyourtv/pull/42), [VPN status (Gathin23/cleanyourtv#69)](https://github.com/Gathin23/cleanyourtv/pull/69) | Kept the cumulative device/platform fixes and advanced only the docs/list checkpoint to `4cd5e0b6`; today's merge changes no launcher or device tool. Fresh exclusive emulator pairs were fully drawn 206 to 215 ms, then 198 to 204 ms; warm focus 60.2 to 55.7 ms, then 40.9 to 59.4 ms. Grid jank was 19.8% to 19.6%, Dock jank 52.1% to 51.6%; PSS 42.1 to 43.6 MB. | The earlier large cold-start regression did not reproduce, but the warm-focus direction still reverses, so performance is not signed off. Cold traces show onCreate 31.0 to 25.1 ms, shader compilation 100.7 to 101.1 ms, and main-thread rendering waits up to 56.2/52.0 ms: no defensible code-level cause to remove a wanted device fix. HOME-intent traces are not comparable because baseline installation restores stock Home while the sync installer selects tvhome; do not use them to explain the direct-activity warm measurements. Keep draft rather than broaden the unresolved launcher boundary. |
@@ -46,24 +47,30 @@ or adopted differently, and why: the only record of it.
 
 ## Pending, not merged
 
-The November 6 checkpoint reaches upstream `4cd5e0b6`: 86 upstream commits adopted cumulatively,
-one added today. It adds the AXSO0 package/model findings and restore/safety guidance without changing
-the November 5 launcher tree. Against the fetched upstream tip `3c122bc0`, 5,338 commits remain
-(2,452 first-parent commits), pending rather than rejected or counted as adopted.
+The November 7 checkpoint reaches upstream `47d4414e`: 93 upstream commits adopted cumulatively,
+seven added today in two merge steps (five first-parent commits). It ports the previously blocked
+tile-sizing fix to the fork's focus/lift geometry, adds the China-market TCL ak30a5 list and signing-gate
+findings, and keeps crash-loop diagnosis without adopting unsafe Google TV recovery instructions.
+Against fetched upstream tip `3f175120`, 5,463 commits remain (2,502 first-parent commits), pending rather
+than rejected or counted as adopted.
 
-The next commit, [tile sizing (d7a2efcd)](https://github.com/Gathin23/cleanyourtv/commit/d7a2efcd84bf628ae131072f70620a03ad069383),
-needs a coordinated port into the fork's grid: upstream assumes a 1.10 focus scale and rows_below_dock,
-whereas the fork uses 1.22 focus, 1.27 lifted tiles, fixed scroll-row geometry and its retained Dock position.
-Do not text-merge those geometry assumptions while the cumulative launcher's warm-focus comparison remains
-unresolved. No part of this pending commit is marked merged.
+The next step is [Live TV action and source-panel options (Gathin23/cleanyourtv#96)](https://github.com/Gathin23/cleanyourtv/pull/96).
+It needs porting into the fork's current Inputs menu, including validation of the service component and
+explicit failure handling instead of upstream's broad exception catch. It has not been trial-merged or
+counted as adopted. Stop at this checked checkpoint while the cumulative cold/jank comparison above is
+unresolved; the next run can continue from this exact upstream ancestor.
 
-`. tools/devenv.sh && tools/ci.sh` passes at `41f1e97b`: 180 JVM tests per variant, 279 Python tests,
-release lint and a 415,865-byte APK (below 589,824 bytes). Upstream has no CI workflow or root `tests/`
-at this checkpoint; the merged local CI includes the later upstream test/lint/size requirements already.
-The private emulator core tour passes 40/40, its eight screenshots match their expectations, and saved
-settings are unchanged. Latest fork main is included, preserving wake-time D-pad replay with optional
+`. tools/devenv.sh && tools/ci.sh` passes at `5eedbfd7`: 183 JVM tests per variant, 279 Python tests,
+release lint and a 416,261-byte APK (below 589,824 bytes). Upstream has no CI workflow, root `tests/`
+or table generator at this historical checkpoint; the merged local CI already includes its later
+JVM/lint/size checks, and both projects' table entries were preserved directly.
+The private emulator core tour passes 40/40; its eight screenshots and Dock recording were inspected.
+The same dense-grid tour passes 23/23 with five and six columns, with all six screenshots inspected in
+each; a six-column build of the previous sync reproduced overlapping/clipped cards. Temporary column
+overrides were removed: the committed default remains four. Every tour left saved settings unchanged.
+Latest fork main is included, retaining one HomeButtonService, wake-time D-pad replay and optional
 Input/ALL_APPS handling. The physical TV was untouched; the cumulative PR remains draft for
-`/test-on-tv pr 40`, with performance not signed off for the reasons above.
+`/test-on-tv pr 40`, with performance not signed off.
 
 Windows installer execution, physical-remote filtering and live screensaver preview remain unverified.
 The production emulator image rejects dream shell commands and has no activity for
