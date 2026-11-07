@@ -68,7 +68,7 @@ public class MoveMarks extends View {
         float m = MARGIN_DP * density;
         float gap = (RING_GAP_DP + RING_DP / 2f) * density;
         rect.set(m - gap, m - gap, getWidth() - m + gap, getHeight() - m + gap);
-        float r = AppAdapter.cornerRadius(Math.round(getWidth() - 2 * m), density) + gap;
+        float r = TileSizing.cornerRadius(Math.round(getWidth() - 2 * m), density) + gap;
         c.drawRoundRect(rect, r, r, ring);
 
         // Each chevron on its disc, just outside the ring.

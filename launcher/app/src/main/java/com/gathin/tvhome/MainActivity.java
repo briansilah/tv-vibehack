@@ -415,7 +415,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int h = b - t;
             int inner = (r - l) - grid.getPaddingLeft() - grid.getPaddingRight();
-            int dockRow = AppAdapter.dockRowHeightPx(inner, COLUMNS, density);
+            int dockRow = TileSizing.dockRowHeightPx(inner, COLUMNS, density);
             int want = Math.max(0, h - dockRow - (int) (30 * density));
             if (grid.getPaddingTop() != want) {
                 grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
