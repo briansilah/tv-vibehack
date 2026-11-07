@@ -253,7 +253,17 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, apps);
         return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
+    }
+
+    private static void addHomeSettingsShortcut(Context ctx, List<Entry> apps) {
+        if (ctx.getResources().getBoolean(R.bool.show_home_settings_shortcut)
+                && ctx.getPackageManager().resolveActivity(new Intent(Settings.ACTION_HOME_SETTINGS), 0) != null) {
+            apps.add(new Entry(ctx.getString(R.string.default_home),
+                    new ComponentName(ctx, HomeSettingsActivity.class), null,
+                    ctx.getDrawable(R.drawable.ic_home_settings), null, 0));
+        }
     }
 
     /** Whether an app is a tile: not hidden (config.xml), and of this app's own activities only Home Settings. */
@@ -300,6 +310,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, fresh);
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());
@@ -429,6 +440,33 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_app, parent, false);
+        if (dockSize > 4) {
+            float density = parent.getResources().getDisplayMetrics().density;
+            int width = parent.getWidth() > 0 ? parent.getWidth() : parent.getMeasuredWidth();
+            int inner = width - parent.getPaddingLeft() - parent.getPaddingRight();
+            int w = TileSizing.tileWidthPx(inner, dockSize, density), tileH = TileSizing.tileHeightPx(w);
+            View card = v.findViewById(R.id.card);
+            ViewGroup.LayoutParams cardLp = card.getLayoutParams();
+            cardLp.width = w;
+            cardLp.height = tileH;
+            card.setLayoutParams(cardLp);
+            float tileScale = w / (180f * density);
+            View icon = v.findViewById(R.id.icon);
+            ViewGroup.MarginLayoutParams iconLp = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
+            iconLp.width = iconLp.height = Math.round(48 * density * tileScale);
+            iconLp.bottomMargin = Math.round(14 * density * tileScale);
+            icon.setLayoutParams(iconLp);
+            View name = v.findViewById(R.id.name);
+            ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
+            nameLp.width = w;
+            nameLp.topMargin = tileH + Math.round(7 * density);
+            name.setLayoutParams(nameLp);
+            View marks = v.findViewById(R.id.marks);
+            ViewGroup.LayoutParams marksLp = marks.getLayoutParams();
+            marksLp.width = w + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marksLp.height = tileH + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marks.setLayoutParams(marksLp);
+        }
         Holder h = new Holder(v, listener);
         if (viewType == TYPE_ACTION) {
             h.card.setBackgroundResource(R.drawable.action_tile_bg);
@@ -738,11 +776,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             scaleX.addUpdateListener((a, value, velocity) -> marks.setScaleX(value));
             scaleY.addUpdateListener((a, value, velocity) -> marks.setScaleY(value));
 
-            final float radius = density * TILE_RADIUS_DP;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
+                            TileSizing.cornerRadius(view.getWidth(), density));
                 }
             });
             card.setClipToOutline(true);

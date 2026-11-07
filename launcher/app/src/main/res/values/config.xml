@@ -25,7 +25,23 @@
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
     <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
 
-    <!-- Tiles per row in the grid; the dock always has this many slots. -->
+    <!-- Map the remote's Input key (KEYCODE_TV) to Android's input switcher from any app.
+         Off leaves the TV's own handling alone. Both installers enable HomeButtonService when true;
+         the same filter handles Home and Input, preserving held-volume repeats. -->
+    <bool name="input_key_service">false</bool>
+    <!-- Xiaomi sticks whose Home button sends ALL_APPS instead of HOME. Uses the same service as
+         input_key_service, enabled by either installer when true. Other remotes keep their own handling. -->
+    <bool name="home_key_service">false</bool>
+
+    <!-- Show the Solar Hijri (Shamsi) date used in Iran and Afghanistan above the Gregorian date at the
+         top left. Off keeps the fork's uncluttered Top Shelf and expanding top right unchanged. -->
+    <bool name="shamsi_date">false</bool>
+    <!-- Optional VPN app the network button opens (hold for Wi-Fi settings). Empty: opens Wi-Fi settings.
+         For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
+    <string name="vpn_app" translatable="false"></string>
+
+    <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
+         shrink to fit from 5 up, reserving room for focus and the larger Arrange apps lift. -->
     <integer name="columns">4</integer>
 
     <!-- Top right: the time and your profile picture, as on Apple TV. Moving up there opens it and shows the
@@ -118,4 +134,7 @@
         <item>com.netflix.ninja | nflx://www.netflix.com/search?q={title}</item>
         <item>com.apple.atve.androidtv.appletv | https://tv.apple.com/search?term={title}</item>
     </string-array>
+    <!-- "Default home" tile that opens Android's home-screen picker, for TVs whose settings have one
+         (most Android TVs don't; the tile only appears when the page exists). Off by default. -->
+    <bool name="show_home_settings_shortcut">false</bool>
 </resources>

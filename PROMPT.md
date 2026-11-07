@@ -8,7 +8,8 @@ instead of writing them from scratch, and only needs to edit `launcher/.../value
 
 Before you start, on the TV: Settings → Device Preferences → About → press OK on "Build" 7 times,
 then go back → Developer options → turn on USB debugging (and Network/ADB debugging if your TV
-shows it). Keep the TV on.
+shows it). Keep the TV on. Some boxes cut power to their USB port while USB debugging is on, so a
+USB speaker or drive plugged into it goes dead until you switch debugging off again.
 
 ---
 
@@ -30,6 +31,8 @@ Connect
 Back up first
 - Save the full package list, disabled-package list, getprop output and all settings to a backup folder
   before changing anything, and write a restore script that re-enables everything you disable.
+- Ask me what is plugged into the TV's USB ports. Some devices cut their power while USB debugging
+  is on, so warn me, and remind me to switch debugging off once you're done.
 
 Debloat
 - List installed packages and sort them into: manufacturer telemetry/analytics, manufacturer content

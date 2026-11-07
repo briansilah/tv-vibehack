@@ -3,14 +3,21 @@
 **Your TV, minus the ads.**
 
 Strip the bloatware from any Android TV or Google TV over Wi-Fi, and replace the ad-filled home
-screen with a clean launcher that looks like an Apple TV. No root, no cable, nothing uninstalled,
-and a one-line restore if you change your mind.
+screen with a clean launcher that looks like an Apple TV.
+
+**No root, no cable, nothing uninstalled, and a one-line restore if you change your mind.**
 
 ![Before: stock Google TV home with a sponsored ad. After: the tv-vibehack launcher](docs/stock-vs-new-side.jpg)
 
 It started as an afternoon fixing my parents' Mi TV, which showed them an advert before they
 could reach Netflix. The whole thing was done with Claude Code talking to the real TV, and the
-prompt that did it is in this repo so you can do the same with yours.
+prompt that did it is in this repo so you can do the same with yours. The replies to the
+[tweet below](https://x.com/gathint/status/2111379569030939102) are where most of the TV lists in
+this repo came from.
+
+<p align="center">
+  <a href="https://x.com/gathint/status/2111379569030939102"><img src="docs/tweet.png" alt="The tweet: Vibe coded my parents' TV this afternoon. Before and after screenshots." width="380"></a>
+</p>
 
 ---
 
@@ -22,6 +29,7 @@ prompt that did it is in this repo so you can do the same with yours.
 - [Supported TVs](#supported-tvs)
 - [Doing it by hand](#doing-it-by-hand)
 - [The launcher](#the-launcher)
+- [Restoring your TV](#restoring-your-tv)
 - [Troubleshooting](#troubleshooting)
 - [Questions people ask](#questions-people-ask)
 - [Contributing](#contributing)
@@ -115,6 +123,11 @@ A home screen that is yours again:
 - **All text is set in [Inter](https://rsms.me/inter/)**, the open typeface closest to Apple TV's
   SF Pro, on a type scale taken from tvOS's text styles (`values/styles.xml`).
 - **A matching Clock screensaver**, optional, that drifts around the screen so nothing burns in.
+- **The remote's Input button can keep working.** On Google TV the stock launcher handled it; an
+  optional `input_key_service` setting in `config.xml` maps it (`KEYCODE_TV`) to the system input
+  switcher in any app. Off by default; set it to `true` and run either installer to turn it on.
+  This uses the existing `HomeButtonService`, not a second key filter, and keeps held-volume repeats.
+  Without a system input switcher the key stays with the TV. Google TV's stock launcher stays enabled.
 
 And a TV that stops working against you: no sponsored rows, no "Discover" nags, no analytics
 phoning home, no apps you never asked for.
@@ -125,18 +138,41 @@ Anything running **Android TV** or **Google TV**: Xiaomi and Redmi, TCL, Hisense
 Realme, Nvidia Shield and most others. The launcher does not require Wi-Fi hardware; Ethernet-only
 TVs are supported too.
 
-Not supported: Samsung (Tizen), LG (webOS) and Amazon Fire TV. They run different systems or
-won't let a third-party launcher take over Home.
+Not supported: Samsung (Tizen) and LG (webOS), which run different systems. Amazon Fire TV
+(Fire OS) takes the debloat half only: Fire OS won't let a third-party launcher take over Home,
+so the Fire TV lists below are about removing Amazon's ads and telemetry, not the home screen.
+
+Some China-market TCL firmware is stricter still: Android TV 9 sets (ak30a5 at least) refuse to
+install any APK that declares `android.intent.category.HOME` unless it is signed with TCL's own
+key, so there the debloat half works and the launcher half is impossible. Its
+[example list](examples/tcl-ak30a5/debloat.txt) says so in the header.
 
 Lists that people have tested and contributed live in [`examples/`](examples/):
 
 | TV | OS |
 |---|---|
+| BenQ E55-735 (Changhong AI PONT, DVB96BQ) | Google TV 14 |
+| CHiQ AI PONT (DVB93CQ) | Android TV 11 |
+| Hisense SmartTV 4K FFM (huangshan, MediaTek) | Android TV 10 |
+| Insignia 55" F30 4K Fire TV (NS-55F301NA25, AFTDCT31, duckie) | Fire OS 7 / Android 9 |
+| NVIDIA SHIELD TV Pro 2019 (P2897, mdarcy) | Android TV 11 |
+| OnePlus TV (D00, Dubai) | Google TV 14 |
+| RCA AI PONT SA (Changhong, redwood, ISDB92RC) | Android 14 |
+| SANYO ATV R2 (SCBC, Realtek RTD285O) | Android TV 9 |
+| Sony BRAVIA 4K UR2 (BRAVIA_UR2_4K, MediaTek) | Android TV 10 |
+| Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
+| TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
+| TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
+| TCL ak30a5 (China, Amlogic; debloat only, see above) | Android TV 9 |
+| TCL BeyondTV (India) | Android TV 9 |
+| TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
+| Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
+| Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 |
 | Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
-| Xiaomi MiTV-AXSO0 | Android TV 9 |
-| TCL 55" 4K Google TV, 2023 (G10) | Google TV 12 |
-| SANYO ATV R2 | Android TV 9 |
-| OnePlus TV (D00) | Google TV 14 |
+| Xiaomi MiTV-AESP0 stick (aquaman, 1 GB) | Android TV 9 |
+| Xiaomi MiTV-AXSO0 (dangal; Mi TV 4C Pro 2019 / 4A Pro) | Android TV 9 |
+| Xiaomi MiTV-MOOR2 (venom, MediaTek) | Google TV 11 |
+| Xiaomi TV A Pro 75" 2026 (MiTV-MZTU0, river, MediaTek) | Google TV 14 |
 
 Your TV not here? The prompt works regardless, it discovers the bloat itself. If you add your
 list afterwards, the next person with your model skips that step. See
@@ -198,13 +234,16 @@ powershell -ExecutionPolicy Bypass -File tools\restore.ps1 examples\xiaomi-mi-tv
 Each script takes `-TvHost <tv ip>` for `adb_shell` and `-Serial <adb serial>` to pick one of
 several adb devices.
 
-The install script stops before touching the stock launcher if the install or the home-screen
-switch fails. Git Bash also works; the `.sh` scripts detect a Windows venv and disable MSYS path
-rewriting themselves.
+Both install scripts keep Google TV's `launcherx` enabled, regardless of `STOCK_LAUNCHER`.
+On other TVs they ask which app owns Home and only disable a recognised stock launcher
+(`tvlauncher` or `leanbacklauncher`); pass `STOCK_LAUNCHER=<package>` (or `-StockLauncher`) to
+override, or `none` to disable nothing. They stop before touching it if install or launch fails,
+then verify Home after switching and restore the stock launcher if the switch fails.
+Git Bash also works; the `.sh` scripts detect a Windows venv and disable MSYS path rewriting themselves.
 
 ## The launcher
 
-A small native Android TV app (`com.gathin.tvhome`, about 300 KB), written in plain Java with
+A small native Android TV app (`com.gathin.tvhome`, about 400 KB), written in plain Java with
 AndroidX RecyclerView and nothing heavier. It is built for sets with 1 GB of RAM: no video, no
 network except the top shelf's pictures (below), and no background services except, on Google TV,
 the small Home-button service described below. The only blur is the dock's and the top right's
@@ -213,10 +252,24 @@ in [docs/performance.md](docs/performance.md), off on low-RAM and pre-Android 12
 `liquid_glass_blur` in `config.xml` turns it off.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
-the dock order, apps to hide, your TV's Live TV package, the number of columns, the top shelf's art,
+the dock order, apps to hide, your TV's Live TV package, the number of columns (tiles shrink to fit
+from 5 columns up), the top shelf's art,
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).
+The Inputs button hides itself on sticks and boxes that have no HDMI or tuner.
+On Xiaomi remotes that send ALL_APPS for Home, set `home_key_service` to `true` and reinstall:
+the existing HomeButtonService handles that key too, with no second accessibility filter.
+
+**Language** follows the TV: English, German, Spanish, Catalan and Simplified Chinese. On Android 13
+and later, set a language for the launcher alone with, for example,
+`tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales ca'`.
+The newer translations use English for the fork's additional Home Settings and Top Shelf strings.
+
+**Optional date and VPN shortcut**: `shamsi_date` shows the Solar Hijri date above the Gregorian date at
+the top left (off by default). `vpn_app` sets the package opened by the network button; leave it empty
+for Wi-Fi settings, which holding the button always opens. A connected VPN adds a badge to the network
+button's label or caption, without changing the corner's icon-only styles.
 
 Each app tile exposes its app name to screen readers, including banner-only tiles in the Dock.
 Home Settings and Arrange Apps are named too; the latter's accessible name changes to Done while arranging.
@@ -406,6 +459,8 @@ It needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0). On macOS:
 ```bash
 brew install openjdk@17 android-commandlinetools
 sdkmanager "platforms;android-34" "build-tools;34.0.0"
+# newer command-line tools (sdkmanager forwards to the "android" CLI) take this form instead:
+# android sdk install platforms/android-34 build-tools/34.0.0
 ```
 
 Without Homebrew, the script also finds a JDK 17 known to `/usr/libexec/java_home` and an SDK in
@@ -482,6 +537,33 @@ tools/venv/bin/python -I tools/tv.py 'settings put secure screensaver_components
 It starts after the TV's "screen off" idle time (`settings get system screen_off_timeout`).
 </details>
 
+### Changing the default home from the TV
+
+Optional: set `show_home_settings_shortcut` to `true` in `config.xml` and a **Default Home** tile
+appears in the app grid, opening Android's own home-screen picker so you can switch
+launchers from the sofa. Most Android TV firmware has no such page, and then the tile stays
+hidden. The stock launcher has to be enabled before it can be picked, see the restore instructions.
+This is separate from **Home Settings**, which controls this launcher's appearance. The optional tile follows
+your saved app order and can be rearranged like an app.
+
+## Restoring your TV
+
+Keep the list you applied: the restore script re-enables exactly those packages, then re-enables and
+re-selects the stock launcher, and resets the three animation scales.
+
+```bash
+TV_HOST=192.168.1.50 tools/restore.sh "examples/<your tv>/debloat.txt"                 # Android TV
+TV_HOST=192.168.1.50 tools/restore.sh "examples/<your tv>/debloat.txt" com.google.android.apps.tv.launcherx   # Google TV
+```
+
+The second argument is the stock launcher package; it defaults to Google's `tvlauncher`, so pass
+`launcherx` on Google TV (on Windows: `-Stock`). What restore does not do: it leaves the new launcher
+installed (uninstall it from the TV's settings if you want it gone), it does not know about packages
+you disabled outside the list, and it does not undo a changed screensaver. The fork's restore script
+does turn off this launcher's HomeButtonService, preserving other accessibility services, and resets
+its auto-start app-op and DUMP grant. See Troubleshooting for the screensaver setting. If the TV is
+unreachable, the TV's own Settings → Apps page can re-enable apps too.
+
 ## Troubleshooting
 
 Things that bit us or contributors, so they don't bite you.
@@ -497,6 +579,9 @@ Things that bit us or contributors, so they don't bite you.
   The device then shows up under an mDNS name such as `adb-XXXX._adb-tls-connect._tcp`.
 - **No "wireless debugging" toggle** on some TVs, Xiaomi among them. USB debugging alone opens
   network ADB on port 5555.
+- **USB devices go dead while USB debugging is on**, seen on the Xiaomi Mi Box S: its firmware
+  switches the USB port to ADB device mode, which cuts the power to a USB speaker or drive. Switch
+  USB debugging off when you're done; the launcher doesn't need it.
 - **Windows PowerShell 5.1 adds a byte-order mark** to text piped into a program, which turned the
   first batch command into gibberish. `tv.py` now strips it, and the `.ps1` scripts pipe clean UTF-8.
 - **Git Bash rewrites paths** like `/data/local/tmp` into Windows paths. The scripts set
@@ -521,19 +606,48 @@ Things that bit us or contributors, so they don't bite you.
   `appops get com.gathin.tvhome AUTO_START` says `allow`; run
   `appops set com.gathin.tvhome AUTO_START allow; appops write-settings`. The second command
   matters: Android saves app ops up to 30 minutes later, and `adb reboot` loses unsaved ones.
+- **Xiaomi MiTV-MOOR2's setup wizard also answers Home**, seen upstream after disabling the stock launcher on Google TV
+  (Xiaomi MiTV-MOOR2). Another system app answers HOME: `com.google.android.tungsten.setupwraith`,
+  with `.MainActivity` at intent-filter priority 4 and `.RecoveryActivity` at priority 1. You
+  cannot outrank it, and the obvious workarounds don't help: Android ignores `android:priority` on
+  HOME filters for apps that aren't on the system image, `cmd package set-home-activity` prints
+  `Success` without changing anything (not even after a reboot), and `pm disable-user` on one of
+  setupwraith's components is refused with a SecurityException. Upstream disabled the whole
+  `com.google.android.tungsten.setupwraith` package to free the slot. This fork instead keeps Google
+  TV's launcher enabled and uses HomeButtonService: do not disable either package to take over Home.
+  If you disabled the setup wizard previously, re-enable it before a factory reset.
+- **The TV drops off Wi-Fi every minute right after the install**, seen on Google TV 14 (Xiaomi
+  MiTV-MZTU0): the same setupwraith `.RecoveryActivity` took Home and system_server crash-looped
+  on it after the stock launcher was disabled. This fork keeps the stock Google TV launcher enabled
+  and uses HomeButtonService instead. To confirm it is this bug: `logcat -b crash` shows `FATAL EXCEPTION IN SYSTEM PROCESS:
+  android.display`, and the main log shows `setupwraith/.RecoveryActivity` being started every
+  200 ms or so. If you're already in the loop:
+  `tools/tv.py 'pm enable --user 0 com.google.android.apps.tv.launcherx'`.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
   `tools/tv.py 'ime set com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME'`
 - **Third-party launchers** often charge for basics like a custom wallpaper. That's why this repo
   has its own.
+- **Wrong time zone, clock off by 30 or 60 minutes**, seen on Xiaomi in Iran: the TV picked a
+  neighbouring zone, and older firmware ships time zone data from before Iran dropped daylight
+  saving in 2022 (on Android 10 and newer, check with
+  `tools/tv.py 'cat /apex/com.android.tzdata/etc/tz/tz_version'`). Set the zone yourself:
+  `tools/tv.py 'settings put global auto_time_zone 0; cmd alarm set-timezone Asia/Tehran'`.
+  If the clock then jumps an hour ahead in spring, a fixed offset keeps it right:
+  `tools/tv.py 'cmd alarm set-timezone GMT+03:30'`. The same applies to any country whose rules
+  changed after the firmware was built.
 
 ## Questions people ask
 
 **Is this safe? Can it brick the TV?**
-No. Nothing is flashed, rooted or deleted. Packages are disabled for the user profile, which
-lives in the data partition, not in the system image. The firmware is untouched. If something
-goes wrong, `tools/restore.sh` puts everything back, and even without the tools you can re-enable
-apps from the TV's own settings.
+Nothing is flashed, rooted or deleted, so the firmware itself is never at risk: packages are
+disabled for the user profile, which lives in the data partition. What can go wrong is disabling
+something the TV leans on. One Hisense booted to Android Recovery until "Try again" was pressed,
+and on Google TV disabling the stock launcher without the setup wizard sent Home into a crash
+loop (both are in Troubleshooting, with the way out). So: apply a list in small batches, keep
+the backup folder the assistant makes, and have `tools/restore.sh` ready. Even without the tools,
+the TV's own Settings → Apps page can re-enable packages, and a factory reset is the last resort,
+not the first.
 
 **What about firmware updates?**
 Most lists disable the manufacturer's update service, so updates only arrive when you re-enable

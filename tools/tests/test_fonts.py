@@ -57,6 +57,13 @@ class StringTests(unittest.TestCase):
     def test_every_launcher_string_is_in_the_subset(self):
         self.assertEqual(fonts.missing_characters(), {})
 
+    def test_cjk_uses_system_fallback_but_missing_latin_is_still_reported(self):
+        with tempfile.TemporaryDirectory() as res:
+            os.makedirs(os.path.join(res, "values-zh-rCN"))
+            with open(os.path.join(res, "values-zh-rCN", "strings.xml"), "w", encoding="utf-8") as f:
+                f.write('<resources><string name="a">主屏幕，设置。ǔ</string></resources>')
+            self.assertEqual(fonts.missing_characters(res), {"ǔ": ["values-zh-rCN/strings.xml"]})
+
 
 class FontResourceTests(unittest.TestCase):
     """The fonts in res/font are exactly the ones tools/fonts.py builds, and every one is used."""

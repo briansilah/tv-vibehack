@@ -2,6 +2,7 @@ package com.gathin.tvhome;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.BroadcastReceiver;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -61,6 +62,9 @@ public class HomeButtonService extends AccessibilityService {
     private boolean longPressDone;
     private boolean dreaming;
     private VolumeHold volumeHold;
+    private final InputPress inputPress = new InputPress();
+    private final InputPress allAppsPress = new InputPress();
+    private Intent inputIntent;
     private final HopKeys hopKeys = new HopKeys();
 
     private final BroadcastReceiver dreamReceiver = new BroadcastReceiver() {
@@ -111,6 +115,16 @@ public class HomeButtonService extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         if (volumeHold != null) volumeHold.keyEvent(event);
+        if (event.getKeyCode() == KeyEvent.KEYCODE_TV) return onInputKey(event);
+        if (event.getKeyCode() == KeyEvent.KEYCODE_ALL_APPS) {
+            int result = allAppsPress.key(event.getAction(), event.getRepeatCount(), event.isCanceled(),
+                    getResources().getBoolean(R.bool.home_key_service));
+            if (result == InputPress.OPEN) {
+                showLauncher(false);
+                closeScreensaver();
+            }
+            return result != InputPress.PASS;
+        }
         if (hopKeys.take(event.getAction(), event.getKeyCode(), event.getRepeatCount(), event.getDownTime(),
                 SystemClock.uptimeMillis())) {
             return true;
@@ -137,6 +151,50 @@ public class HomeButtonService extends AccessibilityService {
                 return true;
             default:
                 return homeHeld;
+        }
+    }
+
+    private boolean onInputKey(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            inputIntent = null;
+            if (getResources().getBoolean(R.bool.input_key_service)) {
+                Intent inputs = new Intent("com.android.tv.action.VIEW_INPUTS")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (inputs.resolveActivity(getPackageManager()) != null) inputIntent = inputs;
+                else Log.w(TAG, "no system input switcher; leaving the Input key to the TV");
+            }
+        }
+        int result = inputPress.key(event.getAction(), event.getRepeatCount(), event.isCanceled(),
+                inputIntent != null);
+        if (result == InputPress.OPEN) {
+            try {
+                startActivity(inputIntent);
+            } catch (ActivityNotFoundException | SecurityException e) {
+                Log.w(TAG, "could not open the system input switcher", e);
+            }
+        }
+        if (event.getAction() == KeyEvent.ACTION_UP) inputIntent = null;
+        return result != InputPress.PASS;
+    }
+
+    /** Own the whole press or none of it; a canceled press must never open the switcher. */
+    static final class InputPress {
+        static final int PASS = 0;
+        static final int CONSUME = 1;
+        static final int OPEN = 2;
+        private boolean held;
+
+        int key(int action, int repeats, boolean canceled, boolean available) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                if (repeats == 0) held = available && !canceled;
+                return held ? CONSUME : PASS;
+            }
+            if (action == KeyEvent.ACTION_UP) {
+                boolean ours = held;
+                held = false;
+                return !ours ? PASS : canceled ? CONSUME : OPEN;
+            }
+            return held ? CONSUME : PASS;
         }
     }
 

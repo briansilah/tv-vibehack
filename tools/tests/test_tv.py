@@ -163,6 +163,11 @@ class FakeRun:
 
 
 class AdbBinaryTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(tv, "bound_device", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def fake(self, answer):
         run = FakeRun(answer)
         patcher = mock.patch.object(tv.subprocess, "run", run)
@@ -247,6 +252,11 @@ class AdbBinaryTests(unittest.TestCase):
 
 
 class AdbShellTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(tv, "bound_device", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_missing_package(self):
         with mock.patch.dict(sys.modules, {"adb_shell": None, "adb_shell.adb_device": None}):
             with self.assertRaisesRegex(tv.TvError, "pip install -r tools/requirements.txt"):
@@ -630,6 +640,18 @@ class ScriptTests(unittest.TestCase):
             self.assertEqual(subprocess.run(["bash", "-n", os.path.join(REPO, path)]).returncode, 0, path)
         with open(os.path.join(REPO, "launcher", "build-and-install.sh")) as f:
             self.assertNotIn("TV_HOST:?", f.read())
+
+    def test_windows_home_commands_use_components(self):
+        with open(os.path.join(REPO, "launcher", "build-and-install.ps1")) as f:
+            install = f.read()
+        self.assertEqual(install.count("cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity'"), 1)
+        self.assertNotIn("cmd package set-home-activity --user 0 com.gathin.tvhome'", install)
+        self.assertIn("com.gathin.tvhome/.HomeButtonService", install)
+        with open(os.path.join(REPO, "tools", "restore.ps1")) as f:
+            restore = f.read()
+        self.assertIn("$(cmd package resolve-activity --brief -a android.intent.action.MAIN "
+                      "-c android.intent.category.HOME ", restore)
+        self.assertNotIn('"cmd package set-home-activity --user 0 $Stock"', restore)
 
 
 if __name__ == "__main__":
