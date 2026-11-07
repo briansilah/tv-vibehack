@@ -40,5 +40,6 @@ public class TileSizingTest {
         assertEquals(16f, TileSizing.cornerRadius(180, 1f), 0f);
         assertEquals(8f, TileSizing.cornerRadius(90, 1f), 0f);
         assertEquals(32f, TileSizing.cornerRadius(720, 2f), 0f);
+        assertEquals(16f * 1.28f, TileSizing.cornerRadius(Math.round(180 * 1.28f), 1.28f), 0f);
     }
 }

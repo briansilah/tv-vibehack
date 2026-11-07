@@ -27,6 +27,8 @@ final class TileSizing {
     }
 
     static float cornerRadius(int tileWidthPx, float density) {
-        return AppAdapter.TILE_RADIUS_DP * density * Math.min(1f, tileWidthPx / (DESIGN_W_DP * density));
+        float scale = tileWidthPx >= Math.round(DESIGN_W_DP * density)
+                ? 1f : tileWidthPx / (DESIGN_W_DP * density);
+        return AppAdapter.TILE_RADIUS_DP * density * scale;
     }
 }

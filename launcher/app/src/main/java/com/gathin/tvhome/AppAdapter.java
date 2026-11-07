@@ -450,6 +450,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             cardLp.width = w;
             cardLp.height = tileH;
             card.setLayoutParams(cardLp);
+            float tileScale = w / (180f * density);
+            View icon = v.findViewById(R.id.icon);
+            ViewGroup.MarginLayoutParams iconLp = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
+            iconLp.width = iconLp.height = Math.round(48 * density * tileScale);
+            iconLp.bottomMargin = Math.round(14 * density * tileScale);
+            icon.setLayoutParams(iconLp);
             View name = v.findViewById(R.id.name);
             ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
             nameLp.width = w;
