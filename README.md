@@ -246,7 +246,8 @@ in [docs/performance.md](docs/performance.md), off on low-RAM and pre-Android 12
 `liquid_glass_blur` in `config.xml` turns it off.
 
 **Configure** it in [`launcher/app/src/main/res/values/config.xml`](launcher/app/src/main/res/values/config.xml):
-the dock order, apps to hide, your TV's Live TV package, the number of columns, the top shelf's art,
+the dock order, apps to hide, your TV's Live TV package, the number of columns (tiles shrink to fit
+from 5 columns up), the top shelf's art,
 feeds and logos, and how see-through the Liquid Glass is (`liquid_glass`, 0 to 100: 0 is the clearest
 and the default, 5 is Apple TV's Clear, 95 is Tinted). Each app's top shelf and the Liquid Glass can
 also be changed on the TV, in [Home Settings](#home-settings).

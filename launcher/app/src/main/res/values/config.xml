@@ -40,7 +40,8 @@
          For any VPN, its label/caption shows the VPN badge; icon-only styles keep the matching network icon. -->
     <string name="vpn_app" translatable="false"></string>
 
-    <!-- Tiles per row in the grid; the dock always has this many slots. -->
+    <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
+         shrink to fit from 5 up, reserving room for focus and the larger Arrange apps lift. -->
     <integer name="columns">4</integer>
 
     <!-- Top right: the time and your profile picture, as on Apple TV. Moving up there opens it and shows the

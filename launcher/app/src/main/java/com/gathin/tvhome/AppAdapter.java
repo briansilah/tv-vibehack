@@ -134,6 +134,31 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** Home Settings: the launcher's own, so it looks like the action tile (glass, its gear and name), not an app. */
     private static final int TYPE_SETTINGS = 2;
     private static final long ACTION_ID = Long.MAX_VALUE;
+    /** Design size of a tile (dp); tiles shrink from here when the columns don't fit, see tileWidthPx. */
+    static final float DESIGN_W_DP = 180f, DESIGN_H_DP = 101f;
+
+    /**
+     * Keep the four-column design; denser grids reserve room for the larger Arrange apps lift, not
+     * upstream's smaller focus zoom.
+     */
+    static int tileWidthPx(int innerWidthPx, int columns, float density) {
+        int design = Math.round(DESIGN_W_DP * density);
+        if (innerWidthPx <= 0 || columns <= 4) return design;
+        int cell = innerWidthPx / columns;
+        int fit = (int) ((cell - 12 * density) / LIFT_SCALE);
+        return Math.max(1, Math.min(design, fit));
+    }
+
+    static int tileHeightPx(int tileWidthPx) {
+        return Math.round(tileWidthPx * DESIGN_H_DP / DESIGN_W_DP);
+    }
+
+    static int dockRowHeightPx(int innerWidthPx, int columns, float density) {
+        int designRow = (int) ((145 + 6 + 12) * density);
+        if (columns <= 4) return designRow;
+        return designRow + tileHeightPx(tileWidthPx(innerWidthPx, columns, density))
+                - Math.round(DESIGN_H_DP * density);
+    }
 
     private final Context ctx;
     private final TileListener listener;
@@ -440,6 +465,27 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_app, parent, false);
+        if (dockSize > 4) {
+            float density = parent.getResources().getDisplayMetrics().density;
+            int width = parent.getWidth() > 0 ? parent.getWidth() : parent.getMeasuredWidth();
+            int inner = width - parent.getPaddingLeft() - parent.getPaddingRight();
+            int w = tileWidthPx(inner, dockSize, density), tileH = tileHeightPx(w);
+            View card = v.findViewById(R.id.card);
+            ViewGroup.LayoutParams cardLp = card.getLayoutParams();
+            cardLp.width = w;
+            cardLp.height = tileH;
+            card.setLayoutParams(cardLp);
+            View name = v.findViewById(R.id.name);
+            ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
+            nameLp.width = w;
+            nameLp.topMargin = tileH + Math.round(7 * density);
+            name.setLayoutParams(nameLp);
+            View marks = v.findViewById(R.id.marks);
+            ViewGroup.LayoutParams marksLp = marks.getLayoutParams();
+            marksLp.width = w + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marksLp.height = tileH + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marks.setLayoutParams(marksLp);
+        }
         Holder h = new Holder(v, listener);
         if (viewType == TYPE_ACTION) {
             h.card.setBackgroundResource(R.drawable.action_tile_bg);
@@ -715,6 +761,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return AmbientColor.pick(pixels);
     }
 
+    /** Corner radius for a tile of this width: 16dp at the design width, proportionally less when smaller. */
+    static float cornerRadius(int tileWidthPx, float density) {
+        return 16f * density * Math.min(1f, tileWidthPx / (DESIGN_W_DP * density));
+    }
+
     static final class Holder extends RecyclerView.ViewHolder {
         final View card;
         final ImageView banner;
@@ -749,11 +800,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             scaleX.addUpdateListener((a, value, velocity) -> marks.setScaleX(value));
             scaleY.addUpdateListener((a, value, velocity) -> marks.setScaleY(value));
 
-            final float radius = density * TILE_RADIUS_DP;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadius(view.getWidth(), density));
                 }
             });
             card.setClipToOutline(true);
