@@ -142,6 +142,11 @@ Not supported: Samsung (Tizen) and LG (webOS), which run different systems. Amaz
 (Fire OS) takes the debloat half only: Fire OS won't let a third-party launcher take over Home,
 so the Fire TV lists below are about removing Amazon's ads and telemetry, not the home screen.
 
+Some China-market TCL firmware is stricter still: Android TV 9 sets (ak30a5 at least) refuse to
+install any APK that declares `android.intent.category.HOME` unless it is signed with TCL's own
+key, so there the debloat half works and the launcher half is impossible. Its
+[example list](examples/tcl-ak30a5/debloat.txt) says so in the header.
+
 Lists that people have tested and contributed live in [`examples/`](examples/):
 
 | TV | OS |
@@ -158,6 +163,7 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 | Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
 | TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
 | TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
+| TCL ak30a5 (China, Amlogic; debloat only, see above) | Android TV 9 |
 | TCL BeyondTV (India) | Android TV 9 |
 | TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
 | Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
@@ -613,7 +619,9 @@ Things that bit us or contributors, so they don't bite you.
 - **The TV drops off Wi-Fi every minute right after the install**, seen on Google TV 14 (Xiaomi
   MiTV-MZTU0): the same setupwraith `.RecoveryActivity` took Home and system_server crash-looped
   on it after the stock launcher was disabled. This fork keeps the stock Google TV launcher enabled
-  and uses HomeButtonService instead. If you're already in the loop:
+  and uses HomeButtonService instead. To confirm it is this bug: `logcat -b crash` shows `FATAL EXCEPTION IN SYSTEM PROCESS:
+  android.display`, and the main log shows `setupwraith/.RecoveryActivity` being started every
+  200 ms or so. If you're already in the loop:
   `tools/tv.py 'pm enable --user 0 com.google.android.apps.tv.launcherx'`.
 - **No on-screen keyboard** after switching launchers, seen on Xiaomi: the default input method
   pointed at a Baidu keyboard that isn't installed. Fix:
