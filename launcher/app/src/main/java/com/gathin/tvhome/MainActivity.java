@@ -1494,7 +1494,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             addInputRow(rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1, this::openSourcePanel);
         }
         Intent liveTv = liveTvIntent();
-        if (liveTv != null && tunerId != null && Intent.ACTION_MAIN.equals(liveTv.getAction())) {
+        if (liveTv != null && tunerId != null && liveTv.hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)) {
             liveTv = new Intent(Intent.ACTION_VIEW)
                     .setDataAndType(TvContract.buildChannelUriForPassthroughInput(tunerId), "vnd.android.cursor.item/channel")
                     .setPackage(liveTvPkg);

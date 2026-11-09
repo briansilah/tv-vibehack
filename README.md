@@ -165,7 +165,7 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 | Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
 | TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
 | TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
-| TCL ak30a5 (China, Amlogic) | Android TV 9 |
+| TCL ak30a5 (China, Amlogic; debloat only, see above) | Android TV 9 |
 | TCL BeyondTV (India) | Android TV 9 |
 | TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
 | TCL Smart TV Pro (G05, G05_4K_US, MediaTek MT5889) | Google TV 11 |
@@ -679,7 +679,7 @@ debugging off again afterwards and the launcher keeps working.
 Not with anything in this repo. Chromecast built-in covers Android phones and most TVs keep it. For
 iPhones, [jqssun/android-airplay-server](https://github.com/jqssun/android-airplay-server) (GPL-3, built
 on UxPlay) is an ad-free receiver that runs as a background service; nguyenduchoai's install script
-for it is in [PR #84](https://github.com/Gathin23/tv-vibehack/pull/84) if you want to try it. DRM
+for it is in [Gathin23/cleanyourtv#84](https://github.com/Gathin23/cleanyourtv/pull/84) if you want to try it. DRM
 apps such as Netflix and Apple TV+ won't mirror.
 
 **Can I just download the launcher APK?**

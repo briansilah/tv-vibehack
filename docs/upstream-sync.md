@@ -50,29 +50,36 @@ or adopted differently, and why: the only record of it.
 
 ## Pending, not merged
 
-The November 7 checkpoint reaches upstream `47d4414e`: 93 upstream commits adopted cumulatively,
-seven added today in two merge steps (five first-parent commits). It ports the previously blocked
-tile-sizing fix to the fork's focus/lift geometry, adds the China-market TCL ak30a5 list and signing-gate
-findings, and keeps crash-loop diagnosis without adopting unsafe Google TV recovery instructions.
-Against fetched upstream tip `3f175120`, 5,463 commits remain (2,502 first-parent commits), pending rather
+The November 9 checkpoint reaches upstream `13c21763`: 109 upstream commits adopted cumulatively,
+16 added today in two merge steps (13 first-parent commits). It adds Live TV action/source-service
+options, hardware-tuner preference, Thai, four device lists (Chromecast, Philips, TCL G05 and Toshiba
+Fire TV), and updates to three existing lists, pairing guidance and AirPlay documentation.
+Against fetched upstream tip `294d3d59`, 5,564 commits remain (2,542 first-parent commits), pending rather
 than rejected or counted as adopted.
 
-The next step is [Live TV action and source-panel options (Gathin23/cleanyourtv#96)](https://github.com/Gathin23/cleanyourtv/pull/96).
-It needs porting into the fork's current Inputs menu, including validation of the service component and
-explicit failure handling instead of upstream's broad exception catch. It has not been trial-merged or
-counted as adopted. Stop at this checked checkpoint while the cumulative cold/jank comparison above is
-unresolved; the next run can continue from this exact upstream ancestor.
+The next step is [SHOWCASE.md (b7a11838)](https://github.com/Gathin23/cleanyourtv/commit/b7a11838),
+followed by [JSON config and wallpaper (a9fc0fcf)](https://github.com/Gathin23/cleanyourtv/commit/a9fc0fcf)
+and themes. These have not been merged or rejected. The configuration layer needs a deliberate port
+across the fork's background app loading, saved preferences, Top Shelf and LiquidGlass, not a text-only
+merge of MainActivity/AppAdapter. Stop before that broader change while cumulative performance remains
+unsigned off; the next run can continue from this exact upstream ancestor.
 
-`. tools/devenv.sh && tools/ci.sh` passes at `5eedbfd7`: 183 JVM tests per variant, 279 Python tests,
-release lint and a 416,261-byte APK (below 589,824 bytes). Upstream has no CI workflow, root `tests/`
+`. tools/devenv.sh && tools/ci.sh` passes at `9701623a` and `b70b5f5a`; the latter has 187 JVM tests
+per variant, 280 Python tests, release lint and a 418,193-byte APK (below 589,824 bytes).
+Upstream has no CI workflow, root `tests/`
 or table generator at this historical checkpoint; the merged local CI already includes its later
 JVM/lint/size checks, and both projects' table entries were preserved directly.
 The private emulator core tour passes 40/40; its eight screenshots and Dock recording were inspected.
-The same dense-grid tour passes 23/23 with five and six columns, with all six screenshots inspected in
-each; a six-column build of the previous sync reproduced overlapping/clipped cards. Temporary column
-overrides were removed: the committed default remains four. Every tour left saved settings unchanged.
-Latest fork main is included, retaining one HomeButtonService, wake-time D-pad replay and optional
-Input/ALL_APPS handling. The physical TV was untouched; the cumulative PR remains draft for
+An isolated Android instrumentation probe passes 15 checks in English and 15 in Thai on the debug APK:
+leanback priority, package-scoped action fallback, malformed/empty/missing/denied service handling,
+explicit service starts with and without an action, and Inputs visibility. A target-34 fixture
+exercised background-service rejection; a target-25 fixture models the legacy vendor service and
+verifies successful delivery. Both popup screenshots were inspected, including Thai shaping and
+the translated unavailable-service toast. This does not verify a TCL vendor service on real hardware.
+The fixture APK and its device screenshot were removed and the temporary Thai app locale reset.
+The core tour left saved settings unchanged. The committed defaults remain four columns and empty
+action/service options; latest fork main is included with one HomeButtonService, wake-time D-pad replay
+and optional Input/ALL_APPS handling. The physical TV was untouched; the cumulative PR remains draft for
 `/test-on-tv pr 40`, with performance not signed off.
 
 Windows installer execution, physical-remote filtering and live screensaver preview remain unverified.
