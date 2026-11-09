@@ -18,6 +18,7 @@ or adopted differently, and why: the only record of it.
 
 | Date | Upstream | What the fork did | Why |
 |---|---|---|---|
+| 2026-11-09 | [Android 14 support (Gathin23/cleanyourtv#34)](https://github.com/Gathin23/cleanyourtv/pull/34), [input discovery (Gathin23/cleanyourtv#42)](https://github.com/Gathin23/cleanyourtv/pull/42), [Live TV/source options (Gathin23/cleanyourtv#96)](https://github.com/Gathin23/cleanyourtv/pull/96) | Kept the cumulative platform/device fixes and new empty-by-default options. Final exclusive emulator pair at launcher tree `49e49e10`: fully drawn 216 to 217 ms, warm focus 62.0 to 59.9 ms, grid/corner/arrange jank 21.2% to 17.0%, Dock jank 52.0% to 47.4%, shelf change 243.6 to 244.8 ms, PSS 44.8 to 46.1 MB. Stopped before the broader runtime-theme port. | Earlier same-day pairs at `d03c3262` were fully drawn 200 to 192 ms, then 183 to 197 ms in reverse order. Cold direction still reverses; the previous large cold/jank regressions did not reproduce consistently, not proof of an overall performance pass. Final comparative cold traces show onCreate 23.55 to 27.26 ms, reload 5.92 to 8.18 ms, shader compilation 105.7 to 156.6 ms and maximum main-thread rendering wait 71.6 to 73.7 ms. They do not establish a code-level cause or justify deleting a wanted device fix. Keep the historical evidence and require TV sign-off; these are emulator numbers only. |
 | 2026-11-09 | [Chromecast (Gathin23/cleanyourtv#80)](https://github.com/Gathin23/cleanyourtv/pull/80), [Philips (Gathin23/cleanyourtv#99)](https://github.com/Gathin23/cleanyourtv/pull/99), [TCL G05 findings (4e010034)](https://github.com/Gathin23/cleanyourtv/commit/4e010034), [HOME guidance (bd89d360)](https://github.com/Gathin23/cleanyourtv/commit/bd89d360) | Kept device lists, pairing/remote findings and batch/visibility guidance. Commented out launcherx/setupwraith disables in the two new lists, retained the QM6K safety wording with its AU14 additions, and described the fork's single HomeButtonService path in the prompt and G05 notes. Key Mapper instructions preserve other enabled accessibility services rather than overwrite them. | The fork keeps Google TV's stock launcher for Quick Settings. Disabling a setup wizard or replacing the enabled accessibility-service list would undermine its Home ownership; upstream's G05 outcome does not establish that the fork's distinct path was tested. |
 | 2026-11-09 | [Thai translation (68dae00f)](https://github.com/Gathin23/cleanyourtv/commit/68dae00f) | Adopted the entire translation and locale registration; declared Thai's Android system-font fallback in the Latin subset checker. | Inter has no Thai glyphs. Preserve native shaping without bundling another font; missing Latin characters still fail. Fork-only Home Settings and Top Shelf strings fall back to English. |
 | 2026-11-09 | [Live TV action and source-panel options (Gathin23/cleanyourtv#96)](https://github.com/Gathin23/cleanyourtv/pull/96) | Ported all three empty-by-default keys into the fork's Inputs popup and deferred availability check. Require an explicit, nonempty service component; log and notify malformed, missing, denied or unstartable services rather than catching every exception. Preserve the configured Live TV action even when a tuner exists, and document Android 11+ package visibility for non-leanback apps. | Keeps the fork's corner, focus recovery and one HomeButtonService. An invalid component must never fall through to an implicit service intent, a missing service can return null rather than throw, and a TV-specific launch action must not be replaced by ACTION_VIEW. |
@@ -64,14 +65,16 @@ across the fork's background app loading, saved preferences, Top Shelf and Liqui
 merge of MainActivity/AppAdapter. Stop before that broader change while cumulative performance remains
 unsigned off; the next run can continue from this exact upstream ancestor.
 
-`. tools/devenv.sh && tools/ci.sh` passes at `9701623a` and `b70b5f5a`; the latter has 187 JVM tests
-per variant, 280 Python tests, release lint and a 418,193-byte APK (below 589,824 bytes).
-Upstream has no CI workflow, root `tests/`
-or table generator at this historical checkpoint; the merged local CI already includes its later
+`. tools/devenv.sh && tools/ci.sh` passes at `9701623a`, `b70b5f5a` and final launcher commit
+`0b47536c`: 187 JVM tests per variant, 280 Python tests, release lint and a 418,145-byte APK
+(below 589,824 bytes). The final walkthrough and performance run use launcher tree
+`49e49e10b8417c8b27bfff6156a25770219c865a`; subsequent checkpoint edits are documentation only.
+Upstream has no CI workflow, root `tests/` or table generator at this historical checkpoint;
+the merged local CI already includes its later
 JVM/lint/size checks, and both projects' table entries were preserved directly.
 The private emulator core tour passes 40/40; its eight screenshots and Dock recording were inspected.
-An isolated Android instrumentation probe passes 15 checks in English and 15 in Thai on the debug APK:
-leanback priority, package-scoped action fallback, malformed/empty/missing/denied service handling,
+An isolated Android instrumentation probe passes 16 checks in English and 16 in Thai on the final debug APK:
+leanback priority, package-scoped action fallback (including ACTION_MAIN), malformed/empty/missing/denied service handling,
 explicit service starts with and without an action, and Inputs visibility. A target-34 fixture
 exercised background-service rejection; a target-25 fixture models the legacy vendor service and
 verifies successful delivery. Both popup screenshots were inspected, including Thai shaping and
