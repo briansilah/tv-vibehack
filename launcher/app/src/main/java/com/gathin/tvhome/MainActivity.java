@@ -1424,6 +1424,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         btnInputs.setVisibility(any ? View.VISIBLE : View.GONE);
     }
 
+    static String preferredTuner(String current, String candidate) {
+        if (current == null) return candidate;
+        boolean hardware = candidate.matches(".*/HW\\d+$");
+        boolean currentHardware = current.matches(".*/HW\\d+$");
+        if (hardware != currentHardware) return hardware ? candidate : current;
+        return candidate.compareTo(current) < 0 ? candidate : current;
+    }
+
     /** Dropdown menu under the Inputs button: HDMI ports (with connection state), AV and Live TV. */
     private void showInputs() {
         TopBarButton inputsButton = topBar.findViewById(R.id.btnInputs);
@@ -1462,9 +1470,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             boolean hdmiStateBogus = hdmiPorts > 1 && hdmiConnected == hdmiPorts;
             for (TvInputInfo info : inputs) {
                 if (info.getType() == TvInputInfo.TYPE_TUNER
-                        && (info.getServiceInfo().applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
-                        && (tunerId == null || info.getId().compareTo(tunerId) < 0)) {
-                    tunerId = info.getId();
+                        && (info.getServiceInfo().applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+                    // Prefer a hardware tuner: the framework names those ".../HW<n>". System apps such as
+                    // AirPlay also register software inputs of type TUNER and may sort first (seen on TCL G05).
+                    tunerId = preferredTuner(tunerId, info.getId());
                 }
                 if (!info.isPassthroughInput()) continue;
                 CharSequence l = info.loadLabel(this);

@@ -153,19 +153,23 @@ Lists that people have tested and contributed live in [`examples/`](examples/):
 |---|---|
 | BenQ E55-735 (Changhong AI PONT, DVB96BQ) | Google TV 14 |
 | CHiQ AI PONT (DVB93CQ) | Android TV 11 |
+| Chromecast with Google TV 4K (sabrina) | Google TV 14 |
 | Hisense SmartTV 4K FFM (huangshan, MediaTek) | Android TV 10 |
 | Insignia 55" F30 4K Fire TV (NS-55F301NA25, AFTDCT31, duckie) | Fire OS 7 / Android 9 |
 | NVIDIA SHIELD TV Pro 2019 (P2897, mdarcy) | Android TV 11 |
 | OnePlus TV (D00, Dubai) | Google TV 14 |
-| RCA AI PONT SA (Changhong, redwood, ISDB92RC) | Android 14 |
+| Philips Smart 4K TV (Skyworth, eleonas, MediaTek), India | Google TV 14 |
+| RCA AI PONT SA (Changhong, redwood, ISDB92RC; also sold as realme 40-inch) | Android 14 |
 | SANYO ATV R2 (SCBC, Realtek RTD285O) | Android TV 9 |
 | Sony BRAVIA 4K UR2 (BRAVIA_UR2_4K, MediaTek) | Android TV 10 |
 | Sony BRAVIA XBR-65X900E (2017, BRAVIA_ATV2) | Android TV 9 |
 | TCL 55" 4K Google TV, 2023 (G10, G10_4K_US_NF) | Google TV 12 |
 | TCL 65C725 (Smart TV Pro, BeyondTV4) | Android TV 11 |
-| TCL ak30a5 (China, Amlogic; debloat only, see above) | Android TV 9 |
+| TCL ak30a5 (China, Amlogic) | Android TV 9 |
 | TCL BeyondTV (India) | Android TV 9 |
 | TCL QM6K Pro, 2025 (G08, MediaTek tcl9618) | Google TV 14 |
+| TCL Smart TV Pro (G05, G05_4K_US, MediaTek MT5889) | Google TV 11 |
+| Toshiba Fire TV (AFTHA004, hazel) | Fire OS 7 / Android 9 |
 | Xiaomi Mi Box S (MIBOX4, oneday), streaming box | Android TV 9 |
 | Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 |
 | Xiaomi Mi TV 4A (MiTV-MOOQ1) | Android TV 10 |
@@ -261,10 +265,14 @@ The Inputs button hides itself on sticks and boxes that have no HDMI or tuner.
 On Xiaomi remotes that send ALL_APPS for Home, set `home_key_service` to `true` and reinstall:
 the existing HomeButtonService handles that key too, with no second accessibility filter.
 
-**Language** follows the TV: English, German, Spanish, Catalan and Simplified Chinese. On Android 13
+**Language** follows the TV: English, German, Spanish, Catalan, Simplified Chinese and Thai. On Android 13
 and later, set a language for the launcher alone with, for example,
 `tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales ca'`.
 The newer translations use English for the fork's additional Home Settings and Top Shelf strings.
+For Live TV apps without a leanback entry point, set `live_tv_action` as well as `live_tv_package`;
+on Android 11+, declare the package in the manifest's `queries`. When no HDMI/AV inputs can be listed,
+`source_panel_service` (`package/class`) and its optional `source_panel_action` open the TV's own
+source selector. Both options are empty by default; unavailable services show an error.
 
 **Optional date and VPN shortcut**: `shamsi_date` shows the Solar Hijri date above the Gregorian date at
 the top left (off by default). `vpn_app` sets the package opened by the network button; leave it empty
@@ -579,6 +587,9 @@ Things that bit us or contributors, so they don't bite you.
   The device then shows up under an mDNS name such as `adb-XXXX._adb-tls-connect._tcp`.
 - **No "wireless debugging" toggle** on some TVs, Xiaomi among them. USB debugging alone opens
   network ADB on port 5555.
+- **USB debugging never opens port 5555** on some Google TV sets (a Skyworth-built Philips among
+  them). Pair once through Wireless debugging with the stock `adb` (`adb pair <ip>:<port> <code>`,
+  then `adb connect`), run `adb tcpip 5555`, and `tools/tv.py` works from then on.
 - **USB devices go dead while USB debugging is on**, seen on the Xiaomi Mi Box S: its firmware
   switches the USB port to ADB device mode, which cuts the power to a USB speaker or drive. Switch
   USB debugging off when you're done; the launcher doesn't need it.
@@ -663,6 +674,13 @@ that have been stable for over a decade.
 Through the Android Debug Bridge, with one explicit "allow this computer" tap on the TV, the same
 as developing an Android app. The TV only trusts the key you approved. You can switch USB
 debugging off again afterwards and the launcher keeps working.
+
+**Can the TV receive AirPlay?**
+Not with anything in this repo. Chromecast built-in covers Android phones and most TVs keep it. For
+iPhones, [jqssun/android-airplay-server](https://github.com/jqssun/android-airplay-server) (GPL-3, built
+on UxPlay) is an ad-free receiver that runs as a background service; nguyenduchoai's install script
+for it is in [PR #84](https://github.com/Gathin23/tv-vibehack/pull/84) if you want to try it. DRM
+apps such as Netflix and Apple TV+ won't mirror.
 
 **Can I just download the launcher APK?**
 Build it yourself with the one-line script above; it takes about a minute and you control what

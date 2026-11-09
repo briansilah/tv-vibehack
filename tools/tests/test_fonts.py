@@ -64,6 +64,13 @@ class StringTests(unittest.TestCase):
                 f.write('<resources><string name="a">主屏幕，设置。ǔ</string></resources>')
             self.assertEqual(fonts.missing_characters(res), {"ǔ": ["values-zh-rCN/strings.xml"]})
 
+    def test_thai_uses_system_fallback_but_missing_latin_is_still_reported(self):
+        with tempfile.TemporaryDirectory() as res:
+            os.makedirs(os.path.join(res, "values-th"))
+            with open(os.path.join(res, "values-th", "strings.xml"), "w", encoding="utf-8") as f:
+                f.write('<resources><string name="a">หน้าแรกǔ</string></resources>')
+            self.assertEqual(fonts.missing_characters(res), {"ǔ": ["values-th/strings.xml"]})
+
 
 class FontResourceTests(unittest.TestCase):
     """The fonts in res/font are exactly the ones tools/fonts.py builds, and every one is used."""

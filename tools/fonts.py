@@ -122,8 +122,8 @@ def parse_ranges(spec):
 
 
 UNICODES = parse_ranges(UNICODE_RANGES)
-# CJK is deliberately provided by Android's font fallback, not the small Latin typeface.
-SYSTEM_FALLBACK = parse_ranges("U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF")
+# Thai and CJK use Android's font fallback, not the small Latin typeface.
+SYSTEM_FALLBACK = parse_ranges("U+0E00-0E7F, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF")
 
 
 def string_resources(res=RES):
