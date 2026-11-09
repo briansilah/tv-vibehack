@@ -25,6 +25,18 @@
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
     <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
 
+    <!-- Some Live TV apps have no leanback entry point (e.g. TCL Android TV 9).
+         Try this action in live_tv_package instead. Empty leaves the existing behaviour unchanged.
+         On Android 11+, also add that package to AndroidManifest.xml's queries if it has no
+         leanback entry point, so PackageManager can resolve the action. -->
+    <string name="live_tv_action" translatable="false"></string>
+
+    <!-- When no HDMI/AV inputs can be listed, offer the TV's own source-selection service.
+         Use an explicit package/class component (e.g. com.vendor.tv/.SourceService), with its
+         optional action below. Empty omits the row; invalid or unavailable services show an error. -->
+    <string name="source_panel_service" translatable="false"></string>
+    <string name="source_panel_action" translatable="false"></string>
+
     <!-- Map the remote's Input key (KEYCODE_TV) to Android's input switcher from any app.
          Off leaves the TV's own handling alone. Both installers enable HomeButtonService when true;
          the same filter handles Home and Input, preserving held-volume repeats. -->
