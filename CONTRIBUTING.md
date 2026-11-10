@@ -78,6 +78,18 @@ set, the pure-Python `adb_shell` client. Keep both working: `adb_shell` exists b
 just wireless debugging. `tools/tests` covers both offline:
 `python3 -m unittest discover -s tools/tests`. If you find a cleaner workaround, open an issue first.
 
+## 4. Show what you built
+
+Built your own launcher, a port to another platform, or an add-on that is too big or too personal
+for the shared launcher? Put it in its own repository and add one row to
+[`SHOWCASE.md`](SHOWCASE.md). That page is the place for alternative launchers, forks with a
+different look, and tools around the launcher; this repo keeps one small reference launcher and
+points at everything else. The rules for a row are on that page.
+
+Things that stay in this repo: debloat lists, fixes and small, opt-in features for the reference
+launcher, prompt and tool improvements. Things that go in the showcase: a second launcher, a
+restyle, a platform port, anything with its own background services or network access.
+
 ## Pull requests
 
 - One topic per PR. Small is fine.

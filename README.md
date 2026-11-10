@@ -33,6 +33,7 @@ this repo came from.
 - [Troubleshooting](#troubleshooting)
 - [Questions people ask](#questions-people-ask)
 - [Contributing](#contributing)
+- [Made with tv-vibehack](SHOWCASE.md)
 - [Licence](#licence)
 
 ---
@@ -691,6 +692,10 @@ goes on your TV. We don't publish prebuilt binaries.
 The most useful contribution is your TV's debloat list, so the next person with that model
 doesn't have to rediscover it. Launcher improvements and sharper prompt wording are welcome too.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the format and the testing we ask for.
+
+Built your own launcher or a port with the prompt? Add it to [SHOWCASE.md](SHOWCASE.md), the list of
+things people made on top of this repo: a Stremio shelf, a webOS port, a Fire TV fork, an Aurora
+screensaver and more.
 
 ## Licence
 
