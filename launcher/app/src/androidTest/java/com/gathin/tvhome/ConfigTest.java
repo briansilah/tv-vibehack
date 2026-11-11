@@ -12,22 +12,23 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 
-/** Uses Android's real resources and JSON parser, without a third-party test runtime. */
-public class ConfigTest extends Instrumentation {
+/**
+ * Android's real resources/parser: am instrument -w -e suite config
+ * com.gathin.tvhome.test/com.gathin.tvhome.GlassSliderAccessibilityTest.
+ */
+public class ConfigTest {
+    private final Instrumentation instrumentation;
     private Context context;
     private File config;
     private File wallpaper;
     private byte[] oldConfig;
     private byte[] oldWallpaper;
 
-    @Override
-    public void onCreate(Bundle arguments) {
-        super.onCreate(arguments);
-        start();
+    ConfigTest(Instrumentation instrumentation) {
+        this.instrumentation = instrumentation;
     }
 
-    @Override
-    public void onStart() {
+    void run() {
         StringBuilder output = new StringBuilder();
         int passed = 0, failed = 0;
         for (java.lang.reflect.Method method : ConfigTest.class.getDeclaredMethods()) {
@@ -50,11 +51,11 @@ public class ConfigTest extends Instrumentation {
         Bundle result = new Bundle();
         result.putString("stream", "\n" + output + "Passed: " + passed + ", failed: " + failed + "\n");
         result.putInt("failures", failed);
-        finish(failed == 0 ? Activity.RESULT_OK : Activity.RESULT_CANCELED, result);
+        instrumentation.finish(failed == 0 ? Activity.RESULT_OK : Activity.RESULT_CANCELED, result);
     }
 
     private void setUp() throws java.io.IOException {
-        context = getTargetContext();
+        context = instrumentation.getTargetContext();
         File dir = Config.dir(context);
         assertNotNull(dir);
         config = new File(dir, Config.FILE_NAME);
@@ -192,6 +193,19 @@ public class ConfigTest extends Instrumentation {
         assertEquals(context.getResources().getInteger(R.integer.columns), cfg.columns);
         assertEquals(0xFF000000, cfg.backgroundColor);
         assertEquals(Arrays.asList(context.getResources().getStringArray(R.array.hidden_apps)), cfg.hiddenApps);
+    }
+
+    public void testHomeSettingsUsesThemedHiddenApps() throws Exception {
+        android.content.Intent probe = new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_LEANBACK_LAUNCHER);
+        org.json.JSONArray hidden = new org.json.JSONArray();
+        for (android.content.pm.ResolveInfo info : context.getPackageManager().queryIntentActivities(probe, 0)) {
+            if (info.activityInfo != null) hidden.put(info.activityInfo.packageName);
+        }
+        load("{\"columns\":6,\"show_home_settings_shortcut\":false,\"hidden_apps\":" + hidden + "}");
+        AppAdapter.Ordered ordered = AppAdapter.loadInOrder(context);
+        assertTrue(ordered.apps.isEmpty());
+        assertEquals(0, ordered.dock);
     }
 
     private static void assertEquals(Object expected, Object actual) {

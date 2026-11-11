@@ -294,9 +294,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
      * The TV apps in the order Home shows them, without Home Settings itself, and how many are in the dock: for Home
      * Settings. Loads them all, so not on the main thread.
      */
-    static Ordered loadInOrder(Context ctx, int dockSize) {
+    static Ordered loadInOrder(Context ctx) {
         Config cfg = Config.load(ctx, MainActivity.usesDefaultConfig());
-        dockSize = cfg.columns;
         PackageManager pm = ctx.getPackageManager();
         Set<String> hidden = new HashSet<>(cfg.hiddenApps);
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
@@ -330,7 +329,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Entry e = byKey.get(order.get(i));
             if (e.pkg.equals(ctx.getPackageName())) continue;
             out.add(e);
-            if (i < dockSize) dock++;
+            if (i < cfg.columns) dock++;
         }
         return new Ordered(out, dock);
     }

@@ -21,15 +21,21 @@ public class GlassSliderAccessibilityTest extends Instrumentation {
     private AccessibilityEvent lastEvent;
     private final StringBuilder output = new StringBuilder();
     private int passed, failed;
+    private boolean configSuite;
 
     @Override
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        configSuite = arguments != null && "config".equals(arguments.getString("suite"));
         start();
     }
 
     @Override
     public void onStart() {
+        if (configSuite) {
+            new ConfigTest(this).run();
+            return;
+        }
         getUiAutomation();
         Activity activity = startActivitySync(new Intent(getTargetContext(), MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

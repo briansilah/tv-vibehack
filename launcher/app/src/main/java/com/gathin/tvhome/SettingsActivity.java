@@ -117,9 +117,8 @@ public class SettingsActivity extends Activity implements ShelfSource.Listener {
         }
         direct = getIntent() != null ? getIntent().getStringExtra(EXTRA_PACKAGE) : null;
         title.setText(R.string.home_settings);
-        final int columns = getResources().getInteger(R.integer.columns);
         new Thread(() -> {
-            final AppAdapter.Ordered loaded = AppAdapter.loadInOrder(getApplicationContext(), columns);
+            final AppAdapter.Ordered loaded = AppAdapter.loadInOrder(getApplicationContext());
             final Set<String> own = new HashSet<>();
             if (source != null) {
                 for (AppAdapter.Entry e : loaded.apps) {
