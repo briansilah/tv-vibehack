@@ -132,7 +132,7 @@ final class Config {
             int n = 0, r;
             while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
             String text = new String(buf, 0, n, StandardCharsets.UTF_8);
-            if (text.startsWith("﻿")) text = text.substring(1);   // Windows editors add a BOM
+            if (!text.isEmpty() && text.charAt(0) == 0xFEFF) text = text.substring(1);
             return new JSONObject(text);
         } catch (IOException | JSONException | SecurityException e) {
             Log.w(TAG, "ignoring " + file + ": " + e.getMessage());
