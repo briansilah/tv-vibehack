@@ -112,13 +112,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     static final String EXTRA_GLASS_SLIDER = "com.gathin.tvhome.GLASS_SLIDER";
     /**
      * {@code --ez default_config true}: the launcher as it ships, for tools/perf.py, until the process ends or
-     * {@code --ez default_config false}: config.xml's Liquid Glass instead of the saved choice (which stays saved), and
-     * no stand-in art. Meanwhile {@code --ei liquid_glass} isn't saved either, so a variant can be measured.
+     * {@code --ez default_config false}: no pushed theme, config.xml's Liquid Glass instead of the saved choice
+     * (which stays saved), and no stand-in art. Meanwhile {@code --ei liquid_glass} isn't saved either, so a variant
+     * can be measured.
      */
     static final String EXTRA_DEFAULT_CONFIG = "default_config";
     static final String EXTRA_RELOAD_THEME = "com.gathin.tvhome.RELOAD_THEME";
     /** Static, so it lasts exactly as long as the process. */
     private static boolean defaultConfig;
+    private boolean themeApplied;
     static boolean usesDefaultConfig() {
         return defaultConfig;
     }
@@ -338,6 +340,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
             defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
         }
         Config cfg = Config.load(this, defaultConfig);
+        themeApplied = cfg.overlayApplied || cfg.wallpaper != null;
         COLUMNS = cfg.columns;
         adapter = new AppAdapter(this, this, COLUMNS, cfg);
         // Listen for app changes before the loading starts, so none falls between its query and onResume.
@@ -644,10 +647,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        boolean shipped = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, defaultConfig);
+        boolean needsTheme = themeApplied;
+        if (shipped != defaultConfig && !shipped) {
+            Config cfg = Config.load(this);
+            needsTheme = cfg.overlayApplied || cfg.wallpaper != null;
+        }
+        // Without a theme, the existing glass/shelf update is enough: recreating also delays cold task recovery.
         if (intent.getBooleanExtra(EXTRA_RELOAD_THEME, false)
-                || (intent.hasExtra(EXTRA_DEFAULT_CONFIG)
-                && intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false) != defaultConfig)) {
-            defaultConfig = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, defaultConfig);
+                || (shipped != defaultConfig && needsTheme)) {
+            defaultConfig = shipped;
             recreate();
             return;
         }

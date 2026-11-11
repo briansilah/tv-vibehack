@@ -123,12 +123,13 @@ final class Config {
     /** Reads and parses the overlay; any problem means "no overlay", never a crash on the home screen. */
     private static JSONObject read(File file) {
         if (file == null || !file.isFile()) return null;
-        if (file.length() > 64 * 1024) {
+        long length = file.length();
+        if (length > 64 * 1024) {
             Log.w(TAG, "ignoring " + file + ": larger than 64 KB");
             return null;
         }
         try (InputStream in = new FileInputStream(file)) {
-            byte[] buf = new byte[(int) file.length()];
+            byte[] buf = new byte[(int) length];
             int n = 0, r;
             while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
             String text = new String(buf, 0, n, StandardCharsets.UTF_8);

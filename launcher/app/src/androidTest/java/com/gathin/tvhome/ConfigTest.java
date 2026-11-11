@@ -208,6 +208,66 @@ public class ConfigTest {
         assertEquals(0, ordered.dock);
     }
 
+    public void testDefaultModeOnlyRecreatesWhenAThemeNeedsIt() throws Exception {
+        instrumentation.getUiAutomation();
+        Instrumentation.ActivityMonitor monitor = instrumentation.addMonitor(
+                MainActivity.class.getName(), null, false);
+        MainActivity[] current = {(MainActivity) instrumentation.startActivitySync(
+                new android.content.Intent(context, MainActivity.class)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        .putExtra(MainActivity.EXTRA_DEFAULT_CONFIG, false))};
+        monitor.waitForActivityWithTimeout(100);
+        java.util.Map<String, ?> before = new java.util.HashMap<>(
+                context.getSharedPreferences("home", Context.MODE_PRIVATE).getAll());
+        try {
+            deliver(current[0], true, false);
+            Activity unexpected = monitor.waitForActivityWithTimeout(500);
+            if (unexpected != null) current[0] = (MainActivity) unexpected;
+            assertNull(unexpected);
+            assertTrue(MainActivity.usesDefaultConfig());
+            deliver(current[0], false, false);
+            unexpected = monitor.waitForActivityWithTimeout(500);
+            if (unexpected != null) current[0] = (MainActivity) unexpected;
+            assertNull(unexpected);
+            assertFalse(MainActivity.usesDefaultConfig());
+
+            load("{\"columns\":6}");
+            deliver(current[0], false, true);
+            current[0] = recreated(monitor);
+            assertEquals(6, MainActivity.COLUMNS);
+            deliver(current[0], true, false);
+            current[0] = recreated(monitor);
+            assertEquals(context.getResources().getInteger(R.integer.columns), MainActivity.COLUMNS);
+            deliver(current[0], false, false);
+            current[0] = recreated(monitor);
+            assertEquals(6, MainActivity.COLUMNS);
+            assertEquals(before, context.getSharedPreferences("home", Context.MODE_PRIVATE).getAll());
+        } finally {
+            Files.deleteIfExists(config.toPath());
+            Files.deleteIfExists(wallpaper.toPath());
+            deliver(current[0], false, true);
+            MainActivity restored = recreated(monitor);
+            instrumentation.runOnMainSync(restored::finish);
+            instrumentation.removeMonitor(monitor);
+        }
+    }
+
+    private void deliver(MainActivity activity, boolean shipped, boolean reload) {
+        instrumentation.runOnMainSync(() -> activity.onNewIntent(
+                new android.content.Intent(context, MainActivity.class)
+                        .putExtra(MainActivity.EXTRA_DEFAULT_CONFIG, shipped)
+                        .putExtra(MainActivity.EXTRA_RELOAD_THEME, reload)));
+        instrumentation.waitForIdleSync();
+    }
+
+    private MainActivity recreated(Instrumentation.ActivityMonitor monitor) {
+        Activity activity = monitor.waitForActivityWithTimeout(5000);
+        assertNotNull(activity);
+        instrumentation.waitForIdleSync();
+        return (MainActivity) activity;
+    }
+
     private static void assertEquals(Object expected, Object actual) {
         if (!Objects.equals(expected, actual)) fail("expected " + expected + ", got " + actual);
     }
