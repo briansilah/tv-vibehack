@@ -19,7 +19,6 @@ public class MoveMarks extends View {
     static final float MARGIN_DP = 40f;
     private static final float RING_GAP_DP = 5f;
     private static final float RING_DP = 3f;
-    private static final float CARD_RADIUS_DP = 16f;
     /** Each chevron sits on a dark disc so it reads over any neighbouring artwork, this far out from the ring. */
     private static final float DISC_RADIUS_DP = 13f;
     private static final float DISC_GAP_DP = 4f;
@@ -69,7 +68,7 @@ public class MoveMarks extends View {
         float m = MARGIN_DP * density;
         float gap = (RING_GAP_DP + RING_DP / 2f) * density;
         rect.set(m - gap, m - gap, getWidth() - m + gap, getHeight() - m + gap);
-        float r = CARD_RADIUS_DP * density + gap;
+        float r = TileSizing.cornerRadius(Math.round(getWidth() - 2 * m), density) + gap;
         c.drawRoundRect(rect, r, r, ring);
 
         // Each chevron on its disc, just outside the ring.

@@ -35,7 +35,6 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -138,10 +137,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final Context ctx;
     private final TileListener listener;
     private final int dockSize;
-    /** Dock order (res/values/config.xml, dock_apps). */
+    /** Dock order (config.xml dock_apps, or a theme's config.json). */
     private final List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
     private final Set<String> hidden;
+    private final boolean showHomeSettings;
     private final List<Entry> items = new ArrayList<>();
     private final SharedPreferences prefs;
     /** Arranging apps: the action tile reads Done. */
@@ -153,13 +153,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** The app list loading in the background since {@link #preload}, until the next reload takes it. */
     private Future<Loaded> preloaded;
 
-    AppAdapter(Context ctx, TileListener listener, int dockSize) {
+    AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
-        this.favourites = Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps));
-        this.hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
         this.prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
+        this.favourites = cfg.dockApps;
+        this.hidden = new HashSet<>(cfg.hiddenApps);
+        this.showHomeSettings = cfg.showHomeSettingsShortcut;
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
@@ -253,7 +254,17 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, apps, showHomeSettings);
         return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
+    }
+
+    private static void addHomeSettingsShortcut(Context ctx, List<Entry> apps, boolean show) {
+        if (show
+                && ctx.getPackageManager().resolveActivity(new Intent(Settings.ACTION_HOME_SETTINGS), 0) != null) {
+            apps.add(new Entry(ctx.getString(R.string.default_home),
+                    new ComponentName(ctx, HomeSettingsActivity.class), null,
+                    ctx.getDrawable(R.drawable.ic_home_settings), null, 0));
+        }
     }
 
     /** Whether an app is a tile: not hidden (config.xml), and of this app's own activities only Home Settings. */
@@ -283,9 +294,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
      * The TV apps in the order Home shows them, without Home Settings itself, and how many are in the dock: for Home
      * Settings. Loads them all, so not on the main thread.
      */
-    static Ordered loadInOrder(Context ctx, int dockSize) {
+    static Ordered loadInOrder(Context ctx) {
+        Config cfg = Config.load(ctx, MainActivity.usesDefaultConfig());
         PackageManager pm = ctx.getPackageManager();
-        Set<String> hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
+        Set<String> hidden = new HashSet<>(cfg.hiddenApps);
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         List<Callable<Entry>> tasks = new ArrayList<>();
         for (ResolveInfo ri : pm.queryIntentActivities(probe, 0)) {
@@ -300,6 +312,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
+        addHomeSettingsShortcut(ctx, fresh, cfg.showHomeSettingsShortcut);
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());
@@ -308,7 +321,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
         SharedPreferences prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
         List<String> order = AppOrder.arrange(byName,
-                Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps)),
+                cfg.dockApps,
                 AppOrder.decode(prefs.getString(PREF_ORDER, null)), settingsKey(ctx));
         List<Entry> out = new ArrayList<>(order.size());
         int dock = 0;
@@ -316,7 +329,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Entry e = byKey.get(order.get(i));
             if (e.pkg.equals(ctx.getPackageName())) continue;
             out.add(e);
-            if (i < dockSize) dock++;
+            if (i < cfg.columns) dock++;
         }
         return new Ordered(out, dock);
     }
@@ -429,6 +442,33 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     @Override
     public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_app, parent, false);
+        if (dockSize > 4) {
+            float density = parent.getResources().getDisplayMetrics().density;
+            int width = parent.getWidth() > 0 ? parent.getWidth() : parent.getMeasuredWidth();
+            int inner = width - parent.getPaddingLeft() - parent.getPaddingRight();
+            int w = TileSizing.tileWidthPx(inner, dockSize, density), tileH = TileSizing.tileHeightPx(w);
+            View card = v.findViewById(R.id.card);
+            ViewGroup.LayoutParams cardLp = card.getLayoutParams();
+            cardLp.width = w;
+            cardLp.height = tileH;
+            card.setLayoutParams(cardLp);
+            float tileScale = w / (180f * density);
+            View icon = v.findViewById(R.id.icon);
+            ViewGroup.MarginLayoutParams iconLp = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
+            iconLp.width = iconLp.height = Math.round(48 * density * tileScale);
+            iconLp.bottomMargin = Math.round(14 * density * tileScale);
+            icon.setLayoutParams(iconLp);
+            View name = v.findViewById(R.id.name);
+            ViewGroup.MarginLayoutParams nameLp = (ViewGroup.MarginLayoutParams) name.getLayoutParams();
+            nameLp.width = w;
+            nameLp.topMargin = tileH + Math.round(7 * density);
+            name.setLayoutParams(nameLp);
+            View marks = v.findViewById(R.id.marks);
+            ViewGroup.LayoutParams marksLp = marks.getLayoutParams();
+            marksLp.width = w + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marksLp.height = tileH + Math.round(2 * MoveMarks.MARGIN_DP * density);
+            marks.setLayoutParams(marksLp);
+        }
         Holder h = new Holder(v, listener);
         if (viewType == TYPE_ACTION) {
             h.card.setBackgroundResource(R.drawable.action_tile_bg);
@@ -738,11 +778,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             scaleX.addUpdateListener((a, value, velocity) -> marks.setScaleX(value));
             scaleY.addUpdateListener((a, value, velocity) -> marks.setScaleY(value));
 
-            final float radius = density * TILE_RADIUS_DP;
             card.setOutlineProvider(new ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
+                            TileSizing.cornerRadius(view.getWidth(), density));
                 }
             });
             card.setClipToOutline(true);

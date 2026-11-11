@@ -52,7 +52,8 @@ DynamicAnimation, no Kotlin, no Compose. It targets TVs with 1 GB of RAM, so:
 
 Build with `launcher/build-and-install.sh` (JDK 17, Android SDK platform 34 and
 build-tools 34.0.0; on macOS `brew install openjdk@17 android-commandlinetools` then
-`sdkmanager "platforms;android-34" "build-tools;34.0.0"`). It reaches the TV the way `tools/tv.py`
+`sdkmanager "platforms;android-34" "build-tools;34.0.0"`; with the newer command-line tools the form is
+`android sdk install platforms/android-34 build-tools/34.0.0`). It reaches the TV the way `tools/tv.py`
 does: the `adb` binary, or `adb_shell` with `TV_HOST=<ip>` (see [Connecting](README.md#connecting)).
 
 Logic that doesn't need a TV (e.g. `AmbientColor`, which picks the top shelf's glow colour, `CoverArt`,
@@ -77,6 +78,18 @@ set, the pure-Python `adb_shell` client. Keep both working: `adb_shell` exists b
 just wireless debugging. `tools/tests` covers both offline:
 `python3 -m unittest discover -s tools/tests`. If you find a cleaner workaround, open an issue first.
 
+## 4. Show what you built
+
+Built your own launcher, a port to another platform, or an add-on that is too big or too personal
+for the shared launcher? Put it in its own repository and add one row to
+[`SHOWCASE.md`](SHOWCASE.md). That page is the place for alternative launchers, forks with a
+different look, and tools around the launcher; this repo keeps one small reference launcher and
+points at everything else. The rules for a row are on that page.
+
+Things that stay in this repo: debloat lists, fixes and small, opt-in features for the reference
+launcher, prompt and tool improvements. Things that go in the showcase: a second launcher, a
+restyle, a platform port, anything with its own background services or network access.
+
 ## Pull requests
 
 - One topic per PR. Small is fine.
@@ -84,7 +97,10 @@ just wireless debugging. `tools/tests` covers both offline:
   (with screenshots). [.github/skills/pull-requests](.github/skills/pull-requests/SKILL.md) has the details.
 - CI (`.github/workflows/ci.yml`) must pass. With GitHub Actions off, as on Brian's fork, `tools/ci.sh` runs the
   same checks locally. On every PR it builds the launcher (debug and
-  release), runs its unit tests, and checks the Python tools and shell scripts. The debug APK is
+  release), runs debug and release unit tests and release lint, enforces the release APK's 576 KB limit,
+  and checks the Python tools, shell scripts and upstream's `tests/` when present. Partial upstream
+  translations use Android's English fallback for fork-only strings; lint reports missing translations
+  as warnings. The debug APK is
   attached to each run as the `tvhome-debug-apk` artifact.
 - Say which TV you tested on.
 - No new dependencies in the launcher without discussing it in an issue.
