@@ -208,6 +208,7 @@ tools/restore.sh examples/xiaomi-mi-tv-4a/debloat.txt        # undo it and resto
 | [`tools/b64push.py`](tools/b64push.py) | Uploads larger files such as APKs and verifies the checksum: `adb push` with the adb binary, base64 chunks through the shell with `adb_shell`. |
 | [`tools/disable.sh`](tools/disable.sh) / [`tools/restore.sh`](tools/restore.sh) | Apply or undo a debloat list. PowerShell versions sit next to them. |
 | [`tools/top_shelf_image.py`](tools/top_shelf_image.py) | Puts an app's Apple TV Top Shelf image on the TV, from a screenshot of an Apple TV's home screen. See [The top shelf](#the-top-shelf). |
+| [`tools/theme.sh`](tools/theme.sh) | Push a theme folder from [`themes/`](themes/) to the launcher and restart Home; `--reset` removes it. PowerShell version next to it. |
 
 ### Connecting
 
@@ -265,6 +266,14 @@ also be changed on the TV, in [Home Settings](#home-settings).
 The Inputs button hides itself on sticks and boxes that have no HDMI or tuner.
 On Xiaomi remotes that send ALL_APPS for Home, set `home_key_service` to `true` and reinstall:
 the existing HomeButtonService handles that key too, with no second accessibility filter.
+
+**Themes** change the dock defaults, hidden apps, columns and device shortcuts, plus a background colour and
+wallpaper, without a rebuild:
+a folder with a `config.json` (and optionally a `wallpaper.jpg`) pushed to the TV with
+`tools/theme.sh themes/<name>`, which the launcher reads as an overlay over `config.xml`. Three ship
+in [`themes/`](themes/), and the keys are documented there. Saved app order, Top Shelf choices and Liquid Glass
+stay yours. Wallpapers sit behind the Top Shelf, so its artwork takes precedence.
+`tools/theme.sh --reset` removes only the theme files.
 
 **Language** follows the TV: English, German, Spanish, Catalan, Simplified Chinese and Thai. On Android 13
 and later, set a language for the launcher alone with, for example,

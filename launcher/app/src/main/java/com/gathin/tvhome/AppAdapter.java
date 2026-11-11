@@ -35,7 +35,6 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -138,10 +137,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     private final Context ctx;
     private final TileListener listener;
     private final int dockSize;
-    /** Dock order (res/values/config.xml, dock_apps). */
+    /** Dock order (config.xml dock_apps, or a theme's config.json). */
     private final List<String> favourites;
     /** Never shown as tiles (res/values/config.xml, hidden_apps). */
     private final Set<String> hidden;
+    private final boolean showHomeSettings;
     private final List<Entry> items = new ArrayList<>();
     private final SharedPreferences prefs;
     /** Arranging apps: the action tile reads Done. */
@@ -153,13 +153,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** The app list loading in the background since {@link #preload}, until the next reload takes it. */
     private Future<Loaded> preloaded;
 
-    AppAdapter(Context ctx, TileListener listener, int dockSize) {
+    AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
-        this.favourites = Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps));
-        this.hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
         this.prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
+        this.favourites = cfg.dockApps;
+        this.hidden = new HashSet<>(cfg.hiddenApps);
+        this.showHomeSettings = cfg.showHomeSettingsShortcut;
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
@@ -253,12 +254,12 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
-        addHomeSettingsShortcut(ctx, apps);
+        addHomeSettingsShortcut(ctx, apps, showHomeSettings);
         return new Loaded(apps, tQuery - t0, Perf.now() - tQuery);
     }
 
-    private static void addHomeSettingsShortcut(Context ctx, List<Entry> apps) {
-        if (ctx.getResources().getBoolean(R.bool.show_home_settings_shortcut)
+    private static void addHomeSettingsShortcut(Context ctx, List<Entry> apps, boolean show) {
+        if (show
                 && ctx.getPackageManager().resolveActivity(new Intent(Settings.ACTION_HOME_SETTINGS), 0) != null) {
             apps.add(new Entry(ctx.getString(R.string.default_home),
                     new ComponentName(ctx, HomeSettingsActivity.class), null,
@@ -294,8 +295,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
      * Settings. Loads them all, so not on the main thread.
      */
     static Ordered loadInOrder(Context ctx, int dockSize) {
+        Config cfg = Config.load(ctx, MainActivity.usesDefaultConfig());
+        dockSize = cfg.columns;
         PackageManager pm = ctx.getPackageManager();
-        Set<String> hidden = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.hidden_apps)));
+        Set<String> hidden = new HashSet<>(cfg.hiddenApps);
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         List<Callable<Entry>> tasks = new ArrayList<>();
         for (ResolveInfo ri : pm.queryIntentActivities(probe, 0)) {
@@ -310,7 +313,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
-        addHomeSettingsShortcut(ctx, fresh);
+        addHomeSettingsShortcut(ctx, fresh, cfg.showHomeSettingsShortcut);
         Collections.sort(fresh, (a, b) -> a.label.compareToIgnoreCase(b.label));
         Map<String, Entry> byKey = new HashMap<>();
         List<String> byName = new ArrayList<>(fresh.size());
@@ -319,7 +322,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
         SharedPreferences prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE);
         List<String> order = AppOrder.arrange(byName,
-                Arrays.asList(ctx.getResources().getStringArray(R.array.dock_apps)),
+                cfg.dockApps,
                 AppOrder.decode(prefs.getString(PREF_ORDER, null)), settingsKey(ctx));
         List<Entry> out = new ArrayList<>(order.size());
         int dock = 0;

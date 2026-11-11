@@ -55,6 +55,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -115,8 +116,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
      * no stand-in art. Meanwhile {@code --ei liquid_glass} isn't saved either, so a variant can be measured.
      */
     static final String EXTRA_DEFAULT_CONFIG = "default_config";
+    static final String EXTRA_RELOAD_THEME = "com.gathin.tvhome.RELOAD_THEME";
     /** Static, so it lasts exactly as long as the process. */
     private static boolean defaultConfig;
+    static boolean usesDefaultConfig() {
+        return defaultConfig;
+    }
     private static final long GLASS_PANEL_IN_MS = 180L;
     private static final long GLASS_PANEL_OUT_MS = 140L;
     /** Settings.ACTION_USER_SETTINGS, hidden from the SDK. */
@@ -328,8 +333,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         long t0 = Perf.now();
         Perf.begin("tvhome:onCreate");
         super.onCreate(savedInstanceState);
-        COLUMNS = Math.max(1, getResources().getInteger(R.integer.columns));
-        adapter = new AppAdapter(this, this, COLUMNS);
+        Intent start = getIntent();
+        if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
+            defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
+        }
+        Config cfg = Config.load(this, defaultConfig);
+        COLUMNS = cfg.columns;
+        adapter = new AppAdapter(this, this, COLUMNS, cfg);
         // Listen for app changes before the loading starts, so none falls between its query and onResume.
         IntentFilter packages = new IntentFilter();
         packages.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -347,14 +357,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         adapter.preload();
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
-        liveTvPkg = getString(R.string.live_tv_package).trim();
-        vpnApp = getString(R.string.vpn_app).trim();
-        liveTvAction = getString(R.string.live_tv_action).trim();
-        sourcePanelService = getString(R.string.source_panel_service).trim();
-        sourcePanelAction = getString(R.string.source_panel_action).trim();
+        liveTvPkg = cfg.liveTvPackage;
+        vpnApp = cfg.vpnApp;
+        liveTvAction = cfg.liveTvAction;
+        sourcePanelService = cfg.sourcePanelService;
+        sourcePanelAction = cfg.sourcePanelAction;
 
         root = findViewById(R.id.root);
         homeMotion = new HomeMotion(root);
+        root.setBackgroundColor(cfg.backgroundColor);
+        View themeBackdrop = findViewById(R.id.backdrop);
+        themeBackdrop.setBackgroundColor(cfg.backgroundColor);
+        if (cfg.wallpaper != null) showWallpaper(cfg.wallpaper);
         ambient = findViewById(R.id.ambient);
         heroName = findViewById(R.id.heroName);
         ambientGlow = new GradientDrawable();
@@ -366,10 +380,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         prefs = getSharedPreferences("home", MODE_PRIVATE);
         state = getSharedPreferences("state", MODE_PRIVATE);
         if (lastFocusedKey == null) lastFocusedKey = state.getString(PREF_FOCUSED, null);
-        Intent start = getIntent();
-        if (start != null && start.hasExtra(EXTRA_DEFAULT_CONFIG)) {
-            defaultConfig = start.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false);
-        }
         glassOnReturn = start != null && start.getBooleanExtra(EXTRA_GLASS_SLIDER, false);
         backdrop = new LiquidGlass.Backdrop(findViewById(R.id.backdrop), LiquidGlass.tier(this),
                 new LiquidGlass.Look(glassChoice()));
@@ -391,7 +401,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         corner.setBar(topBar);
         corner.setProfileName(getString(R.string.profile_name));
         topArea = findViewById(R.id.topArea);
-        if (getResources().getBoolean(R.bool.shamsi_date)) {
+        if (cfg.shamsiDate) {
             ViewStub dateStub = findViewById(R.id.shamsiDateStub);
             shamsiDate = dateStub.inflate().findViewById(R.id.shamsiDate);
         }
@@ -512,6 +522,49 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
         Perf.log("create", t0, null);
     }
 
+    /** The theme sits inside the glass's backdrop, behind the Top Shelf, and never holds up the first frame. */
+    private void showWallpaper(File file) {
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int width = Math.max(1, dm.widthPixels), height = Math.max(1, dm.heightPixels);
+        new Thread(() -> {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            try {
+                android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+                opts.inJustDecodeBounds = true;
+                android.graphics.BitmapFactory.decodeFile(file.getPath(), opts);
+                if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+                    Log.w("TvHome.Config", "cannot decode wallpaper " + file);
+                    return;
+                }
+                int sample = 1;
+                while (opts.outWidth / sample > width || opts.outHeight / sample > height) sample *= 2;
+                opts.inJustDecodeBounds = false;
+                opts.inSampleSize = sample;
+                opts.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;
+                android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeFile(file.getPath(), opts);
+                if (bmp == null) {
+                    Log.w("TvHome.Config", "cannot decode wallpaper " + file);
+                    return;
+                }
+                handler.post(() -> {
+                    if (isDestroyed()) {
+                        bmp.recycle();
+                        return;
+                    }
+                    ImageView wall = new ImageView(this);
+                    wall.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                    wall.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    wall.setImageBitmap(bmp);
+                    FrameLayout background = findViewById(R.id.backdrop);
+                    background.addView(wall, 0, new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                });
+            } catch (SecurityException | OutOfMemoryError e) {
+                Log.w("TvHome.Config", "cannot load wallpaper " + file, e);
+            }
+        }, "tvhome-wallpaper").start();
+    }
+
     @Override
     protected void onResume() {
         final long t0 = Perf.now();
@@ -590,6 +643,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener, T
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.getBooleanExtra(EXTRA_RELOAD_THEME, false)
+                || (intent.hasExtra(EXTRA_DEFAULT_CONFIG)
+                && intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, false) != defaultConfig)) {
+            defaultConfig = intent.getBooleanExtra(EXTRA_DEFAULT_CONFIG, defaultConfig);
+            recreate();
+            return;
+        }
         rearranger.end();   // Home pressed while arranging: keep the new arrangement
         showMode = intent.getIntExtra(Transitions.EXTRA_SHOW, Transitions.SHOW_INTENT);
         glassOnReturn = intent.getBooleanExtra(EXTRA_GLASS_SLIDER, false);
